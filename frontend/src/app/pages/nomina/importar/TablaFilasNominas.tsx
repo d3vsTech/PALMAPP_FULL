@@ -17,7 +17,7 @@ import {
 const ESTADO_BADGE: Record<string, string> = {
   OK: 'bg-success/10 text-success border-success/30',
   ERROR: 'bg-destructive/10 text-destructive border-destructive/30',
-  SOBRESCRIBIR: 'bg-amber-500/10 text-amber-700 border-amber-500/30 dark:text-amber-400',
+  SOBRESCRIBIR: 'bg-warning-soft text-warning border-warning/20',
 };
 
 const ESTADO_LABEL: Record<string, string> = {

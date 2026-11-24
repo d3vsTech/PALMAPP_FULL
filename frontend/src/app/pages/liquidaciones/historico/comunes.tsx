@@ -112,7 +112,7 @@ export function SelectorArchivo({
         <Button
           variant="outline"
           onClick={() => inputRef.current?.click()}
-          className="h-12 w-full gap-2 border-dashed"
+          className="h-12 w-full border-dashed"
         >
           <Upload className="h-4 w-4" />
           Seleccionar archivo
@@ -163,7 +163,7 @@ export function PasoCard({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="border-border">
+    <Card>
       <CardHeader className="border-b">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -315,7 +315,7 @@ export function BotonesPlantilla({
         variant="outline"
         onClick={() => onDescargar('xlsx')}
         disabled={descargando !== null}
-        className="gap-2"
+        
       >
         {descargando === 'xlsx' ? (
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -329,7 +329,7 @@ export function BotonesPlantilla({
         size="sm"
         onClick={() => onDescargar('csv')}
         disabled={descargando !== null}
-        className="gap-1.5 text-muted-foreground"
+        className="text-muted-foreground"
       >
         {descargando === 'csv' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
         CSV
@@ -472,7 +472,7 @@ export function IncidenciasFila({
       {advertencias.map((x, i) => (
         <p
           key={`a-${x.code}-${i}`}
-          className="mt-1 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400"
+          className="mt-1 flex items-start gap-1.5 text-xs text-warning"
         >
           <Info className="mt-0.5 h-3 w-3 shrink-0" />
           {x.mensaje || etiquetasAdvertencia[x.code] || x.code}
@@ -519,7 +519,7 @@ export function CeldaColaborador({
       {/* El nombre del archivo solo se muestra cuando no es el de la ficha: la
           advertencia dice que algo pasa, esto dice qué decía el archivo. */}
       {delArchivo && !mismoNombre(delArchivo, nombre) && (
-        <p className="truncate text-xs text-amber-700 dark:text-amber-500">
+        <p className="truncate text-xs text-warning">
           en el archivo: {delArchivo}
         </p>
       )}

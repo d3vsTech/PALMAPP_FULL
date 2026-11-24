@@ -64,7 +64,7 @@ export function EtapaLaboresFinca({
           </div>
           <Button
             onClick={agregarAuxiliar}
-            className="gap-2 self-end sm:self-auto"
+            className="self-end sm:self-auto"
             disabled={auxiliarEnEdicion !== null}
           >
             <Plus className="h-4 w-4" />
@@ -169,11 +169,11 @@ export function EtapaLaboresFinca({
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-2 border-t">
-                <Button variant="outline" onClick={cancelarAuxiliar} className="gap-2">
+                <Button variant="outline" onClick={cancelarAuxiliar}>
                   <X className="h-4 w-4" />
                   Cancelar
                 </Button>
-                <Button onClick={guardarAuxiliar} className="gap-2">
+                <Button onClick={guardarAuxiliar}>
                   <Save className="h-4 w-4" />
                   Guardar Labor
                 </Button>
@@ -203,7 +203,7 @@ export function EtapaLaboresFinca({
                     <p className="font-semibold text-sm">
                       {personaTexto}
                       {personaSel?.terceroNombre ? (
-                        <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">
+                        <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-warning-soft text-warning border border-warning/20 font-medium align-middle">
                           Tercero · {personaSel.terceroNombre}
                         </span>
                       ) : null}

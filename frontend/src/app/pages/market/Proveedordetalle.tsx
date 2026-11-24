@@ -162,7 +162,7 @@ export default function ProveedorDetalle() {
           variant="ghost"
           size="sm"
           onClick={() => navigate('/market/proveedores')}
-          className="mb-4 gap-2"
+          className="mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver a proveedores
@@ -170,7 +170,7 @@ export default function ProveedorDetalle() {
       </div>
 
       {/* Información del proveedor */}
-      <Card className="border-border">
+      <Card>
         <CardContent className="p-8">
           <div className="flex flex-col lg:flex-row gap-8">
             {/* Logo y certificaciones */}
@@ -206,7 +206,7 @@ export default function ProveedorDetalle() {
                     key={i}
                     className={`h-5 w-5 ${
                       i < Math.floor(proveedorData.rating)
-                        ? 'fill-amber-400 text-amber-400'
+                        ? 'fill-warning text-warning'
                         : 'text-muted'
                     }`}
                   />
@@ -273,11 +273,11 @@ export default function ProveedorDetalle() {
             {proveedorData.productos.map((producto) => (
               <Card
                 key={producto.id}
-                className="border-border hover:shadow-lg transition cursor-pointer"
+                className="cursor-pointer transition-colors"
                 onClick={() => navigate(`/market/producto/${producto.id}`)}
               >
                 <CardContent className="p-6 space-y-4">
-                  <div className="aspect-square bg-gradient-to-br from-primary/10 to-primary/5 rounded-lg flex items-center justify-center">
+                  <div className="aspect-square flex items-center justify-center rounded-lg bg-primary-soft">
                     <Package className="h-16 w-16 text-primary/30" />
                   </div>
 
@@ -292,7 +292,7 @@ export default function ProveedorDetalle() {
                           key={i}
                           className={`h-3 w-3 ${
                             i < Math.floor(producto.rating)
-                              ? 'fill-amber-400 text-amber-400'
+                              ? 'fill-warning text-warning'
                               : 'text-muted'
                           }`}
                         />
@@ -315,7 +315,7 @@ export default function ProveedorDetalle() {
                     </Badge>
                   </div>
 
-                  <Button className="w-full gap-2">
+                  <Button className="w-full">
                     <ShoppingCart className="h-4 w-4" />
                     Ver producto
                   </Button>
@@ -327,7 +327,7 @@ export default function ProveedorDetalle() {
 
         {/* Tab Acerca de */}
         <TabsContent value="acerca" className="mt-6">
-          <Card className="border-border">
+          <Card>
             <CardContent className="p-8 space-y-6">
               <div>
                 <h2 className="text-2xl font-bold text-foreground mb-4">
@@ -400,8 +400,8 @@ export default function ProveedorDetalle() {
         <TabsContent value="reviews" className="mt-6">
           <div className="space-y-4">
             {proveedorData.reviews.map((review) => (
-              <Card key={review.id} className="border-border">
-                <CardContent className="p-6">
+              <Card key={review.id}>
+                <CardContent>
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <p className="font-semibold text-foreground">{review.usuario}</p>
@@ -415,7 +415,7 @@ export default function ProveedorDetalle() {
                           key={i}
                           className={`h-4 w-4 ${
                             i < review.rating
-                              ? 'fill-amber-400 text-amber-400'
+                              ? 'fill-warning text-warning'
                               : 'text-muted'
                           }`}
                         />

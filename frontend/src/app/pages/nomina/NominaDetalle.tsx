@@ -1087,12 +1087,12 @@ export default function NominaDetalle() {
   //  Finca / Otros → zinc-700
   const acumCategoria = (color: CategoriaLabor['color']) => {
     switch (color) {
-      case 'amber':  return { header: 'text-amber-600',   total: 'text-amber-600' };
+      case 'amber':  return { header: 'text-warning',   total: 'text-warning' };
       case 'green':  return { header: 'text-[#1E5631]',   total: 'text-[#1E5631]' };
-      case 'blue':   return { header: 'text-blue-600',    total: 'text-blue-600' };
-      case 'purple': return { header: 'text-purple-600',  total: 'text-purple-600' };
-      case 'red':    return { header: 'text-rose-600',    total: 'text-rose-600' };
-      default:       return { header: 'text-zinc-700 dark:text-zinc-300', total: 'text-foreground' };
+      case 'blue':   return { header: 'text-info',    total: 'text-info' };
+      case 'purple': return { header: 'text-primary',  total: 'text-primary' };
+      case 'red':    return { header: 'text-destructive',    total: 'text-destructive' };
+      default:       return { header: 'text-foreground', total: 'text-foreground' };
     }
   };
 
@@ -1129,7 +1129,7 @@ export default function NominaDetalle() {
 
       {/* Header */}
       <div>
-        <Button variant="ghost" size="sm" asChild className="mb-4 gap-2">
+        <Button variant="ghost" size="sm" asChild className="mb-4">
           <Link to="/nomina">
             <ArrowLeft className="h-4 w-4" />
             Volver
@@ -1157,7 +1157,6 @@ export default function NominaDetalle() {
               const puedeCerrar = totalColabs > 0 && liquidados === totalColabs;
               return (
                 <Button
-                  className="gap-2 bg-primary hover:bg-primary/90"
                   onClick={async () => {
                     // §4.4 — Precargamos el bundle de validar-cosecha para
                     // saber si hay gajos sin despachar ANTES de abrir el
@@ -1210,7 +1209,7 @@ export default function NominaDetalle() {
                 </Button>
               );
             })()}
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline">
               <Download className="h-4 w-4" />
               Exportar
             </Button>
@@ -1237,17 +1236,17 @@ export default function NominaDetalle() {
         );
         if (enRango.length === 0) return null;
         return (
-          <div className="rounded-lg border-2 border-amber-500/40 bg-amber-50/60 dark:bg-amber-950/20 p-4">
+          <div className="rounded-lg border-2 border-warning/20 bg-warning-soft p-4">
             <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 mt-0.5 text-amber-700 shrink-0" />
+              <AlertCircle className="h-5 w-5 mt-0.5 text-warning shrink-0" />
               <div className="flex-1">
-                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200 mb-1">
+                <p className="text-sm font-semibold text-warning mb-1">
                   {enRango.length} día{enRango.length !== 1 ? 's' : ''} de descanso dentro del rango de esta nómina sin cubrir
                 </p>
-                <p className="text-xs text-amber-800/80 dark:text-amber-200/80 mb-2">
+                <p className="text-xs text-foreground mb-2">
                   Con cortes personalizados hay días de descanso que caen en el hueco entre dos nóminas y no se están pagando en ninguna. Puede ser deliberado.
                 </p>
-                <ul className="text-xs text-amber-900/90 dark:text-amber-100/90 space-y-0.5">
+                <ul className="text-xs text-foreground space-y-0.5">
                   {enRango.slice(0, 6).map((d) => (
                     <li key={d.fecha}>
                       <span className="font-mono">{d.fecha}</span> · {d.nombre}
@@ -1298,26 +1297,26 @@ export default function NominaDetalle() {
           onClick={() => setTabActivo('terceros')}
           className={`relative flex items-center gap-4 rounded-xl border-2 px-5 py-4 text-left transition duration-200 ${
             tabActivo === 'terceros'
-              ? 'border-amber-500 bg-amber-50/60 dark:bg-amber-950/20 shadow-sm'
-              : 'border-border bg-card hover:border-amber-400/40 hover:bg-muted/40'
+              ? 'border-warning/40 bg-warning-soft shadow-sm'
+              : 'border-border bg-card hover:border-warning/20 hover:bg-muted/40'
           }`}
         >
           <div className={`h-12 w-12 flex-shrink-0 rounded-xl flex items-center justify-center ${
-            tabActivo === 'terceros' ? 'bg-amber-500/15' : 'bg-muted'
+            tabActivo === 'terceros' ? 'bg-warning-soft' : 'bg-muted'
           }`}>
-            <Building2 className={`h-6 w-6 ${tabActivo === 'terceros' ? 'text-amber-600' : 'text-muted-foreground'}`} />
+            <Building2 className={`h-6 w-6 ${tabActivo === 'terceros' ? 'text-warning' : 'text-muted-foreground'}`} />
           </div>
           <div className="min-w-0 flex-1">
-            <p className={`font-semibold text-base ${tabActivo === 'terceros' ? 'text-amber-700' : 'text-foreground'}`}>
+            <p className={`font-semibold text-base ${tabActivo === 'terceros' ? 'text-warning' : 'text-foreground'}`}>
               Terceros
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">Contratistas y empresas externas</p>
           </div>
-          <span className={`text-2xl font-bold flex-shrink-0 ${tabActivo === 'terceros' ? 'text-amber-700' : 'text-muted-foreground'}`}>
+          <span className={`text-2xl font-bold flex-shrink-0 ${tabActivo === 'terceros' ? 'text-warning' : 'text-muted-foreground'}`}>
             {tercerosAgrupados.length}
           </span>
           {tabActivo === 'terceros' && (
-            <span className="absolute right-3 top-3 h-2 w-2 rounded-full bg-amber-500" />
+            <span className="absolute right-3 top-3 h-2 w-2 rounded-full bg-warning" />
           )}
         </button>
       </div>
@@ -1325,7 +1324,7 @@ export default function NominaDetalle() {
       {/* KPIs dinámicos según tab */}
       {tabActivo === 'colaboradores' ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card className="border-border">
+          <Card>
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -1339,7 +1338,7 @@ export default function NominaDetalle() {
               </div>
             </CardContent>
           </Card>
-          <Card className="border-border">
+          <Card>
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -1367,7 +1366,7 @@ export default function NominaDetalle() {
               </div>
             </CardContent>
           </Card>
-          <Card className="border-border">
+          <Card>
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -1392,7 +1391,7 @@ export default function NominaDetalle() {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-3">
-          <Card className="border-border">
+          <Card>
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -1420,7 +1419,7 @@ export default function NominaDetalle() {
               </div>
             </CardContent>
           </Card>
-          <Card className="border-border">
+          <Card>
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -1450,14 +1449,14 @@ export default function NominaDetalle() {
         <div className="space-y-4">
 
           {cargandoTerceros ? (
-            <Card className="border-border">
+            <Card>
               <CardContent className="py-12 flex items-center justify-center gap-2 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" />
                 Cargando terceros...
               </CardContent>
             </Card>
           ) : tercerosAgrupados.length === 0 ? (
-            <Card className="bg-gradient-to-br from-muted/20 to-muted/5 border-dashed border-2">
+            <Card className="border-2 border-dashed bg-muted/30">
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <Building2 className="h-16 w-16 text-muted-foreground mb-4" />
                 <p className="text-lg font-semibold mb-2">No hay terceros en este período</p>
@@ -1486,11 +1485,11 @@ export default function NominaDetalle() {
               const totalEstimado = categorias.reduce((s, c) => s + c.subtotal, 0);
               const total = toNumber(acta?.total_a_transferir);
               return (
-                <Card key={grupo.tercero_id} className="border-border overflow-hidden">
+                <Card key={grupo.tercero_id} className="overflow-hidden">
                   {/* Header acta */}
-                  <div className={`flex items-center justify-between px-5 py-4 border-b border-border ${pagado ? 'bg-success/5' : 'bg-amber-50/60 dark:bg-amber-950/20'}`}>
+                  <div className={`flex items-center justify-between px-5 py-4 border-b border-border ${pagado ? 'bg-success/5' : 'bg-warning-soft'}`}>
                     <div className="flex items-center gap-3">
-                      <div className={`h-9 w-9 rounded-lg flex items-center justify-center font-bold ${pagado ? 'bg-success/10 text-success' : 'bg-amber-500/10 text-amber-700'}`}>
+                      <div className={`h-9 w-9 rounded-lg flex items-center justify-center font-bold ${pagado ? 'bg-success/10 text-success' : 'bg-warning-soft text-warning'}`}>
                         {grupo.tercero_nombre.charAt(0)}
                       </div>
                       <div>
@@ -1513,14 +1512,13 @@ export default function NominaDetalle() {
                       <Badge className={`text-xs ${
                         pagado
                           ? 'bg-success/10 text-success border-success/20'
-                          : 'bg-amber-500/10 text-amber-700 border-amber-300'
+                          : 'bg-warning-soft text-warning border-warning/20'
                       }`}>
                         {pagado ? 'Pagado' : 'Pendiente'}
                       </Badge>
                       {!pagado && (
                         <Button
                           size="sm"
-                          className="bg-primary hover:bg-primary/90 gap-1.5"
                           onClick={() => navigate(
                             `/nomina/${nominaId}/tercero/${grupo.tercero_id}/liquidar`,
                             { state: { totalEstimado, categorias } },
@@ -1536,7 +1534,7 @@ export default function NominaDetalle() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="gap-1.5"
+                          
                           disabled={generandoActa === grupo.tercero_id}
                           onClick={() =>
                             generarComprobanteTercero(grupo.tercero_id, grupo.tercero_nombre)
@@ -1570,7 +1568,7 @@ export default function NominaDetalle() {
                           size="sm"
                           onClick={() => calcularActaTercero(grupo.tercero_id)}
                           disabled={calculandoActa === grupo.tercero_id}
-                          className="gap-1.5"
+                          
                         >
                           {calculandoActa === grupo.tercero_id
                             ? 'Calculando...'
@@ -1607,7 +1605,7 @@ export default function NominaDetalle() {
                                   <React.Fragment key={cat.key}>
                                     {/* Encabezado de grupo */}
                                     <tr className="bg-muted/40 border-b border-border">
-                                      <td colSpan={7} className={`px-5 py-1.5 text-xs font-bold uppercase tracking-wide ${col.header}`}>
+                                      <td colSpan={7} className={`px-5 py-1.5 text-xs font-semibold ${col.header}`}>
                                         {cat.titulo}
                                       </td>
                                     </tr>
@@ -1668,7 +1666,7 @@ export default function NominaDetalle() {
                             <table className="w-full text-sm">
                               <thead>
                                 <tr className="border-b border-border bg-muted/30 text-xs text-muted-foreground">
-                                  <th className={`text-left p-3 pl-5 font-bold uppercase tracking-wide ${col.header}`}>
+                                  <th className={`p-3 pl-5 text-left font-semibold ${col.header}`}>
                                     Trabajos de finca
                                   </th>
                                   <th className="text-right p-3 font-semibold">Precio Unit.</th>
@@ -1709,7 +1707,7 @@ export default function NominaDetalle() {
                       {/* Total orden de pago — al final después de ambas
                           tablas (campo + finca). Estilo tfoot de V.16. */}
                       <div className="border-t-2 border-primary/20 bg-muted/20 flex items-center justify-between px-5 py-3">
-                        <p className="text-sm font-bold text-primary uppercase tracking-wide">
+                        <p className="text-sm font-semibold text-primary">
                           Total orden de pago a {grupo.tercero_nombre}
                         </p>
                         <p className="text-lg font-bold text-primary">
@@ -1727,11 +1725,11 @@ export default function NominaDetalle() {
               al final del listado. */}
           {tercerosAgrupados.length > 0 && (
             <div className="flex justify-end">
-              <div className="rounded-xl border border-amber-300/50 bg-amber-50/60 dark:bg-amber-950/20 px-6 py-3 flex items-center gap-6">
+              <div className="rounded-xl border border-warning/20 bg-warning-soft px-6 py-3 flex items-center gap-6">
                 <p className="text-sm text-muted-foreground">
                   Total a transferir a empresas terceras
                 </p>
-                <p className="text-2xl font-bold text-amber-700">
+                <p className="text-2xl font-bold text-warning">
                   ${tercerosAgrupados
                     .reduce((s, g) => s + toNumber(g.acta?.total_a_transferir), 0)
                     .toLocaleString('es-CO')}
@@ -1756,7 +1754,7 @@ export default function NominaDetalle() {
             </p>
           </div>
 
-          <Card className="overflow-hidden border-border">
+          <Card className="overflow-hidden">
             <CardContent className="p-0">
               {empleadosMostrar.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
@@ -1848,7 +1846,7 @@ export default function NominaDetalle() {
                               <div className="flex items-center gap-3">
                                 <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${
                                   esOperario
-                                    ? 'bg-amber-500/10 text-amber-700 border-amber-500/30'
+                                    ? 'bg-warning-soft text-warning border-warning/20'
                                     : 'bg-primary/10 text-primary border-primary/20'
                                 }`}>
                                   <span className="text-sm font-bold">{getIniciales(nombre)}</span>
@@ -1863,7 +1861,7 @@ export default function NominaDetalle() {
                             </td>
                             <td className="p-4">
                               {esOperario ? (
-                                <Badge className="text-xs bg-amber-500/10 text-amber-700 border-amber-300">
+                                <Badge className="text-xs bg-warning-soft text-warning border-warning/20">
                                   {terceroNombre ?? 'Tercero'}
                                 </Badge>
                               ) : (
@@ -1951,7 +1949,7 @@ export default function NominaDetalle() {
                                   className={`text-xs ${
                                     liquidado
                                       ? 'bg-success/10 text-success border-success/20'
-                                      : 'bg-amber-500/10 text-amber-600 border-amber-200'
+                                      : 'bg-warning-soft text-warning border-warning/20'
                                   }`}
                                 >
                                   {emp.estado}
@@ -1971,7 +1969,6 @@ export default function NominaDetalle() {
                                         }
                                         navigate(`/nomina/${nominaId}/liquidar/${emp.id}`);
                                       }}
-                                      className="gap-1 bg-primary hover:bg-primary/90"
                                       title="Liquidar"
                                     >
                                       <Calculator className="h-4 w-4" />
@@ -2003,7 +2000,7 @@ export default function NominaDetalle() {
                                         size="sm"
                                         variant="outline"
                                         onClick={() => navigate(`/nomina/${nominaId}/liquidar/${emp.id}?reliquidar=1`)}
-                                        className="gap-1 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300"
+                                        className="hover:bg-warning-soft hover:text-warning hover:border-warning/20"
                                         title="Re-liquidar"
                                       >
                                         <Pencil className="h-4 w-4" />
@@ -2132,11 +2129,11 @@ export default function NominaDetalle() {
               la nómina paga de menos. El backend NO bloquea el cierre, pero
               debe requerir confirmación explícita. */}
           {alertaGajosPreCierre && (
-            <div className="rounded-lg border-2 border-orange-500/40 bg-orange-50/60 dark:bg-orange-950/20 p-3 my-2">
-              <p className="text-sm font-semibold text-orange-900 dark:text-orange-200">
+            <div className="rounded-lg border-2 border-warning/20 bg-warning-soft p-3 my-2">
+              <p className="text-sm font-semibold text-warning">
                 Vas a cerrar con {alertaGajosPreCierre.total_gajos_pendientes_enviar} gajos sin despachar en {alertaGajosPreCierre.cosechas_con_gajos_pendientes} cosecha{alertaGajosPreCierre.cosechas_con_gajos_pendientes !== 1 ? 's' : ''}.
               </p>
-              <p className="text-xs text-orange-800/80 dark:text-orange-200/80 mt-1">
+              <p className="text-xs text-foreground mt-1">
                 Esos gajos quedarán fuera de la liquidación de forma permanente: la cosecha pertenece a este período por fecha de operación, así que la nómina siguiente no los va a tomar.
               </p>
             </div>
@@ -2152,14 +2149,14 @@ export default function NominaDetalle() {
             );
             if (enRango.length === 0) return null;
             return (
-              <div className="rounded-lg border-2 border-amber-500/40 bg-amber-50/60 dark:bg-amber-950/20 p-3 my-2">
-                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+              <div className="rounded-lg border-2 border-warning/20 bg-warning-soft p-3 my-2">
+                <p className="text-sm font-semibold text-warning">
                   {enRango.length} descanso{enRango.length !== 1 ? 's' : ''} del rango de esta nómina sin cubrir
                 </p>
-                <p className="text-xs text-amber-800/80 dark:text-amber-200/80 mt-1">
+                <p className="text-xs text-foreground mt-1">
                   Estos días caen en un hueco entre nóminas y no se están pagando en ninguna. Puede ser deliberado.
                 </p>
-                <ul className="text-xs text-amber-900/90 dark:text-amber-100/90 mt-2 space-y-0.5">
+                <ul className="text-xs text-foreground mt-2 space-y-0.5">
                   {enRango.slice(0, 6).map((d) => (
                     <li key={d.fecha}>
                       <span className="font-mono">{d.fecha}</span> · {d.nombre}
@@ -2202,7 +2199,7 @@ export default function NominaDetalle() {
               onClick={() => cerrarNomina(bloqueosForzablesCierre.length > 0)}
               disabled={accionando || bloqueosDurosCierre.length > 0}
               className={alertaGajosPreCierre || bloqueosForzablesCierre.length > 0
-                ? 'bg-orange-600 hover:bg-orange-700'
+                ? 'bg-warning hover:bg-warning'
                 : undefined}
             >
               {accionando
@@ -2253,7 +2250,7 @@ export default function NominaDetalle() {
             <AlertDialogAction
               onClick={() => cerrarNomina(true)}
               disabled={accionando || motivoForzado.trim().length < 5}
-              className="bg-orange-600 hover:bg-orange-700"
+              className="bg-warning hover:bg-warning"
             >
               {accionando ? 'Cerrando...' : 'Cerrar de todas formas'}
             </AlertDialogAction>
@@ -2394,7 +2391,7 @@ export default function NominaDetalle() {
             >
               Cancelar
             </Button>
-            <Button onClick={guardarEdicion} disabled={guardandoEdit} className="gap-2">
+            <Button onClick={guardarEdicion} disabled={guardandoEdit}>
               {guardandoEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               Guardar cambios
             </Button>
@@ -2519,7 +2516,6 @@ export default function NominaDetalle() {
                   registrandoPago
                   || (pagandoForm.metodo_pago === 'TRANSFERENCIA' && !pagandoForm.referencia_pago)
                 }
-                className="bg-primary hover:bg-primary/90 gap-2"
               >
                 {registrandoPago ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 Confirmar Pago

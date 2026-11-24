@@ -169,7 +169,7 @@ export default function VacacionesHistorico() {
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" size="sm" asChild className="gap-2">
+      <Button variant="ghost" size="sm" asChild>
         <Link to="/liquidaciones?tab=vacaciones"><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
       </Button>
 
@@ -249,7 +249,7 @@ export default function VacacionesHistorico() {
         <button
           type="button"
           onClick={() => { setFiltroInterrupcion('reintegro'); setPagina(1); }}
-          className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm text-amber-800 dark:border-amber-800/30 dark:bg-amber-950/20 dark:text-amber-400"
+          className="w-full rounded-xl border border-warning/20 bg-warning-soft px-4 py-3 text-left text-sm text-warning"
         >
           {meta!.totales.reintegros_pendientes} vacación(es) interrumpida(s) con{' '}
           {fmtCOP(meta!.totales.reintegros_pendientes_valor ?? 0)} por reintegrar.
@@ -258,7 +258,7 @@ export default function VacacionesHistorico() {
       )}
 
       {/* Tabla */}
-      <Card className="overflow-hidden glass-subtle border-border">
+      <Card className="glass-subtle overflow-hidden">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -313,7 +313,7 @@ export default function VacacionesHistorico() {
                             <span className="text-xs text-muted-foreground">{ORIGEN_LABEL[h.origen]}</span>
                           )}
                           {h.interrumpida && (
-                            <span className="text-xs text-amber-700">
+                            <span className="text-xs text-warning">
                               Interrumpida
                               {h.interrupcion?.reintegro?.estado === 'PENDIENTE'
                                 ? ' · reintegro pendiente'
@@ -326,7 +326,7 @@ export default function VacacionesHistorico() {
                         <span className="text-sm font-medium text-success">{fmtDias(h.dias_habiles)}</span>
                       </td>
                       <td className="p-4 text-center">
-                        <span className="text-sm font-medium text-amber-600">
+                        <span className="text-sm font-medium text-warning">
                           {h.dias_dinero > 0 ? fmtDias(h.dias_dinero) : '—'}
                         </span>
                       </td>
@@ -392,7 +392,7 @@ export default function VacacionesHistorico() {
                               <Button
                                 size="sm"
                                 onClick={() => navigate(`/liquidaciones/vacaciones/nueva?solicitud=${h.id}`)}
-                                className="gap-1.5 bg-success hover:bg-success/90"
+                                className="bg-success hover:bg-success/90"
                               >
                                 <Check className="h-3.5 w-3.5" />
                                 Liquidar
@@ -401,7 +401,7 @@ export default function VacacionesHistorico() {
                                 size="sm"
                                 variant="outline"
                                 onClick={() => setAAnular({ fila: h, modo: 'solicitud' })}
-                                className="gap-1.5 hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
+                                className="hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
                               >
                                 <Ban className="h-3.5 w-3.5" />
                                 Rechazar
@@ -413,7 +413,7 @@ export default function VacacionesHistorico() {
                               size="sm"
                               variant="outline"
                               onClick={() => setAPagar(h)}
-                              className="gap-1.5 hover:border-primary hover:bg-primary/10 hover:text-primary"
+                              className="hover:border-primary hover:bg-primary/10 hover:text-primary"
                             >
                               <Banknote className="h-3.5 w-3.5" />
                               {/* En NOMINA el giro solo cubre el saldo que las
@@ -425,7 +425,7 @@ export default function VacacionesHistorico() {
                             size="sm"
                             variant="outline"
                             onClick={() => navigate(`/liquidaciones/vacaciones/${h.id}`)}
-                            className="gap-1.5"
+                            
                           >
                             <Eye className="h-3.5 w-3.5" />
                             Ver
@@ -438,7 +438,7 @@ export default function VacacionesHistorico() {
                               variant="outline"
                               disabled={descargando === h.id}
                               onClick={() => descargarComprobante(h)}
-                              className="gap-1.5 hover:border-primary hover:bg-primary/10 hover:text-primary"
+                              className="hover:border-primary hover:bg-primary/10 hover:text-primary"
                             >
                               {descargando === h.id
                                 ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -502,14 +502,14 @@ export default function VacacionesHistorico() {
               {/* PR-L15 — De esas, las que esperan el cierre de una nomina.
                   No son una mora del modulo: no hay nada que girar aqui. */}
               {meta && (meta.totales.pendientes_pago_nomina ?? 0) > 0 && (
-                <span className="text-sky-600 dark:text-sky-400">
+                <span className="text-info">
                   {' · '}{meta.totales.pendientes_pago_nomina} esperando nómina
                 </span>
               )}
               {/* PR-N4 — Sin liquidar, la nómina del período paga esos días
                   como trabajados. Merece su propio contador. */}
               {meta && (meta.totales.solicitudes_pendientes ?? 0) > 0 && (
-                <span className="text-orange-600 dark:text-orange-400">
+                <span className="text-warning">
                   {' · '}{meta.totales.solicitudes_pendientes} solicitud
                   {meta.totales.solicitudes_pendientes !== 1 ? 'es' : ''} por resolver
                 </span>

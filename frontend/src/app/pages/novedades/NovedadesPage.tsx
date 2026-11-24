@@ -167,13 +167,13 @@ export default function NovedadesPage() {
             <Button
               variant="outline"
               onClick={() => navigate('/novedades/importar')}
-              className="w-full gap-2 border-2 border-primary text-primary hover:bg-primary/5 sm:w-auto"
+              className="w-full border-2 border-primary text-primary hover:bg-primary/5 sm:w-auto"
             >
               <Upload className="h-4 w-4" />
               Importar Novedades
             </Button>
           )}
-          <Button onClick={() => navigate('/novedades/nueva')} className="w-full gap-2 sm:w-auto">
+          <Button onClick={() => navigate('/novedades/nueva')} className="w-full sm:w-auto">
             <Plus className="h-4 w-4" />
             Nueva Novedad
           </Button>
@@ -183,14 +183,14 @@ export default function NovedadesPage() {
       {/* Totales por categoría del filtro completo, no de la página. */}
       {meta?.totales && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <Card className="border-border">
+          <Card>
             <CardContent className="p-3">
               <p className="text-xs text-muted-foreground">Total</p>
               <p className="text-xl font-bold text-foreground">{meta.totales.total}</p>
             </CardContent>
           </Card>
           {CATEGORIAS.map((c) => (
-            <Card key={c.valor} className="border-border">
+            <Card key={c.valor}>
               <CardContent className="p-3">
                 <p className="truncate text-xs text-muted-foreground" title={c.etiqueta}>{c.etiqueta}</p>
                 <p className="text-xl font-bold text-foreground">{meta.totales?.[c.valor] ?? 0}</p>
@@ -207,18 +207,18 @@ export default function NovedadesPage() {
         <button
           type="button"
           onClick={() => { setEstado('PENDIENTE'); setFuente('AUSENCIA'); }}
-          className="flex w-full items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left transition hover:border-amber-300 dark:border-amber-800/40 dark:bg-amber-950/20 dark:hover:border-amber-700"
+          className="flex w-full items-center gap-3 rounded-xl border border-warning/20 bg-warning-soft px-4 py-3 text-left transition hover:border-warning/20 dark:hover:border-warning/40"
         >
-          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+          <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+            <p className="text-sm font-semibold text-warning">
               {pendientes} {pendientes === 1 ? 'novedad' : 'novedades'} pendiente{pendientes === 1 ? '' : 's'} de aprobar
             </p>
-            <p className="text-xs text-amber-700 dark:text-amber-400">
+            <p className="text-xs text-warning">
               Mientras sigan sin aprobar, la nómina no liquida a esos colaboradores ni se cierra.
             </p>
           </div>
-          <span className="shrink-0 text-xs font-medium text-amber-800 underline underline-offset-2 dark:text-amber-300">
+          <span className="shrink-0 text-xs font-medium text-warning underline underline-offset-2">
             Ver pendientes
           </span>
         </button>
@@ -284,7 +284,7 @@ export default function NovedadesPage() {
         )}
       </div>
 
-      <Card className="overflow-hidden glass-subtle border-border">
+      <Card className="glass-subtle overflow-hidden">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[860px]">

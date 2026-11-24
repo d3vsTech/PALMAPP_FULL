@@ -287,7 +287,7 @@ export default function NuevoProducto() {
                     <CardTitle>Precios por Volumen</CardTitle>
                     <p className="text-sm text-muted-foreground mt-1">Opcional: Ofrece descuentos por cantidad</p>
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={agregarPV} className="gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={agregarPV}>
                     <Plus className="h-4 w-4" />
                     Agregar
                   </Button>
@@ -411,7 +411,7 @@ export default function NuevoProducto() {
           >
             Cancelar
           </Button>
-          <Button type="submit" className="gap-2" disabled={enviando}>
+          <Button type="submit"  disabled={enviando}>
             {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             {enviando ? 'Creando...' : 'Crear Producto'}
           </Button>

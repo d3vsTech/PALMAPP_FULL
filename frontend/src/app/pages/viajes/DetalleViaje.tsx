@@ -11,8 +11,8 @@ import {
 } from '../../components/ui/alert-dialog';
 import {
   ArrowLeft, ArrowRight, Check, Truck, Leaf, Trash2, Edit, X,
-  CheckCircle, Clock, FileText, Sparkles, Image as ImageIcon, Upload, Loader2,
-  AlertTriangle, Download, Settings, Calendar, MapPin, User, Package, Weight, Save,
+  CheckCircle, Sparkles, Upload, Loader2,
+  AlertTriangle, Download, Settings, Weight, Save,
   RotateCcw, Undo2,
 } from 'lucide-react';
 import {
@@ -24,7 +24,7 @@ import {
   type Viaje, type ViajeDetalle, type EstadoViajeApi, type EstadoOcrDocumento,
   type TransportadorSelect, type ExtractoraSelect,
 } from '../../../api/viajes';
-import { formatFecha, formatFechaHora, formatHora } from '../../utils/fecha';
+import { formatFecha, formatHora } from '../../utils/fecha';
 import { useAuth } from '../../contexts/AuthContext';
 import { RevertirEstadoDialog } from '../../components/common/RevertirEstadoDialog';
 import { reversionApi } from '../../../api/reversionEstados';
@@ -82,7 +82,7 @@ export default function DetalleViaje() {
 
   const [viaje, setViaje] = useState<any>(null);
   // La pantalla abre en el resumen del viaje (tarjetas de solo lectura +
-  // acciones). "Gestionar Viaje" cambia al wizard de etapas.
+  // acciones). "Gestionar viaje" cambia al wizard de etapas.
   /**
    * La vista vive en la URL y no en un estado local, para que el botón
    * "atrás" del navegador funcione entre modos en vez de sacarte de la
@@ -168,7 +168,7 @@ export default function DetalleViaje() {
       const res = await viajesApi.ver(Number(id));
       setViaje(res.data);
       // Un viaje EN_VALIDACION está esperando el formulario de la extractora:
-      // abrir en el resumen obligaba a pasar por "Gestionar Viaje" para llegar
+      // abrir en el resumen obligaba a pasar por "Gestionar viaje" para llegar
       // a la carga del soporte. En ese estado entramos directo al wizard.
       // Solo en la primera carga, para no anular el toggle del usuario.
       if (primeraCarga.current) {
@@ -213,7 +213,7 @@ export default function DetalleViaje() {
    */
   /**
    * Hidrata el formulario con el viaje cargado y trae los selects. Se llama
-   * tanto al pulsar "Gestionar Viaje" como al entrar directo por URL con
+   * tanto al pulsar "Gestionar viaje" como al entrar directo por URL con
    * `?vista=editar` desde el botón Editar de la lista.
    *
    * Los selects se piden solo aquí, no en cada visita de solo lectura.
@@ -557,32 +557,7 @@ export default function DetalleViaje() {
   const horaSalida = horaSalidaRaw.includes('T')
     ? horaSalidaRaw.slice(11, 16)
     : horaSalidaRaw.slice(0, 5);
-  const fechaCreado = viaje.created_at ?? null;
-  // En el modelo nuevo, `validacion_at` es la fecha exacta de transición a EN_VALIDACION.
-  // Mantenemos fallbacks a campos legacy por si el backend aún devuelve los antiguos.
-  const fechaValidacion = viaje.validacion_at ?? viaje.fecha_despachado ?? viaje.fecha_en_camino ?? null;
-  const fechaFinalizado = viaje.finalizado_at ?? viaje.fecha_finalizado ?? null;
-
   const detalles = (viaje.detalles ?? []) as any[];
-
-  // §14.1 — el `show` devuelve los documentos de báscula cargados. El hito
-  // "Soporte Extractora" se cumple cuando ya subieron al menos uno, sin
-  // esperar a que el viaje cierre; la fecha es la del primero.
-  const documentosBascula = (viaje.documentos_bascula ?? []) as Array<{ created_at: string }>;
-  const fechaSoporte = documentosBascula.length > 0
-    ? documentosBascula
-        .map((d) => d.created_at)
-        .filter(Boolean)
-        .sort()[0] ?? null
-    : null;
-  const tieneSoporte = documentosBascula.length > 0 || estadoActual === 'Finalizado';
-
-  // Pasos del Timeline
-  const timelineSteps = [
-    { estado: 'Creado',        label: 'Info. Viaje',        icon: FileText,    fecha: fechaCreado,                                                          completado: ['Creado', 'En Validación', 'Finalizado'].includes(estadoActual) },
-    { estado: 'En Validación', label: 'Cosecha',            icon: Clock,       fecha: ['En Validación', 'Finalizado'].includes(estadoActual) ? fechaValidacion : null, completado: ['En Validación', 'Finalizado'].includes(estadoActual) },
-    { estado: 'Finalizado',    label: 'Soporte Extractora', icon: CheckCircle, fecha: tieneSoporte ? (fechaSoporte ?? fechaFinalizado) : null,              completado: tieneSoporte },
-  ];
 
   /** Creado en gris, en validación en azul, finalizado en verde. */
   const tonoEstado = estadoActual === 'Creado' ? 'secondary' as const
@@ -785,20 +760,92 @@ export default function DetalleViaje() {
   );
 
   // ── Vista Resumen (por defecto) ────────────────────────────────────────────
+
+  /**
+   * Los botones de la cabecera. Son los mismos que vivian en la barra de la
+   * derecha, con sus mismas condiciones: el desprendible solo existe con el
+   * viaje finalizado, la remision de entrega solo en CREADO, y reabrir pide
+   * su propio permiso.
+   */
+  const acciones = (
+    <>
+      {/* La remisión solo existe con el viaje finalizado (D4). */}
+      {puedeDesprendible && (
+        <Button onClick={descargarDesprendible} disabled={descargandoPdf}>
+          <Download className="h-4 w-4" strokeWidth={2} />
+          {descargandoPdf ? 'Generando…' : 'Descargar desprendible'}
+        </Button>
+      )}
+      {puedeDesprendible && (
+        <Button variant="outline" onClick={enviarPorWhatsApp} disabled={generandoEnlace}>
+          <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+    </svg>
+          {generandoEnlace ? 'Generando enlace…' : 'Enviar por WhatsApp'}
+        </Button>
+      )}
+      {/* §5.10 — Permiso aparte: `viajes.editar` no lo incluye.
+          Reabrir borra el promedio que este camión aportó, así que
+          solo aparece con el viaje ya finalizado. */}
+      {estadoActual === 'Finalizado' && hasPermiso('viajes.reabrir') && (
+        <Button
+          variant="outline"
+          onClick={() => setReabrirAbierto(true)}
+          className="border-warning/20 text-warning hover:bg-warning-soft"
+        >
+          <RotateCcw className="h-4 w-4" strokeWidth={2} />
+          Reabrir viaje
+        </Button>
+      )}
+      {/* La remisión de entrega es el papel que lleva el conductor, así que
+          se imprime antes de salir. El desprendible de arriba es otro
+          documento y solo existe cuando el viaje ya está finalizado. */}
+      {estadoActual === 'Creado' && (
+        <Button onClick={() => void descargarRemisionEntrega()} disabled={descargandoRemision}>
+          <Download className="h-4 w-4" strokeWidth={2} />
+          {descargandoRemision ? 'Generando…' : 'Descargar remisión'}
+        </Button>
+      )}
+      {/* CREADO entra al formulario de edición; EN_VALIDACION al wizard de
+          carga de la remisión de extractora. FINALIZADO no muestra ninguno:
+          ya no admite cambios. */}
+      {estadoActual === 'Creado' && (
+        <Button variant="outline" onClick={habilitarEdicion}>
+          <Settings className="h-4 w-4" strokeWidth={2} />
+          Gestionar viaje
+        </Button>
+      )}
+      {estadoActual === 'En Validación' && (
+        <Button variant="outline" onClick={() => irAVista('gestion')}>
+          <Upload className="h-4 w-4" strokeWidth={2} />
+          Soporte de extractora
+        </Button>
+      )}
+      {/* Vuelta al conteo antes de finalizar: faltó una cosecha, sobra otra,
+          o hay que corregir la cabecera, que solo se edita en CREADO. */}
+      {estadoActual === 'En Validación' && hasPermiso('viajes.editar') && (
+        <Button variant="outline" onClick={() => setDevolverAbierto(true)}>
+          <Undo2 className="h-4 w-4" strokeWidth={2} />
+          Devolver a conteo
+        </Button>
+      )}
+    </>
+  );
+
   if (vistaResumen) {
     return (
       <div className="space-y-6">
         <PageHeader
           backTo="/viajes"
           eyebrow={remisionId || 'Viajes'}
-          title={
+          title={modoGestion ? 'Editar viaje' : 'Detalle del viaje'}
+          description={
             <span className="flex flex-wrap items-center gap-2">
-              {modoGestion ? 'Editar viaje' : 'Detalle del viaje'}
               <Badge variant={tonoEstado}>{estadoActual}</Badge>
               {/*
                 * §15 — un viaje que entró por archivo. Importa decirlo aquí
                 * porque su `finalizado_at` es la hora del cargue, no la del
-                * cierre real, y el timeline de abajo no cuenta nada.
+                * cierre real.
                 */}
               {viaje.origen === 'IMPORTACION' && (
                 <Badge variant="outline" className="border-border text-muted-foreground">
@@ -807,20 +854,24 @@ export default function DetalleViaje() {
               )}
             </span>
           }
+          actions={modoGestion ? undefined : acciones}
         />
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Columna principal — a ancho completo mientras se edita */}
-          <div className={modoGestion ? 'lg:col-span-3 space-y-6' : 'lg:col-span-2 space-y-6'}>
-            {/* Info del viaje */}
-            <Card className="border-border">
-              <CardHeader className="border-b border-border pb-4">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Truck className="h-4 w-4 text-primary" />
-                  Información del Viaje
-                </CardTitle>
+        <div className="space-y-6">
+          {/* Info del viaje */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="flex items-center gap-2">
+                    <Truck className="h-4 w-4 text-muted-foreground" strokeWidth={2} />
+                    Información del viaje
+                  </CardTitle>
+                  {remisionId && (
+                    <span className="text-sm text-muted-foreground">{remisionId}</span>
+                  )}
+                </div>
               </CardHeader>
-              <CardContent className="p-6">
+              <CardContent>
                 {modoGestion ? (
                   /* Formulario de edición. Solo fecha, hora, transportador y
                      extractora viajan en el PUT; placa y conductor son
@@ -828,7 +879,7 @@ export default function DetalleViaje() {
                   <div className="space-y-5">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="detallevia-fecha-del-viaje">Fecha del Viaje</Label>
+                        <Label htmlFor="detallevia-fecha-del-viaje">Fecha del viaje</Label>
                         <Input id="detallevia-fecha-del-viaje"
                           type="date"
                           value={datosViaje.fecha}
@@ -836,7 +887,7 @@ export default function DetalleViaje() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="detallevia-hora-de-salida">Hora de Salida</Label>
+                        <Label htmlFor="detallevia-hora-de-salida">Hora de salida</Label>
                         <Input id="detallevia-hora-de-salida"
                           type="time"
                           value={datosViaje.horaSalida}
@@ -862,7 +913,7 @@ export default function DetalleViaje() {
                         </Select>
                       </div>
                       <div className="space-y-2">
-                        <Label>Extractora Destino</Label>
+                        <Label>Extractora destino</Label>
                         <Select
                           value={datosViaje.extractoraId}
                           onValueChange={(v) => setDatosViaje({ ...datosViaje, extractoraId: v })}
@@ -880,7 +931,7 @@ export default function DetalleViaje() {
                         </Select>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="detallevia-placa-del-vehiculo">Placa del Vehículo</Label>
+                        <Label htmlFor="detallevia-placa-del-vehiculo">Placa del vehículo</Label>
                         <Input id="detallevia-placa-del-vehiculo" value={datosViaje.placaVehiculo} disabled className="bg-muted" />
                       </div>
                       <div className="space-y-2">
@@ -890,11 +941,11 @@ export default function DetalleViaje() {
                     </div>
 
                     <div className="flex gap-2 pt-2">
-                      <Button onClick={guardarEdicion} disabled={guardandoEdicion} className="gap-2">
-                        <Save className="h-4 w-4" />
-                        {guardandoEdicion ? 'Guardando...' : 'Guardar'}
+                      <Button onClick={guardarEdicion} disabled={guardandoEdicion}>
+                        <Save className="h-4 w-4" strokeWidth={2} />
+                        {guardandoEdicion ? 'Guardando…' : 'Guardar cambios'}
                       </Button>
-                      <Button variant="outline" onClick={cancelarEdicion} className="gap-2">
+                      <Button variant="outline" onClick={cancelarEdicion}>
                         <X className="h-4 w-4" />
                         Cancelar
                       </Button>
@@ -903,47 +954,29 @@ export default function DetalleViaje() {
                 ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground uppercase tracking-wide">
-                      <Calendar className="h-3.5 w-3.5" />
-                      Fecha del Viaje
-                    </div>
+                    <p className="text-[13px] font-medium text-muted-foreground">Fecha del viaje</p>
                     <p className="font-semibold text-foreground">
                       {formatFecha(fechaViaje, { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground uppercase tracking-wide">
-                      <Clock className="h-3.5 w-3.5" />
-                      Hora de Salida
-                    </div>
+                    <p className="text-[13px] font-medium text-muted-foreground">Hora de salida</p>
                     <p className="font-semibold text-foreground">{horaSalida ? formatHora(horaSalida) : '—'}</p>
                   </div>
                   <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground uppercase tracking-wide">
-                      <Truck className="h-3.5 w-3.5" />
-                      Placa del Vehículo
-                    </div>
+                    <p className="text-[13px] font-medium text-muted-foreground">Placa del vehículo</p>
                     <p className="font-semibold text-foreground">{placa || '—'}</p>
                   </div>
                   <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground uppercase tracking-wide">
-                      <User className="h-3.5 w-3.5" />
-                      Conductor
-                    </div>
+                    <p className="text-[13px] font-medium text-muted-foreground">Conductor</p>
                     <p className="font-semibold text-foreground">{conductor || '—'}</p>
                   </div>
                   <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground uppercase tracking-wide">
-                      <Package className="h-3.5 w-3.5" />
-                      Transportador
-                    </div>
+                    <p className="text-[13px] font-medium text-muted-foreground">Transportador</p>
                     <p className="font-semibold text-foreground">{transporte || '—'}</p>
                   </div>
                   <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground uppercase tracking-wide">
-                      <MapPin className="h-3.5 w-3.5" />
-                      Extractora Destino
-                    </div>
+                    <p className="text-[13px] font-medium text-muted-foreground">Extractora destino</p>
                     <p className="font-semibold text-foreground">{extractora || '—'}</p>
                   </div>
                 </div>
@@ -955,22 +988,22 @@ export default function DetalleViaje() {
                 viaje en CREADO: ahí las cosechas todavía se están contando
                 y los totales no significan nada. */}
             {!modoGestion && estadoActual !== 'Creado' && (
-            <Card className="overflow-hidden border-border">
-              <CardHeader className="border-b border-border pb-4">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Leaf className="h-4 w-4 text-primary" />
-                  Resumen de Cosecha
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Leaf className="h-4 w-4 text-muted-foreground" strokeWidth={2} />
+                  Resumen de cosecha
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-6 space-y-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="rounded-xl bg-primary-soft p-4 text-center">
-                    <p className="text-3xl font-bold tabular-nums text-primary">{numFmt(totalGajos)}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Gajos totales</p>
+              <CardContent className="space-y-5">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="rounded-lg bg-muted/60 px-4 py-3">
+                    <p className="text-xs font-medium text-muted-foreground">Gajos totales</p>
+                    <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{numFmt(totalGajos)}</p>
                   </div>
-                  <div className="rounded-xl bg-primary-soft p-4 text-center">
-                    <p className="text-3xl font-bold tabular-nums text-primary">{lotesSummary.length}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Lotes</p>
+                  <div className="rounded-lg bg-muted/60 px-4 py-3">
+                    <p className="text-xs font-medium text-muted-foreground">Lotes</p>
+                    <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{lotesSummary.length}</p>
                   </div>
                 </div>
 
@@ -982,14 +1015,14 @@ export default function DetalleViaje() {
                           <th className="px-4 py-2.5 text-left font-semibold">Fecha planilla</th>
                           <th className="px-4 py-2.5 text-left font-semibold">Colaboradores</th>
                           <th className="px-4 py-2.5 text-left font-semibold">Lote</th>
-                          <th className="px-4 py-2.5 text-left font-semibold">Sublote</th>
+                          <th className="hidden px-4 py-2.5 text-left font-semibold sm:table-cell">Sublote</th>
                           <th className="px-4 py-2.5 text-right font-semibold">Gajos</th>
                           <th className="px-4 py-2.5 text-right font-semibold">Peso (kg)</th>
                         </tr>
                       </thead>
-                      <tbody>
-                        {filasCosecha.map((f, i) => (
-                          <tr key={f.id} className={`border-b border-border last:border-0 ${i % 2 === 1 ? 'bg-muted/30' : ''}`}>
+                      <tbody className="divide-y divide-border">
+                        {filasCosecha.map((f) => (
+                          <tr key={f.id} className="transition-colors hover:bg-muted/40">
                             <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">
                               {formatFecha(f.fecha)}
                             </td>
@@ -1000,7 +1033,7 @@ export default function DetalleViaje() {
                               {f.colaboradores.length > 0 ? f.colaboradores.join(', ') : '—'}
                             </td>
                             <td className="px-4 py-2.5 text-foreground">{f.lote}</td>
-                            <td className="px-4 py-2.5 text-muted-foreground">{f.sublote}</td>
+                            <td className="hidden px-4 py-2.5 text-muted-foreground sm:table-cell">{f.sublote}</td>
                             <td className="px-4 py-2.5 text-right tabular-nums">{numFmt(f.gajos)}</td>
                             <td className="px-4 py-2.5 text-right tabular-nums">
                               {f.pesoKg === null
@@ -1011,10 +1044,11 @@ export default function DetalleViaje() {
                         ))}
                       </tbody>
                       <tfoot>
-                        <tr className="bg-primary text-white">
-                          <td colSpan={4} className="px-4 py-2.5 font-bold">Total</td>
-                          <td className="px-4 py-2.5 text-right font-bold tabular-nums">{numFmt(totalGajos)}</td>
-                          <td className="px-4 py-2.5 text-right font-bold tabular-nums">
+                        <tr className="border-t border-border bg-muted/60">
+                          <td colSpan={3} className="px-4 py-2.5 font-semibold text-foreground">Total</td>
+                          <td className="hidden sm:table-cell" />
+                          <td className="px-4 py-2.5 text-right font-semibold tabular-nums">{numFmt(totalGajos)}</td>
+                          <td className="px-4 py-2.5 text-right font-semibold tabular-nums">
                             {hayPesos ? numFmt(totalKg, 2) : '—'}
                           </td>
                         </tr>
@@ -1022,9 +1056,9 @@ export default function DetalleViaje() {
                     </table>
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Leaf className="h-10 w-10 mx-auto mb-2 opacity-20" />
-                    <p className="text-sm">No hay cosechas asociadas a este viaje</p>
+                  <div className="space-y-1 py-8 text-center">
+                    <h3 className="text-base font-semibold text-foreground">Sin cosechas en este viaje</h3>
+                    <p className="text-sm text-muted-foreground">Entra al conteo para enlazarlas.</p>
                   </div>
                 )}
               </CardContent>
@@ -1033,182 +1067,58 @@ export default function DetalleViaje() {
 
             {/* Datos extractora (si finalizado) */}
             {!modoGestion && estadoActual === 'Finalizado' && pesoExtractora > 0 && (
-              <Card className="border-border">
-                <CardHeader className="border-b border-border pb-4">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Weight className="h-4 w-4 text-primary" />
-                    Datos Recibidos en Extractora
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Weight className="h-4 w-4 text-muted-foreground" strokeWidth={2} />
+                    Datos recibidos en la extractora
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-6">
+                <CardContent>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">N° Remisión Extractora</p>
+                      <p className="text-[13px] font-medium text-muted-foreground">N° de remisión de la extractora</p>
                       <p className="font-semibold">{viaje.numero_remision_extractora || '—'}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Fecha / Hora Llegada</p>
+                      <p className="text-[13px] font-medium text-muted-foreground">Fecha y hora de llegada</p>
                       <p className="font-semibold">
                         {viaje.fecha_llegada ? formatFecha(String(viaje.fecha_llegada).slice(0, 10)) : '—'}
                         {viaje.hora_llegada ? ` · ${formatHora(String(viaje.hora_llegada))}` : ''}
                       </p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Peso Recibido</p>
+                      <p className="text-[13px] font-medium text-muted-foreground">Peso recibido</p>
                       <p className="font-semibold">{numFmt(pesoExtractora, 2)} kg</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Fruto Verde</p>
+                      <p className="text-[13px] font-medium text-muted-foreground">Fruto verde</p>
                       <p className="font-semibold">{numFmt(Number(viaje.fruto_verde ?? 0), 2)} %</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Sobre Maduro</p>
+                      <p className="text-[13px] font-medium text-muted-foreground">Sobre maduro</p>
                       <p className="font-semibold">{numFmt(Number(viaje.sobre_maduro ?? 0), 2)} %</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Podrido</p>
+                      <p className="text-[13px] font-medium text-muted-foreground">Podrido</p>
                       <p className="font-semibold">{numFmt(Number(viaje.podrido ?? 0), 2)} %</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Pedúnculo Largo</p>
+                      <p className="text-[13px] font-medium text-muted-foreground">Pedúnculo largo</p>
                       <p className="font-semibold">{numFmt(Number(viaje.pedunculo_largo ?? 0), 2)} %</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Mal Formado</p>
+                      <p className="text-[13px] font-medium text-muted-foreground">Mal formado</p>
                       <p className="font-semibold">{numFmt(Number(viaje.mal_formado ?? 0), 2)} %</p>
                     </div>
                     <div className="space-y-1 sm:col-span-2">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Observaciones</p>
+                      <p className="text-[13px] font-medium text-muted-foreground">Observaciones</p>
                       <p className="font-semibold">{viaje.observaciones_extractora || '—'}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-            )}
-          </div>
-
-          {/* Columna derecha: Acciones + Timeline */}
-          {!modoGestion && <div className="lg:col-span-1 space-y-6">
-            <Card className="border-border">
-              <CardContent className="p-4 space-y-2">
-                {/* La remisión solo existe con el viaje finalizado (D4). */}
-                {puedeDesprendible && (
-                <Button onClick={descargarDesprendible} disabled={descargandoPdf} className="w-full gap-2">
-                  <Download className="h-4 w-4" />
-                  {descargandoPdf ? 'Generando...' : 'Descargar Desprendible'}
-                </Button>
-                )}
-                {puedeDesprendible && (
-                <Button variant="outline" onClick={enviarPorWhatsApp} disabled={generandoEnlace} className="w-full gap-2">
-                  <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                  </svg>
-                  {generandoEnlace ? 'Generando enlace...' : 'Enviar por WhatsApp'}
-                </Button>
-                )}
-                {/* §5.10 — Permiso aparte: `viajes.editar` no lo incluye.
-                    Reabrir borra el promedio que este camión aportó, así que
-                    solo aparece con el viaje ya finalizado. */}
-                {estadoActual === 'Finalizado' && hasPermiso('viajes.reabrir') && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setReabrirAbierto(true)}
-                    className="w-full gap-2 border-amber-500/40 text-amber-700 hover:bg-amber-500/10 dark:text-amber-300"
-                  >
-                    <RotateCcw className="h-4 w-4" />
-                    Reabrir viaje
-                  </Button>
-                )}
-                {/* La remisión de entrega es el papel que lleva el
-                    conductor, así que se imprime antes de salir. El
-                    desprendible de arriba es otro documento y solo existe
-                    cuando el viaje ya está finalizado. */}
-                {estadoActual === 'Creado' && (
-                  <Button
-                    onClick={() => void descargarRemisionEntrega()}
-                    disabled={descargandoRemision}
-                    className="w-full gap-2"
-                  >
-                    <Download className="h-4 w-4" />
-                    {descargandoRemision ? 'Generando...' : 'Descargar Remisión'}
-                  </Button>
-                )}
-                {/* CREADO entra al formulario de edición; EN_VALIDACION al
-                    wizard de carga de la remisión de extractora. FINALIZADO
-                    no muestra ninguno: ya no admite cambios. */}
-                {estadoActual === 'Creado' && (
-                  <Button variant="outline" onClick={habilitarEdicion} className="w-full gap-2">
-                    <Settings className="h-4 w-4" />
-                    Gestionar Viaje
-                  </Button>
-                )}
-                {estadoActual === 'En Validación' && (
-                  <Button variant="outline" onClick={() => irAVista('gestion')} className="w-full gap-2">
-                    <Upload className="h-4 w-4" />
-                    Soporte de Extractora
-                  </Button>
-                )}
-                {/* Vuelta al conteo antes de finalizar: faltó una cosecha,
-                    sobra otra, o hay que corregir la cabecera, que solo se
-                    edita en CREADO. */}
-                {estadoActual === 'En Validación' && hasPermiso('viajes.editar') && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setDevolverAbierto(true)}
-                    className="w-full gap-2"
-                  >
-                    <Undo2 className="h-4 w-4" />
-                    Devolver a Conteo
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Timeline */}
-            <Card className="border-border">
-              <CardHeader className="border-b border-border">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Clock className="h-4 w-4 text-primary" />
-                  Timeline del Viaje
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="relative space-y-6">
-                  <div className="absolute left-4 top-4 bottom-4 w-0.5 bg-border" />
-                  {timelineSteps.map((step) => {
-                    const Icon = step.icon;
-                    const isCompleted = step.completado;
-                    const isActive = step.estado === estadoActual;
-                    return (
-                      <div key={step.estado} className="relative flex gap-3">
-                        <div className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 ${
-                          isCompleted ? 'bg-success border-success/20' : 'bg-muted border-border'
-                        } ${isActive ? 'ring-2 ring-primary/30' : ''}`}>
-                          {isCompleted ? <CheckCircle className="h-4 w-4 text-white" /> : <Icon className="h-4 w-4 text-muted-foreground" />}
-                        </div>
-                        <div className="flex-1 pb-2">
-                          <h4 className={`text-sm font-semibold ${
-                            isCompleted ? 'text-success' : isActive ? 'text-primary' : 'text-muted-foreground'
-                          }`}>
-                            {step.label}
-                          </h4>
-                          {step.fecha ? (
-                            <p className="text-xs text-muted-foreground">
-                              {formatFechaHora(step.fecha, {
-                                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-                              })}
-                            </p>
-                          ) : (
-                            <p className="text-xs text-muted-foreground">Pendiente</p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          </div>}
+          )}
         </div>
 
         {dialogoReabrir}
@@ -1223,60 +1133,53 @@ export default function DetalleViaje() {
       <PageHeader
         backTo="/viajes"
         eyebrow={remisionId || 'Viajes'}
-        title={
-          <span className="flex flex-wrap items-center gap-2">
-            Cargar remisión
-            <Badge variant={tonoEstado}>{estadoActual}</Badge>
-          </span>
-        }
+        title="Cargar remisión"
+        description={<Badge variant={tonoEstado}>{estadoActual}</Badge>}
       />
 
       {/* Una sola columna a ancho completo: la carga de la remisión no
-          convive con el timeline ni con las acciones del detalle. */}
-      <div className="space-y-8">
-        <div className="space-y-8">
+          convive con la línea de tiempo ni con las acciones del detalle. */}
+      <div className="space-y-6">
           {/* Stepper — oculto cuando el viaje está en validación (solo se muestra el formulario) */}
           {estadoActual !== 'En Validación' && (
-          <Card className="border-border">
-            <CardContent className="p-6">
+          <Card>
+            <CardContent>
               <div className="flex items-center justify-between">
                 {etapasDisponibles.map((etapa, index) => {
                   const estaCompleta = etapaActual > etapa.numero;
                   const estaActiva = etapaActual === etapa.numero;
                   return (
                     <React.Fragment key={etapa.numero}>
-                      <button aria-label="Confirmar"
+                      <button
                         onClick={() => irAEtapa(etapa.numero)}
                         /* Sin "Siguiente" en el pie, el círculo del stepper es
                            la única forma de llegar a la etapa de Cosecha. */
                         className={`flex shrink-0 cursor-pointer flex-col items-center gap-2 ${estaActiva || estaCompleta ? '' : 'opacity-50'}`}
                       >
-                        <div className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition md:h-12 md:w-12 ${
-                          estaCompleta ? 'bg-primary border-primary text-white'
-                          : estaActiva ? 'bg-primary/10 border-primary text-primary'
-                          : 'bg-muted border-border text-muted-foreground'
+                        <div className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition-colors ${
+                          estaCompleta ? 'border-primary bg-primary text-primary-foreground'
+                          : estaActiva ? 'border-primary bg-primary-soft text-primary'
+                          : 'border-border bg-muted text-muted-foreground'
                         }`}>
-                          {estaCompleta ? <Check className="h-5 w-5" /> : <span className="font-bold">{etapa.numero}</span>}
+                          {estaCompleta
+                            ? <Check className="h-4 w-4" strokeWidth={2} />
+                            : <span className="text-sm font-semibold">{etapa.numero}</span>}
                         </div>
-                        <div className="hidden text-center md:block">
-                          <div className={`text-sm font-semibold whitespace-nowrap ${estaActiva || estaCompleta ? 'text-foreground' : 'text-muted-foreground'}`}>
+                        <div className="text-center">
+                          <div className={`text-xs font-semibold sm:whitespace-nowrap sm:text-sm ${estaActiva || estaCompleta ? 'text-foreground' : 'text-muted-foreground'}`}>
                             {etapa.nombre}
                           </div>
                         </div>
                       </button>
                       {index < etapasDisponibles.length - 1 && (
-                        <div className="relative mx-2 h-0.5 flex-1 bg-border sm:mx-4">
-                          <div className={`absolute inset-0 bg-primary transition-[width] ${estaCompleta ? 'w-full' : 'w-0'}`} />
+                        <div className="relative mx-2 h-0.5 min-w-[16px] flex-1 bg-border sm:mx-3">
+                          <div className={`absolute inset-0 bg-primary transition-all ${estaCompleta ? 'w-full' : 'w-0'}`} />
                         </div>
                       )}
                     </React.Fragment>
                   );
                 })}
               </div>
-              {/* Reemplaza a los rotulos, escondidos en celular. */}
-              <p className="mt-3 text-center text-[13px] font-semibold text-foreground md:hidden">
-                Paso {etapaActual} de {etapasDisponibles.length}: {etapasDisponibles.find((x) => x.numero === etapaActual)?.nombre}
-              </p>
             </CardContent>
           </Card>
           )}
@@ -1285,17 +1188,10 @@ export default function DetalleViaje() {
           <div className="space-y-6">
             {/* ETAPA 1: INFO VIAJE */}
             {etapaActual === 1 && (
-              <Card className="border-border">
+              <Card>
                 <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <Truck className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle>Información del viaje</CardTitle>
-                      <p className="text-sm text-muted-foreground">Datos del viaje registrado</p>
-                    </div>
-                  </div>
+                  <CardTitle>Información del viaje</CardTitle>
+                  <p className="text-sm text-muted-foreground">Datos del viaje registrado</p>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {/* Solo lectura: la edición vive en la vista Detalle del
@@ -1303,11 +1199,11 @@ export default function DetalleViaje() {
                       viaje en estado CREADO. */}
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="detallevia-fecha-del-viaje-2">Fecha del Viaje</Label>
+                      <Label htmlFor="detallevia-fecha-del-viaje-2">Fecha del viaje</Label>
                       <Input id="detallevia-fecha-del-viaje-2" type="date" value={fechaViaje} disabled />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="detallevia-placa-del-vehiculo-2">Placa del Vehículo</Label>
+                      <Label htmlFor="detallevia-placa-del-vehiculo-2">Placa del vehículo</Label>
                       <Input id="detallevia-placa-del-vehiculo-2" value={placa} disabled />
                     </div>
                     <div className="space-y-2">
@@ -1319,11 +1215,11 @@ export default function DetalleViaje() {
                       <Input id="detallevia-transportador" value={transporte} disabled />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="detallevia-extractora-destino">Extractora Destino</Label>
+                      <Label htmlFor="detallevia-extractora-destino">Extractora destino</Label>
                       <Input id="detallevia-extractora-destino" value={extractora} disabled />
                     </div>
                     <div className="space-y-2">
-                      <Label>Hora de Salida</Label>
+                      <Label>Hora de salida</Label>
                       {/* `type="time"` vacío no distingue "sin hora" de un
                           campo en blanco; con texto se puede mostrar "—". */}
                       {horaSalida
@@ -1337,40 +1233,34 @@ export default function DetalleViaje() {
 
             {/* ETAPA 2: COSECHA */}
             {etapaActual === 2 && (
-              <Card className="border-border">
+              <Card>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                        <Leaf className="h-6 w-6 text-primary" />
-                      </div>
-                      <div>
-                        <CardTitle>Cosecha</CardTitle>
-                        <p className="text-sm text-muted-foreground">
-                          {estadoActual === 'Finalizado' ? 'Información de cosecha registrada' : 'Cosechas asociadas al viaje'}
-                        </p>
-                      </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <CardTitle>Cosecha</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        {estadoActual === 'Finalizado' ? 'Información de cosecha registrada' : 'Cosechas asociadas al viaje'}
+                      </p>
                     </div>
                     {estadoActual === 'Creado' && (
-                      <Button onClick={() => navigate(`/viajes/${id}/conteo`)} className="gap-2">
-                        <Edit className="h-4 w-4" />
-                        Ir a Conteo
+                      <Button onClick={() => navigate(`/viajes/${id}/conteo`)}>
+                        <Edit className="h-4 w-4" strokeWidth={2} />
+                        Ir al conteo
                       </Button>
                     )}
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {detalles.length === 0 ? (
-                    <div className="text-center py-12 text-muted-foreground">
-                      <Leaf className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                      <p>No hay cosechas registradas</p>
+                    <div className="space-y-1 py-12 text-center">
+                      <h3 className="text-base font-semibold text-foreground">Todavía no hay cosechas</h3>
                       {estadoActual === 'Creado' && (
-                        <p className="text-sm">Haz clic en "Ir a Conteo" para agregar cosechas</p>
+                        <p className="text-sm text-muted-foreground">Entra al conteo para agregarlas.</p>
                       )}
                     </div>
                   ) : (
                     detalles.map((d) => (
-                      <Card key={d.id} className="border-border">
+                      <Card key={d.id}>
                         <CardContent className="pt-6">
                           <div className="grid gap-4 md:grid-cols-2">
                             <div className="space-y-2">
@@ -1382,11 +1272,11 @@ export default function DetalleViaje() {
                               <Input id="detallevia-sublote" value={d.cosecha?.sublote?.nombre ?? '—'} disabled />
                             </div>
                             <div className="space-y-2">
-                              <Label htmlFor="detallevia-numero-de-gajos">Número de Gajos</Label>
+                              <Label htmlFor="detallevia-numero-de-gajos">Número de gajos</Label>
                               <Input id="detallevia-numero-de-gajos" value={d.cosecha?.gajos_reportados ?? 0} disabled />
                             </div>
                             <div className="space-y-2">
-                              <Label>Gajos en Viaje</Label>
+                              <Label>Gajos en viaje</Label>
                               {/* §5.5: `gajos_en_viaje` es el split de esta
                                   cosecha en este viaje. `cosecha.gajos_reconteo`
                                   suma todos los splits — no sirve aca porque
@@ -1422,12 +1312,9 @@ export default function DetalleViaje() {
             {etapaActual === 3 && (
               <div className="space-y-6">
                 {/* Carga de imagen */}
-                <Card className="overflow-hidden border-border">
+                <Card className="overflow-hidden">
                   <CardHeader>
-                    <div className="flex items-center gap-3">
-                      <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                        <ImageIcon className="h-6 w-6 text-primary" />
-                      </div>
+                    <div className="space-y-1">
                       <div>
                         <CardTitle>Formulario de la extractora</CardTitle>
                         <p className="text-sm text-muted-foreground">
@@ -1442,7 +1329,7 @@ export default function DetalleViaje() {
                     {estadoActual !== 'Finalizado' && (
                       <>
                         <div className="space-y-2">
-                          <Label htmlFor="detallevia-imagen-del-formulario">Imagen del Formulario</Label>
+                          <Label htmlFor="detallevia-imagen-del-formulario">Imagen del formulario</Label>
                           <div className="flex flex-col gap-3">
                             <Input id="detallevia-imagen-del-formulario" type="file"
                               onChange={handleImagenFormularioChange}
@@ -1464,7 +1351,7 @@ export default function DetalleViaje() {
                               </Button>
                             </div>
                             <Button onClick={transcribirConIA} disabled={procesandoIA}
-                              className="w-full gap-2 bg-primary hover:bg-primary/90" size="lg">
+                              className="w-full" size="lg">
                               {procesandoIA ? (
                                 <><Loader2 className="h-5 w-5 animate-spin" />Procesando con IA...</>
                               ) : (
@@ -1475,10 +1362,9 @@ export default function DetalleViaje() {
                         )}
 
                         {!imagenPreview && (
-                          <div className="text-center py-12 border-2 border-dashed border-border rounded-lg bg-muted/20">
-                            <Upload className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-50" />
-                            <p className="text-muted-foreground">Carga una imagen del formulario</p>
-                            <p className="text-sm text-muted-foreground">La IA extraerá automáticamente los datos</p>
+                          <div className="space-y-1 rounded-lg border-2 border-dashed border-border bg-muted/20 py-12 text-center">
+                            <h3 className="text-base font-semibold text-foreground">Carga una imagen del formulario</h3>
+                            <p className="text-sm text-muted-foreground">La IA extrae los datos sola.</p>
                           </div>
                         )}
                       </>
@@ -1497,7 +1383,7 @@ export default function DetalleViaje() {
                           validacionesCruzadas.conductor.coincide === false ||
                           validacionesCruzadas.placa.coincide === false
                         ) && (
-                          <div className="flex items-start gap-3 p-3 rounded-md border border-amber-300 bg-amber-50 text-amber-900">
+                          <div className="flex items-start gap-3 p-3 rounded-md border border-warning/20 bg-warning-soft text-warning">
                             <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
                             <div className="text-sm">
                               <p className="font-semibold">El camión que llegó no coincide con el planeado</p>
@@ -1521,15 +1407,15 @@ export default function DetalleViaje() {
 
                         <div className="grid gap-4 md:grid-cols-2">
                           <div className="space-y-2">
-                            <Label htmlFor="detallevia-numero-de-remision">Número de Remisión</Label>
+                            <Label htmlFor="detallevia-numero-de-remision">Número de remisión</Label>
                             <Input id="detallevia-numero-de-remision" value={String(viaje?.numero_remision_extractora ?? '')} disabled />
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="detallevia-fecha-de-llegada">Fecha de Llegada</Label>
+                            <Label htmlFor="detallevia-fecha-de-llegada">Fecha de llegada</Label>
                             <Input id="detallevia-fecha-de-llegada" value={formatFecha(viaje?.fecha_llegada)} disabled />
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="detallevia-hora-de-llegada">Hora de Llegada</Label>
+                            <Label htmlFor="detallevia-hora-de-llegada">Hora de llegada</Label>
                             <Input id="detallevia-hora-de-llegada" value={formatHora(viaje?.hora_llegada)} disabled />
                           </div>
                           <div className="space-y-2">
@@ -1580,13 +1466,13 @@ export default function DetalleViaje() {
 
                 {/* Banner de estado OCR (REVISION_MANUAL / FALLIDO / confianza) */}
                 {estadoOCR === 'REVISION_MANUAL' && (
-                  <div className="flex items-start gap-3 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                    <Sparkles className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+                  <div className="flex items-start gap-3 p-4 bg-warning-soft border border-warning/20 rounded-lg">
+                    <Sparkles className="h-5 w-5 text-warning mt-0.5" />
                     <div className="flex-1 text-sm">
-                      <p className="font-medium text-yellow-700 dark:text-yellow-300">
+                      <p className="font-medium text-warning">
                         Revisa estos datos cuidadosamente
                       </p>
-                      <p className="text-yellow-700/80 dark:text-yellow-300/80">
+                      <p className="text-foreground">
                         {errorOCR ?? 'Algunos campos tienen baja confianza o faltan. Verifica antes de guardar.'}
                         {confianzaOCR != null && ` (Confianza: ${(confianzaOCR * 100).toFixed(0)}%)`}
                       </p>
@@ -1615,26 +1501,19 @@ export default function DetalleViaje() {
 
                 {/* Datos extraídos — solo visible después de subir el archivo */}
                 {imagenFormulario && (
-                  <Card className="border-border">
+                  <Card>
                     <CardHeader>
-                      <div className="flex items-center gap-3">
-                        <div className="h-12 w-12 rounded-xl bg-success/10 flex items-center justify-center">
-                          <FileText className="h-6 w-6 text-success" />
-                        </div>
-                        <div>
-                          <CardTitle>Datos de la extractora</CardTitle>
-                          <p className="text-sm text-muted-foreground">
-                            {procesandoIA ? 'Transcribiendo formulario… esto toma 5-15 segundos' : 'Verifica y edita los datos extraídos'}
-                          </p>
-                        </div>
-                      </div>
+                      <CardTitle>Datos de la extractora</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        {procesandoIA ? 'Transcribiendo formulario… esto toma 5-15 segundos' : 'Verifica y edita los datos extraídos'}
+                      </p>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       {validacionesCruzadas && (
                         validacionesCruzadas.conductor.coincide === false ||
                         validacionesCruzadas.placa.coincide === false
                       ) && (
-                        <div className="flex items-start gap-3 p-3 rounded-md border border-amber-300 bg-amber-50 text-amber-900">
+                        <div className="flex items-start gap-3 p-3 rounded-md border border-warning/20 bg-warning-soft text-warning">
                           <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
                           <div className="text-sm">
                             <p className="font-semibold">El camión que llegó no coincide con el planeado</p>
@@ -1658,19 +1537,19 @@ export default function DetalleViaje() {
                       )}
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
-                          <Label htmlFor="detallevia-numero-de-remision-2">Número de Remisión</Label>
+                          <Label htmlFor="detallevia-numero-de-remision-2">Número de remisión</Label>
                           <Input id="detallevia-numero-de-remision-2" value={datosExtractora.numeroRemision}
                             onChange={(e) => setDatosExtractora({ ...datosExtractora, numeroRemision: e.target.value })}
                             disabled={procesandoIA || estadoActual === 'Finalizado'} />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="detallevia-fecha-de-llegada-2">Fecha de Llegada</Label>
+                          <Label htmlFor="detallevia-fecha-de-llegada-2">Fecha de llegada</Label>
                           <Input id="detallevia-fecha-de-llegada-2" type="date" value={datosExtractora.fechaLlegada}
                             onChange={(e) => setDatosExtractora({ ...datosExtractora, fechaLlegada: e.target.value })}
                             disabled={procesandoIA || estadoActual === 'Finalizado'} />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="detallevia-hora-de-llegada-2">Hora de Llegada</Label>
+                          <Label htmlFor="detallevia-hora-de-llegada-2">Hora de llegada</Label>
                           <Input id="detallevia-hora-de-llegada-2" type="time" value={datosExtractora.horaLlegada}
                             onChange={(e) => setDatosExtractora({ ...datosExtractora, horaLlegada: e.target.value })}
                             disabled={procesandoIA || estadoActual === 'Finalizado'} />
@@ -1737,55 +1616,55 @@ export default function DetalleViaje() {
             )}
 
             {/* Botones de navegación */}
-            <div className="flex items-center justify-between pt-4">
+            <div className="barra-acciones flex items-center justify-between gap-2 pt-2">
               {estadoActual === 'Finalizado' && (
-                <Button variant="outline" onClick={etapaAnterior} disabled={etapaActual === 1} className="gap-2">
-                  <ArrowLeft className="h-4 w-4" />
+                <Button variant="outline" onClick={etapaAnterior} disabled={etapaActual === 1}>
+                  <ArrowLeft className="h-4 w-4" strokeWidth={2} />
                   Anterior
                 </Button>
               )}
               {estadoActual === 'En Validación' && (
-                <Button variant="outline" onClick={() => navigate('/viajes')} className="gap-2">
-                  <ArrowLeft className="h-4 w-4" />
-                  Volver a Viajes
+                <Button variant="outline" onClick={() => navigate('/viajes')}>
+                  <ArrowLeft className="h-4 w-4" strokeWidth={2} />
+                  Volver a viajes
                 </Button>
               )}
 
-              <div className="flex gap-2 ml-auto">
+              <div className="ml-auto flex gap-2">
                 {estadoActual === 'Creado' ? (
                   <>
-                    <Button variant="outline" onClick={eliminarViaje} className="gap-2 text-destructive hover:text-destructive">
-                      <Trash2 className="h-4 w-4" /> Eliminar
+                    <Button variant="outline" onClick={eliminarViaje} className="text-destructive hover:text-destructive">
+                      <Trash2 className="h-4 w-4" strokeWidth={2} />
+                      Eliminar
                     </Button>
-                    <Button onClick={habilitarEdicion} className="gap-2">
-                      <Edit className="h-4 w-4" /> Editar
+                    <Button onClick={habilitarEdicion}>
+                      <Edit className="h-4 w-4" strokeWidth={2} />
+                      Editar
                     </Button>
                   </>
                 ) : estadoActual === 'Finalizado' && etapaActual < 3 ? (
-                  <Button onClick={siguienteEtapa} className="gap-2">
-                    Siguiente <ArrowRight className="h-4 w-4" />
+                  <Button onClick={siguienteEtapa}>
+                    Siguiente
+                    <ArrowRight className="h-4 w-4" strokeWidth={2} />
                   </Button>
                 ) : estadoActual === 'En Validación' && etapaActual === 3 ? (
-                  <Button onClick={guardarValidacion} disabled={!imagenFormulario || procesandoIA || procesando}
-                    className="gap-2">
-                    <Check className="h-4 w-4" />
-                    {procesando ? 'Procesando...' : 'Guardar y Finalizar'}
+                  <Button onClick={guardarValidacion} disabled={!imagenFormulario || procesandoIA || procesando}>
+                    <Check className="h-4 w-4" strokeWidth={2} />
+                    {procesando ? 'Procesando…' : 'Guardar y finalizar'}
                   </Button>
                 ) : null}
               </div>
             </div>
           </div>
-        </div>
-
       </div>
 
       {/* AlertDialog: confirmar eliminar viaje */}
       <AlertDialog open={confirmEliminarOpen} onOpenChange={setConfirmEliminarOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogTitle>¿Eliminar el viaje?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esto eliminará permanentemente este viaje. Esta acción no se puede deshacer.
+              Se borra el viaje con sus cosechas enlazadas. No se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

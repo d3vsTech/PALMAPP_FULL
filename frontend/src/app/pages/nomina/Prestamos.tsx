@@ -135,7 +135,7 @@ export default function Prestamos() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <Button variant="ghost" size="sm" asChild className="mb-4 gap-2">
+        <Button variant="ghost" size="sm" asChild className="mb-4">
           <Link to="/nomina">
             <ArrowLeft className="h-4 w-4" />
             Volver a Pagos
@@ -150,7 +150,6 @@ export default function Prestamos() {
           </div>
           <Button
             onClick={() => navigate('/nomina/nuevo-prestamo')}
-            className="gap-2 bg-primary hover:bg-primary/90"
           >
             <Plus className="h-4 w-4" />
             Nuevo Préstamo
@@ -160,7 +159,7 @@ export default function Prestamos() {
 
       {/* KPIs */}
       <div className="grid gap-4 sm:grid-cols-2">
-        <Card className="border-border">
+        <Card>
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <div>
@@ -195,7 +194,7 @@ export default function Prestamos() {
       </div>
 
       {/* Filtros */}
-      <Card className="border-border">
+      <Card>
         <CardContent className="p-4">
           <div className="flex flex-wrap gap-3 items-center">
             <div className="relative flex-1 min-w-[200px]">
@@ -223,7 +222,7 @@ export default function Prestamos() {
       </Card>
 
       {/* Tabla */}
-      <Card className="overflow-hidden border-border">
+      <Card className="overflow-hidden">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -331,7 +330,7 @@ export default function Prestamos() {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="text-xs gap-1.5"
+                              className="text-xs"
                               onClick={() => navigate(`/nomina/prestamos/${p.id}`)}
                               title="Ver el detalle, el calendario de cuotas y el soporte"
                             >
@@ -341,7 +340,7 @@ export default function Prestamos() {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="text-xs gap-1.5"
+                              className="text-xs"
                               onClick={() => navigate(`/nomina/prestamos/${p.id}/abonos`)}
                             >
                               <DollarSign className="h-3.5 w-3.5" />

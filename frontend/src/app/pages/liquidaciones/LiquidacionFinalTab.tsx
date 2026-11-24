@@ -25,8 +25,15 @@ import {
   ESTADO_LIQUIDACION_LABEL,
 } from '../../../api/liquidacionFinal';
 import { ESTADO_BADGE, ESTADO_NOTA, fmtCOP, fmtFecha, mensajeErrorLiquidacion } from './final/comunes';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../../components/ui/select';
 
 const POR_PAGINA = 15;
+
+/** El desplegable no acepta una opcion con valor vacio, asi que el "sin
+ *  filtro" viaja con esta palabra y se traduce a vacio al guardarlo. */
+const TODOS = 'TODOS';
 
 export default function LiquidacionFinalTab() {
   const navigate = useNavigate();
@@ -115,7 +122,7 @@ export default function LiquidacionFinalTab() {
     <div className="space-y-6">
       {/* Cards del resumen (§11.2) */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="glass-subtle border-border">
+        <Card className="glass-subtle">
           <CardContent className="p-5">
             <p className="text-sm font-medium text-muted-foreground mb-1">Borradores</p>
             <p className="text-2xl font-bold text-muted-foreground">{resumen?.borradores ?? 0}</p>
@@ -123,7 +130,7 @@ export default function LiquidacionFinalTab() {
           </CardContent>
         </Card>
 
-        <Card className="glass-subtle border-border">
+        <Card className="glass-subtle">
           <CardContent className="p-5">
             <p className="text-sm font-medium text-muted-foreground mb-1">Aprobadas</p>
             <p className="text-2xl font-bold text-primary">{resumen?.aprobadas ?? 0}</p>
@@ -131,7 +138,7 @@ export default function LiquidacionFinalTab() {
           </CardContent>
         </Card>
 
-        <Card className="glass-subtle border-border">
+        <Card className="glass-subtle">
           <CardContent className="p-5">
             <p className="text-sm font-medium text-muted-foreground mb-1">Pagadas</p>
             <p className="text-2xl font-bold text-success">{resumen?.pagadas ?? 0}</p>
@@ -139,7 +146,7 @@ export default function LiquidacionFinalTab() {
           </CardContent>
         </Card>
 
-        <Card className="glass-subtle border-border">
+        <Card className="glass-subtle">
           <CardContent className="p-5">
             <p className="text-sm font-medium text-muted-foreground mb-1">Monto por Pagar</p>
             <p className="text-2xl font-bold text-foreground">{fmtCOP(resumen?.monto_por_pagar ?? 0)}</p>
@@ -153,7 +160,7 @@ export default function LiquidacionFinalTab() {
           <Button
             size="lg"
             onClick={() => navigate('/liquidaciones/liquidacion-final/nueva')}
-            className="gap-2"
+            
           >
             <Plus className="h-5 w-5" />
             Nueva Liquidación
@@ -173,38 +180,44 @@ export default function LiquidacionFinalTab() {
           />
         </div>
 
-        <select
-          aria-label="Estado"
-          value={estado}
-          onChange={(e) => {
-            setEstado(e.target.value as EstadoLiquidacionFinal | '');
+        <Select
+          value={estado || TODOS}
+          onValueChange={(valor) => {
+            setEstado(valor === TODOS ? '' : (valor as EstadoLiquidacionFinal));
             setPagina(1);
           }}
-          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <option value="">Todos los estados</option>
-          <option value="BORRADOR">Borrador</option>
-          <option value="APROBADA">Aprobada</option>
-          <option value="PAGADA">Pagada</option>
-          <option value="ANULADA">Anulada</option>
-        </select>
+          <SelectTrigger aria-label="Estado" className="h-9">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={TODOS}>Todos los estados</SelectItem>
+            <SelectItem value="BORRADOR">Borrador</SelectItem>
+            <SelectItem value="APROBADA">Aprobada</SelectItem>
+            <SelectItem value="PAGADA">Pagada</SelectItem>
+            <SelectItem value="ANULADA">Anulada</SelectItem>
+          </SelectContent>
+        </Select>
 
-        <select
-          aria-label="Motivo retiro"
-          value={motivoRetiro}
-          onChange={(e) => {
-            setMotivoRetiro(e.target.value as MotivoRetiroCodigo | '');
+        <Select
+          value={motivoRetiro || TODOS}
+          onValueChange={(valor) => {
+            setMotivoRetiro(valor === TODOS ? '' : (valor as MotivoRetiroCodigo));
             setPagina(1);
           }}
-          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <option value="">Todos los motivos</option>
-          {motivos.map((m) => (
-            <option key={m.codigo} value={m.codigo}>
-              {m.etiqueta}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger aria-label="Motivo retiro" className="h-9">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={TODOS}>Todos los motivos</SelectItem>
+            {motivos.map((m) => (
+              <SelectItem key={m.codigo} value={m.codigo}>
+                {m.etiqueta}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         <Input
           type="number"
@@ -219,7 +232,7 @@ export default function LiquidacionFinalTab() {
       </div>
 
       {/* Tabla */}
-      <Card className="overflow-hidden glass-subtle border-border">
+      <Card className="glass-subtle overflow-hidden">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -254,7 +267,7 @@ export default function LiquidacionFinalTab() {
                         {!hayFiltros && puedeCrear && (
                           <Button
                             onClick={() => navigate('/liquidaciones/liquidacion-final/nueva')}
-                            className="mt-2 gap-2"
+                            className="mt-2"
                           >
                             <Plus className="h-4 w-4" />
                             Crear la primera
@@ -288,7 +301,7 @@ export default function LiquidacionFinalTab() {
                         <div className="flex flex-col">
                           <span className="text-sm text-foreground">{liq.motivo_etiqueta ?? '—'}</span>
                           {liq.indemniza && (
-                            <span className="text-xs text-amber-600">con indemnización</span>
+                            <span className="text-xs text-warning">con indemnización</span>
                           )}
                         </div>
                       </td>
@@ -307,7 +320,7 @@ export default function LiquidacionFinalTab() {
                               desde archivo se ven iguales sin esta marca, y
                               no admiten las mismas acciones. */}
                           {liq.origen === 'HISTORICO' && (
-                            <Badge variant="outline" className="border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                            <Badge variant="outline" className="border-border bg-muted text-foreground">
                               Histórico
                             </Badge>
                           )}
@@ -320,7 +333,7 @@ export default function LiquidacionFinalTab() {
                             size="sm"
                             variant="outline"
                             onClick={() => navigate(`/liquidaciones/liquidacion-final/${liq.id}`)}
-                            className="hover:bg-primary/10 hover:text-primary hover:border-primary gap-1"
+                            className="hover:bg-primary/10 hover:text-primary hover:border-primary"
                           >
                             <Eye className="h-4 w-4" />
                             Ver detalle
@@ -347,7 +360,7 @@ export default function LiquidacionFinalTab() {
                     variant="outline"
                     disabled={meta.current_page <= 1 || cargando}
                     onClick={() => setPagina((p) => Math.max(1, p - 1))}
-                    className="gap-1"
+                    
                   >
                     <ChevronLeft className="h-4 w-4" />
                     Anterior
@@ -360,7 +373,7 @@ export default function LiquidacionFinalTab() {
                     variant="outline"
                     disabled={meta.current_page >= meta.last_page || cargando}
                     onClick={() => setPagina((p) => p + 1)}
-                    className="gap-1"
+                    
                   >
                     Siguiente
                     <ChevronRight className="h-4 w-4" />

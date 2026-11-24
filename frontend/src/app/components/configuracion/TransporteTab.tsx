@@ -547,8 +547,8 @@ export function TransporteTab() {
 
       <TabLoadingGate loading={loading} message="Cargando transporte…">
       {/* Empresas de Transporte con Conductores */}
-      <Card className="overflow-hidden border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b bg-muted/40">
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Transportadores</CardTitle>
@@ -560,11 +560,11 @@ export function TransporteTab() {
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent>
           {empresas.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Building2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">No hay empresas de transporte registradas</p>
+            <div className="space-y-1 py-8 text-center">
+              <h3 className="text-base font-semibold text-foreground">Todavía no hay transportadores</h3>
+              <p className="text-sm text-muted-foreground">Registra el primero con el botón de arriba.</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -599,8 +599,8 @@ export function TransporteTab() {
                             <p className="font-semibold">{empresa.razon_social}</p>
                             <span className={`text-xs px-2 py-0.5 rounded-full ${
                               tipo === 'NATURAL'
-                                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                                : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                                ? 'bg-info-soft text-info'
+                                : 'bg-primary-soft text-primary'
                             }`}>
                               {tipo === 'NATURAL' ? 'P. Natural' : 'P. Jurídica'}
                             </span>

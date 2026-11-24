@@ -56,13 +56,13 @@ const laboresOrden: TipoLabor[] = [
 //   Otros         → purple
 //   Auxiliares    → zinc
 const colorPorLabor: Record<TipoLabor, string> = {
-  Cosecha:       'bg-amber-500/10 text-amber-700 border-amber-300',
+  Cosecha:       'bg-warning-soft text-warning border-warning/20',
   Plateo:        'bg-[#1E5631]/10 text-[#1E5631] border-[#1E5631]/30',
   Poda:          'bg-[#1E5631]/10 text-[#1E5631] border-[#1E5631]/30',
-  Fertilización: 'bg-blue-500/10 text-blue-700 border-blue-300',
-  Sanidad:       'bg-rose-500/10 text-rose-700 border-rose-300',
-  Otros:         'bg-purple-500/10 text-purple-700 border-purple-300',
-  Auxiliares:    'bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 border-zinc-400',
+  Fertilización: 'bg-info-soft text-info border-info/20',
+  Sanidad:       'bg-destructive-soft text-destructive border-destructive/20',
+  Otros:         'bg-primary-soft text-primary border-primary/20',
+  Auxiliares:    'bg-muted text-foreground border-border',
 };
 
 const bordesPorLabor: Record<TipoLabor, string> = {
@@ -283,7 +283,7 @@ export default function PlanillaDiaria() {
           variant="ghost"
           size="sm"
           onClick={() => navigate('/nomina')}
-          className="mb-4 gap-2"
+          className="mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver a Pagos
@@ -317,7 +317,7 @@ export default function PlanillaDiaria() {
             </div>
             <Button
               variant="outline"
-              className="gap-2"
+              
               onClick={exportar}
               disabled={!nominaId || !bundle || exportando}
             >
@@ -340,8 +340,8 @@ export default function PlanillaDiaria() {
 
       {/* Filtros */}
       {nominaId && (
-        <Card className="border-border">
-          <CardContent className="p-6">
+        <Card>
+          <CardContent>
             <div className="flex items-center gap-3 mb-4">
               <Filter className="h-5 w-5 text-muted-foreground" />
               <h3 className="font-semibold">Filtros</h3>
@@ -360,7 +360,7 @@ export default function PlanillaDiaria() {
                         <span className="flex items-center gap-2">
                           <span>{c.nombre}</span>
                           {c.tipo === 'operario' && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200 font-medium">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning-soft text-warning border border-warning/20 font-medium">
                               Tercero
                             </span>
                           )}
@@ -406,11 +406,10 @@ export default function PlanillaDiaria() {
 
       {/* Sin nómina seleccionada */}
       {!nominaId && !cargandoNominas && (
-        <Card className="border-border">
-          <CardContent className="text-center py-12 text-muted-foreground">
-            <FileText className="h-16 w-16 mx-auto mb-4 opacity-40" />
-            <p className="text-lg font-medium mb-1">Selecciona un período de nómina</p>
-            <p className="text-sm">Elige una nómina para ver el reporte de planilla diaria.</p>
+        <Card>
+          <CardContent className="space-y-1 py-12 text-center">
+            <h3 className="text-base font-semibold text-foreground">Selecciona un período de nómina</h3>
+            <p className="text-sm text-muted-foreground">Elige una nómina para ver el reporte de planilla diaria.</p>
           </CardContent>
         </Card>
       )}
@@ -427,11 +426,10 @@ export default function PlanillaDiaria() {
       {nominaId && bundle && (
         <>
           {registrosPorLabor.length === 0 ? (
-            <Card className="border-border">
-              <CardContent className="text-center py-12 text-muted-foreground">
-                <FileText className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-medium mb-1">No hay registros</p>
-                <p className="text-sm">
+            <Card>
+              <CardContent className="space-y-1 py-12 text-center">
+                <h3 className="text-base font-semibold text-foreground">No hay registros</h3>
+                <p className="text-sm text-muted-foreground">
                   {hayFiltros
                     ? 'No se encontraron registros con los filtros aplicados.'
                     : 'No hay operaciones aprobadas para este período.'}
@@ -546,7 +544,7 @@ function SeccionLabor({
     toNumber(subtotal_col_neto) > 0 ? subtotal_col_neto : subtotalColNetoCalc;
 
   return (
-    <Card className={`border-border overflow-hidden ${bordesPorLabor[labor]}`}>
+    <Card className={`overflow-hidden ${bordesPorLabor[labor]}`}>
       <CardHeader className="py-3 px-5 bg-muted/20 border-b border-border">
         <div className="flex items-center gap-3">
           <Badge className={`${colorPorLabor[labor]} border text-xs font-semibold px-3 py-0.5`}>
@@ -716,7 +714,7 @@ function TdColab({ nombre, c }: { nombre: string; c?: PlanillaDiariaColaborador 
         <span>{nombre}</span>
         {c?.tipo === 'operario' && (
           <span
-            className="text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium whitespace-nowrap"
+            className="text-[10px] px-1.5 py-0.5 rounded-md bg-warning-soft text-warning border border-warning/20 font-medium whitespace-nowrap"
             title={c.tercero_nombre ? `Tercero · ${c.tercero_nombre}` : 'Tercero'}
           >
             Tercero

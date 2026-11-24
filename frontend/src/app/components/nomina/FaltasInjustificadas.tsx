@@ -93,7 +93,7 @@ export function FaltasInjustificadas({
       )}
       <div className={container}>
         <div
-          className={`grid ${gridCols} ${headerText} uppercase tracking-wide text-muted-foreground ${
+          className={`grid ${gridCols} ${headerText} font-medium text-muted-foreground ${
             isCompact ? 'pb-1 mb-1 border-b border-border' : 'px-4 py-2 bg-muted/40 border-b'
           }`}
         >

@@ -164,7 +164,7 @@ export default function Proveedores() {
           variant="ghost"
           size="sm"
           onClick={() => navigate('/market')}
-          className="mb-4 gap-2"
+          className="mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver al catálogo
@@ -177,8 +177,8 @@ export default function Proveedores() {
 
       {/* KPIs */}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        <Card className="border-border">
-          <CardContent className="p-6">
+        <Card>
+          <CardContent>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-2">
@@ -194,8 +194,8 @@ export default function Proveedores() {
           </CardContent>
         </Card>
 
-        <Card className="border-border">
-          <CardContent className="p-6">
+        <Card>
+          <CardContent>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-2">
@@ -205,19 +205,19 @@ export default function Proveedores() {
                   <p className="text-2xl sm:text-3xl font-bold text-foreground">
                     {ratingPromedio.toFixed(1)}
                   </p>
-                  <Star className="h-5 w-5 fill-amber-400 text-amber-400" />
+                  <Star className="h-5 w-5 fill-warning text-warning" />
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">De 5.0 estrellas</p>
               </div>
-              <div className="h-14 w-14 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                <Award className="h-7 w-7 text-amber-600" />
+              <div className="h-14 w-14 rounded-xl bg-warning-soft flex items-center justify-center">
+                <Award className="h-7 w-7 text-warning" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-border">
-          <CardContent className="p-6">
+        <Card>
+          <CardContent>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-2">
@@ -235,8 +235,8 @@ export default function Proveedores() {
       </div>
 
       {/* Filtros y búsqueda */}
-      <Card className="border-border">
-        <CardContent className="p-6">
+      <Card>
+        <CardContent>
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -278,7 +278,7 @@ export default function Proveedores() {
 
       {/* Lista de proveedores */}
       {proveedoresFiltrados.length === 0 ? (
-        <Card className="border-border">
+        <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
               <Store className="h-8 w-8 text-muted-foreground" />
@@ -302,7 +302,7 @@ export default function Proveedores() {
           {proveedoresFiltrados.map((proveedor) => (
             <Card
               key={proveedor.id}
-              className="border-border hover:shadow-lg transition cursor-pointer"
+              className="cursor-pointer transition-colors"
               onClick={() => navigate(`/market/proveedor/${proveedor.id}`)}
             >
               <CardContent className="p-6 space-y-4">
@@ -325,7 +325,7 @@ export default function Proveedores() {
                         key={i}
                         className={`h-3 w-3 ${
                           i < Math.floor(proveedor.rating)
-                            ? 'fill-amber-400 text-amber-400'
+                            ? 'fill-warning text-warning'
                             : 'text-muted'
                         }`}
                       />

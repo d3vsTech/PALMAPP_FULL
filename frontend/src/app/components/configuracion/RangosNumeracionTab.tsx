@@ -351,8 +351,8 @@ export function RangosNumeracionTab() {
     <>
       {ConfirmDeleteDialog}
 
-      <Card className="overflow-hidden border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b bg-muted/40">
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Rangos de numeración manual</CardTitle>
@@ -391,12 +391,12 @@ export function RangosNumeracionTab() {
                 />
               </div>
               <div className="flex items-center gap-2">
-                <Button onClick={buscar} variant="outline" className="gap-2">
+                <Button onClick={buscar} variant="outline">
                   <Search className="h-4 w-4" />
                   Buscar
                 </Button>
                 {filtroPrefijo && (
-                  <Button variant="ghost" onClick={limpiarFiltros} className="gap-2">
+                  <Button variant="ghost" onClick={limpiarFiltros}>
                     <X className="h-4 w-4" />
                     Limpiar
                   </Button>
@@ -671,7 +671,7 @@ export function RangosNumeracionTab() {
             <Button
               onClick={guardar}
               disabled={guardando}
-              className="bg-success hover:bg-success/90 gap-2"
+              className="bg-success hover:bg-success/90"
             >
               {guardando ? (
                 <>

@@ -182,7 +182,7 @@ export default function ProductoDetalle() {
           variant="ghost"
           size="sm"
           onClick={() => navigate(-1)}
-          className="mb-4 gap-2"
+          className="mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver al catálogo
@@ -191,7 +191,7 @@ export default function ProductoDetalle() {
           <div>
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-3xl sm:text-4xl font-bold text-foreground">{producto.nombre}</h1>
-              {producto.stock_bajo && <Badge className="bg-amber-500">Stock limitado</Badge>}
+              {producto.stock_bajo && <Badge className="bg-warning">Stock limitado</Badge>}
               {producto.destacado && <Badge className="bg-primary">Destacado</Badge>}
             </div>
           </div>
@@ -205,7 +205,7 @@ export default function ProductoDetalle() {
               + imagen principal grande a la derecha. Hover en miniatura cambia
               la imagen principal automáticamente (sin necesidad de clic).
               En móvil colapsa a tira horizontal abajo. */}
-          <Card className="border-border overflow-hidden">
+          <Card className="overflow-hidden">
             <div className="flex flex-col lg:flex-row">
               {/* ─── Columna miniaturas (vertical en desktop, horizontal en móvil) */}
               {galeria.length > 1 && (
@@ -265,7 +265,7 @@ export default function ProductoDetalle() {
           </Card>
 
           {/* Información del producto */}
-          <Card className="border-border">
+          <Card>
             <CardContent className="p-6 space-y-6">
               <div>
                 <h2 className="text-2xl font-bold text-foreground mb-3">Descripción</h2>
@@ -341,8 +341,8 @@ export default function ProductoDetalle() {
           </Card>
 
           {/* Información del proveedor */}
-          <Card className="border-border">
-            <CardContent className="p-6">
+          <Card>
+            <CardContent>
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
                   <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
@@ -361,7 +361,7 @@ export default function ProductoDetalle() {
                                 key={i}
                                 className={`h-3 w-3 ${
                                   i < Math.floor(mostrar)
-                                    ? 'fill-amber-400 text-amber-400'
+                                    ? 'fill-warning text-warning'
                                     : 'text-muted'
                                 }`}
                               />
@@ -388,7 +388,7 @@ export default function ProductoDetalle() {
 
           {/* Beneficios */}
           <div className="grid gap-4 sm:grid-cols-2">
-            <Card className="border-border">
+            <Card>
               <CardContent className="p-4 flex items-center gap-3">
                 <div className="h-10 w-10 rounded-full bg-success/10 flex items-center justify-center flex-shrink-0">
                   <Shield className="h-5 w-5 text-success" />
@@ -400,10 +400,10 @@ export default function ProductoDetalle() {
               </CardContent>
             </Card>
 
-            <Card className="border-border">
+            <Card>
               <CardContent className="p-4 flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-amber-500/10 flex items-center justify-center flex-shrink-0">
-                  <CheckCircle className="h-5 w-5 text-amber-500" />
+                <div className="h-10 w-10 rounded-full bg-warning-soft flex items-center justify-center flex-shrink-0">
+                  <CheckCircle className="h-5 w-5 text-warning" />
                 </div>
                 <div>
                   <p className="font-medium text-sm">Stock disponible</p>
@@ -417,7 +417,7 @@ export default function ProductoDetalle() {
         {/* Columna derecha: Compra */}
         <div className="lg:col-span-1">
           <div className="sticky top-8 space-y-4">
-            <Card className="border-border">
+            <Card>
               <CardContent className="p-6 space-y-6">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
@@ -428,7 +428,7 @@ export default function ProductoDetalle() {
                           key={i}
                           className={`h-4 w-4 ${
                             i < Math.floor(ratingMostrar)
-                              ? 'fill-amber-400 text-amber-400'
+                              ? 'fill-warning text-warning'
                               : 'text-muted'
                           }`}
                         />
@@ -513,7 +513,7 @@ export default function ProductoDetalle() {
                 <div className="space-y-2 pt-2">
                   <Button
                     onClick={() => agregarAlCarrito(true)}
-                    className="w-full gap-2"
+                    className="w-full"
                     size="lg"
                     disabled={agregando || producto.stock_disponible <= 0}
                   >
@@ -523,7 +523,7 @@ export default function ProductoDetalle() {
                   <Button
                     onClick={() => agregarAlCarrito(false)}
                     variant="outline"
-                    className="w-full gap-2"
+                    className="w-full"
                     size="lg"
                     disabled={agregando || producto.stock_disponible <= 0}
                   >

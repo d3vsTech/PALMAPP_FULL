@@ -63,7 +63,7 @@ function Dato({
     <div className="flex min-w-0 items-start gap-2">
       <Icono className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0">
-        <p className="text-xs uppercase tracking-wide text-muted-foreground">{titulo}</p>
+        <p className="text-[13px] font-medium text-muted-foreground">{titulo}</p>
         <p className="truncate text-sm font-medium" title={valor}>{valor}</p>
         {nota && <p className="truncate text-xs text-muted-foreground">{nota}</p>}
       </div>
@@ -85,7 +85,7 @@ function PromedioPrevisto({ calculo }: { calculo: CalculoViajeCargue | null }) {
 
   return (
     <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">
+      <p className="text-[13px] font-medium text-muted-foreground">
         Promedio kg/gajo que va a sembrar
       </p>
       {previstos.map((p) => (
@@ -220,7 +220,7 @@ function Paginador({
       <div className="flex items-center gap-2">
         <span className="tabular-nums">Página {pagina} de {paginas}</span>
         <Button
-          size="sm" variant="outline" className="gap-1"
+          size="sm" variant="outline" 
           disabled={pagina <= 1}
           onClick={() => onPagina(pagina - 1)}
         >
@@ -228,7 +228,7 @@ function Paginador({
           Anteriores
         </Button>
         <Button
-          size="sm" variant="outline" className="gap-1"
+          size="sm" variant="outline" 
           disabled={pagina >= paginas}
           onClick={() => onPagina(pagina + 1)}
         >

@@ -93,7 +93,7 @@ export default function Carrito() {
             variant="ghost"
             size="sm"
             onClick={() => navigate('/market')}
-            className="mb-4 gap-2"
+            className="mb-4"
           >
             <ArrowLeft className="h-4 w-4" />
             Volver al catálogo
@@ -101,7 +101,7 @@ export default function Carrito() {
           <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Carrito de Compras</h1>
         </div>
 
-        <Card className="border-border">
+        <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
               <ShoppingCart className="h-8 w-8 text-muted-foreground" />
@@ -129,7 +129,7 @@ export default function Carrito() {
             variant="ghost"
             size="sm"
             onClick={() => navigate('/market')}
-            className="mb-4 gap-2"
+            className="mb-4"
           >
             <ArrowLeft className="h-4 w-4" />
             Continuar comprando
@@ -142,7 +142,7 @@ export default function Carrito() {
         <Button
           variant="outline"
           onClick={() => setConfirmVaciar(true)}
-          className="gap-2 text-destructive hover:bg-destructive/10"
+          className="text-destructive hover:bg-destructive/10"
         >
           <Trash2 className="h-4 w-4" />
           Vaciar carrito
@@ -157,8 +157,8 @@ export default function Carrito() {
             const subtotal = toNumber(item.subtotal);
             const isUpdating = actualizando === item.id;
             return (
-              <Card key={item.id} className="overflow-hidden border-border">
-                <CardContent className="p-6">
+              <Card key={item.id} className="overflow-hidden">
+                <CardContent>
                   <div className="flex gap-6">
                     <div className="w-24 h-24 bg-muted rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
                       {item.producto.imagen_principal ? (
@@ -247,7 +247,7 @@ export default function Carrito() {
         {/* Resumen de compra */}
         <div className="lg:col-span-1">
           <div className="sticky top-8 space-y-4">
-            <Card className="border-border">
+            <Card>
               <CardContent className="p-6 space-y-4">
                 <h2 className="text-xl font-bold text-foreground">Resumen de Compra</h2>
 
@@ -280,7 +280,7 @@ export default function Carrito() {
 
                 <Button
                   onClick={() => navigate('/market/checkout')}
-                  className="w-full gap-2"
+                  className="w-full"
                   size="lg"
                 >
                   Proceder al pago

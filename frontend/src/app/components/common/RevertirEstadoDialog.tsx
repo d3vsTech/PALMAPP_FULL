@@ -75,7 +75,7 @@ function Bloqueo({ bloqueo }: { bloqueo: BloqueoReversion }) {
 
 function Aviso({ aviso }: { aviso: AvisoReversion }) {
   return (
-    <p className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-200">
+    <p className="flex items-start gap-2 rounded-lg border border-warning/20 bg-warning-soft p-3 text-sm text-warning">
       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
       <span>{aviso.mensaje || aviso.message || AVISO_REVERSION_LABEL[aviso.code] || aviso.code}</span>
     </p>
@@ -167,7 +167,7 @@ export function RevertirEstadoDialog({
 
           {verificacion?.permitido && (efectos?.length ?? 0) > 0 && (
             <div className="rounded-lg border border-border bg-muted/30 p-3">
-              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground">
                 <Info className="h-3.5 w-3.5" />
                 Qué va a pasar
               </p>
@@ -201,7 +201,7 @@ export function RevertirEstadoDialog({
           <Button variant="outline" onClick={onCerrar} disabled={enviando}>
             Cancelar
           </Button>
-          <Button onClick={() => void ejecutar()} disabled={!puedeConfirmar} className="gap-2">
+          <Button onClick={() => void ejecutar()} disabled={!puedeConfirmar} >
             {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
             {etiquetaAccion}
           </Button>

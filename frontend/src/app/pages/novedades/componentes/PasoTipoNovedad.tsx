@@ -25,7 +25,7 @@ const PILDORA_SI = `${PILDORA} border-success/20 bg-success/10 text-success`;
 const PILDORA_NO = `${PILDORA} border-border bg-muted text-muted-foreground`;
 const PILDORA_ALERTA = `${PILDORA} border-destructive/20 bg-destructive/10 text-destructive`;
 
-const TH = 'px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground';
+const TH = 'px-4 py-3 text-[13px] font-semibold text-muted-foreground';
 
 /** Texto de las pestañas que no tienen motivos que elegir. */
 const SIN_MOTIVOS: Partial<Record<CategoriaNovedad, string>> = {
@@ -46,7 +46,7 @@ export function PasoTipoNovedad({
   const nota = SIN_MOTIVOS[activa];
 
   return (
-    <Card className="overflow-hidden border-border">
+    <Card className="overflow-hidden">
       <div className="flex overflow-x-auto border-b border-border bg-muted/20">
         {categorias.map((cat) => {
           const CatIcono = ICONO_CATEGORIA[cat.codigo];

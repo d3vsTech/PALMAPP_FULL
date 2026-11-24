@@ -6,8 +6,12 @@ const nf = (opts?: Intl.NumberFormatOptions) => new Intl.NumberFormat('es-CO', o
 export const num = (n: number, decimales = 0) =>
   nf({ minimumFractionDigits: decimales, maximumFractionDigits: decimales }).format(n);
 
-/** 1234567 -> "$1.234.567" */
-export const cop = (n: number) => `$${num(Math.round(n))}`;
+/**
+ * 1234567 -> "$1.234.567". No redondea: si la cifra trae centavos, se ven.
+ * Acepta el texto que manda el backend para los montos.
+ */
+export const cop = (v: number | string | null | undefined) =>
+  `$${(Number(v) || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 })}`;
 
 /**
  * Pesos abreviados para indicadores: 33150000 -> "$33,2 M"; 850000 -> "$850 mil".

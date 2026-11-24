@@ -30,10 +30,10 @@ const estadoConfig: Record<EstadoPedido, {
   borderColor: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = {
-  pendiente:   { label: 'Pendiente',     color: 'text-amber-600',  bgColor: 'bg-amber-50',     borderColor: 'border-amber-200',  icon: Clock },
-  confirmado:  { label: 'Confirmado',    color: 'text-blue-600',   bgColor: 'bg-blue-50',      borderColor: 'border-blue-200',   icon: CheckCircle },
-  preparando:  { label: 'En Preparación', color: 'text-purple-600', bgColor: 'bg-purple-50',    borderColor: 'border-purple-200', icon: ChefHat },
-  en_transito: { label: 'En Camino',     color: 'text-indigo-600', bgColor: 'bg-indigo-50',    borderColor: 'border-indigo-200', icon: Truck },
+  pendiente:   { label: 'Pendiente',     color: 'text-warning',  bgColor: 'bg-warning-soft',     borderColor: 'border-warning/20',  icon: Clock },
+  confirmado:  { label: 'Confirmado',    color: 'text-info',   bgColor: 'bg-info-soft',      borderColor: 'border-info/20',   icon: CheckCircle },
+  preparando:  { label: 'En Preparación', color: 'text-primary', bgColor: 'bg-primary-soft',    borderColor: 'border-primary/20', icon: ChefHat },
+  en_transito: { label: 'En Camino',     color: 'text-info', bgColor: 'bg-info-soft',    borderColor: 'border-info/20', icon: Truck },
   entregado:   { label: 'Entregado',     color: 'text-success',    bgColor: 'bg-success/10',   borderColor: 'border-success/20', icon: PackageCheck },
   cancelado:   { label: 'Cancelado',     color: 'text-destructive', bgColor: 'bg-destructive/10', borderColor: 'border-destructive/20', icon: XCircle },
 };
@@ -193,7 +193,7 @@ export default function Pedidos() {
           variant="ghost"
           size="sm"
           onClick={() => navigate('/market')}
-          className="mb-4 gap-2"
+          className="mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver al catálogo
@@ -206,23 +206,23 @@ export default function Pedidos() {
 
       {/* KPIs */}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        <Card className="border-border">
-          <CardContent className="p-6">
+        <Card>
+          <CardContent>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-2">Pedidos Activos</p>
                 <p className="text-2xl sm:text-3xl font-bold text-foreground">{stats?.pedidos_activos ?? 0}</p>
                 <p className="text-xs text-muted-foreground mt-1">En proceso</p>
               </div>
-              <div className="h-14 w-14 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                <Clock className="h-7 w-7 text-amber-600" />
+              <div className="h-14 w-14 rounded-xl bg-warning-soft flex items-center justify-center">
+                <Clock className="h-7 w-7 text-warning" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-border">
-          <CardContent className="p-6">
+        <Card>
+          <CardContent>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-2">Pedidos Entregados</p>
@@ -236,8 +236,8 @@ export default function Pedidos() {
           </CardContent>
         </Card>
 
-        <Card className="border-border">
-          <CardContent className="p-6">
+        <Card>
+          <CardContent>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-2">Total Gastado</p>
@@ -255,8 +255,8 @@ export default function Pedidos() {
       </div>
 
       {/* Filtros */}
-      <Card className="border-border">
-        <CardContent className="p-6">
+      <Card>
+        <CardContent>
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             <div className="flex items-center gap-2">
               <Filter className="h-5 w-5 text-muted-foreground" />
@@ -291,7 +291,7 @@ export default function Pedidos() {
             Cargando pedidos...
           </div>
         ) : pedidos.length === 0 ? (
-          <Card className="border-border">
+          <Card>
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
                 <Package className="h-8 w-8 text-muted-foreground" />
@@ -312,8 +312,8 @@ export default function Pedidos() {
             const config = estadoConfig[pedido.estado] ?? estadoConfig.pendiente;
             const Icon = config.icon;
             return (
-              <Card key={pedido.id} className="border-border hover:shadow-md transition-shadow">
-                <CardContent className="p-6">
+              <Card key={pedido.id} className="hover:shadow-md transition-shadow">
+                <CardContent>
                   <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                     <div className="flex-1 space-y-3">
                       <div className="flex items-start justify-between">
@@ -381,7 +381,7 @@ export default function Pedidos() {
                           variant="outline"
                           size="sm"
                           onClick={() => navigate(`/market/pedidos/${pedido.codigo}`)}
-                          className="gap-2 whitespace-nowrap"
+                          className="whitespace-nowrap"
                         >
                           <Eye className="h-4 w-4" />
                           Ver detalles
@@ -391,7 +391,7 @@ export default function Pedidos() {
                             variant="outline"
                             size="sm"
                             onClick={() => setPedidoACancelar(pedido.codigo)}
-                            className="gap-2 whitespace-nowrap border-destructive/40 text-destructive hover:bg-destructive/5 hover:text-destructive"
+                            className="whitespace-nowrap border-destructive/40 text-destructive hover:bg-destructive/5 hover:text-destructive"
                           >
                             <Ban className="h-4 w-4" />
                             Cancelar

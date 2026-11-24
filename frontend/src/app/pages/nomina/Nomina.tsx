@@ -313,7 +313,7 @@ export default function Nomina() {
             onClick={() => navigate('/nomina/planilla-diaria')}
             size="lg"
             variant="outline"
-            className="gap-2 border-primary text-primary hover:bg-primary/10"
+            className="border-primary text-primary hover:bg-primary/10"
           >
             <Receipt className="h-4 w-4" />
             Planilla Diaria
@@ -322,7 +322,7 @@ export default function Nomina() {
             onClick={() => navigate('/nomina/prestamos')}
             size="lg"
             variant="outline"
-            className="gap-2 border-primary text-primary hover:bg-primary/10"
+            className="border-primary text-primary hover:bg-primary/10"
           >
             <DollarSign className="h-5 w-5" />
             Préstamos
@@ -333,12 +333,12 @@ export default function Nomina() {
             onClick={() => navigate('/nomina/importar')}
             size="lg"
             variant="outline"
-            className="gap-2"
+            
           >
             <FileUp className="h-5 w-5" />
             Importar histórico
           </Button>
-          <Button onClick={() => navigate('/nomina/nueva')} size="lg" className="gap-2">
+          <Button onClick={() => navigate('/nomina/nueva')} size="lg" >
             <Plus className="h-5 w-5" />
             Nuevo Período de Pago
           </Button>
@@ -346,20 +346,20 @@ export default function Nomina() {
       </div>
 
       {/* Resumen de pagos con filtro por período */}
-      <Card className="border-border">
+      <Card>
         <CardContent className="p-5">
           <div className="flex items-center justify-between mb-5">
             <p className="text-sm font-semibold text-foreground">Resumen de pagos</p>
-            <select
-              aria-label="Periodo kpi"
-              value={periodoKpi}
-              onChange={(e) => setPeriodoKpi(e.target.value)}
-              className="text-sm border border-border rounded-lg px-3 py-1.5 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
-            >
-              {opcionesPeriodo.map((op) => (
-                <option key={op.value} value={op.value}>{op.label}</option>
-              ))}
-            </select>
+            <Select value={periodoKpi} onValueChange={setPeriodoKpi}>
+              <SelectTrigger aria-label="Periodo kpi" className="h-9 w-auto">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {opcionesPeriodo.map((op) => (
+                  <SelectItem key={op.value} value={op.value}>{op.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* 4 mini-KPIs */}
@@ -379,16 +379,16 @@ export default function Nomina() {
             </div>
 
             {/* Pagado a Terceros (placeholder hasta que haya endpoint) */}
-            <div className="flex items-center justify-between p-4 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-300/40">
+            <div className="flex items-center justify-between p-4 rounded-xl bg-warning-soft border border-warning/20">
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-1">Pagado a Terceros</p>
-                <p className="text-2xl font-bold text-amber-700">
+                <p className="text-2xl font-bold text-warning">
                   {fmtMillones(kpis.totalTerceros)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">Empresas contratistas</p>
               </div>
-              <div className="h-11 w-11 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
-                <Building2 className="h-5 w-5 text-amber-600" />
+              <div className="h-11 w-11 rounded-xl bg-warning-soft flex items-center justify-center flex-shrink-0">
+                <Building2 className="h-5 w-5 text-warning" />
               </div>
             </div>
 
@@ -420,14 +420,14 @@ export default function Nomina() {
                   hayDeuda
                     ? 'bg-destructive/5 border-destructive/20'
                     : hayBorradorSinLiquidar
-                      ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-300/40'
+                      ? 'bg-warning-soft border-warning/20'
                       : 'bg-muted/30 border-border'
                 }`}>
                   <div>
                     <p className="text-xs font-medium text-muted-foreground mb-1">Pendiente por Pagar</p>
                     <p className={`text-2xl font-bold ${
                       hayDeuda ? 'text-destructive'
-                        : hayBorradorSinLiquidar ? 'text-amber-700'
+                        : hayBorradorSinLiquidar ? 'text-warning'
                         : 'text-muted-foreground'
                     }`}>
                       {hayDeuda
@@ -446,13 +446,13 @@ export default function Nomina() {
                   </div>
                   <div className={`h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
                     hayDeuda ? 'bg-destructive/10'
-                      : hayBorradorSinLiquidar ? 'bg-amber-500/10'
+                      : hayBorradorSinLiquidar ? 'bg-warning-soft'
                       : 'bg-muted'
                   }`}>
                     {hayDeuda
                       ? <TrendingDown className="h-5 w-5 text-destructive" />
                       : hayBorradorSinLiquidar
-                        ? <DollarSign className="h-5 w-5 text-amber-600" />
+                        ? <DollarSign className="h-5 w-5 text-warning" />
                         : <Check className="h-5 w-5 text-muted-foreground" />}
                   </div>
                 </div>
@@ -463,8 +463,8 @@ export default function Nomina() {
       </Card>
 
       {/* Filtros */}
-      <Card className="border-border">
-        <CardContent className="p-6">
+      <Card>
+        <CardContent>
           <div className="flex items-center gap-3 mb-4">
             <Filter className="h-5 w-5 text-muted-foreground" />
             <h3 className="font-semibold">Filtros</h3>
@@ -543,13 +543,13 @@ export default function Nomina() {
         </div>
 
         {cargando ? (
-          <Card className="border-border">
+          <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
               Cargando nóminas...
             </CardContent>
           </Card>
         ) : nominasFiltradas.length > 0 ? (
-          <Card className="overflow-hidden border-border">
+          <Card className="overflow-hidden">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -655,7 +655,6 @@ export default function Nomina() {
                                   <Button
                                     size="sm"
                                     onClick={() => navigate(`/nomina/${n.id}`)}
-                                    className="gap-1 bg-primary hover:bg-primary/90"
                                   >
                                     <Calculator className="h-4 w-4" />
                                     Liquidar
@@ -694,7 +693,7 @@ export default function Nomina() {
                                     size="sm"
                                     variant="outline"
                                     onClick={() => navigate(`/nomina/${n.id}`)}
-                                    className="hover:bg-primary/10 hover:text-primary hover:border-primary gap-1"
+                                    className="hover:bg-primary/10 hover:text-primary hover:border-primary"
                                   >
                                     <Eye className="h-4 w-4" />
                                     Ver
@@ -728,21 +727,21 @@ export default function Nomina() {
             </CardContent>
           </Card>
         ) : nominas.length === 0 ? (
-          <Card className="bg-gradient-to-br from-muted/20 to-muted/5 border-dashed border-2">
+          <Card className="border-2 border-dashed bg-muted/30">
             <CardContent className="flex flex-col items-center justify-center py-12">
               <FileText className="h-16 w-16 text-muted-foreground mb-4" />
               <p className="text-lg font-semibold mb-2">No hay períodos de nómina</p>
               <p className="text-sm text-muted-foreground mb-4">
                 Comienza creando tu primer período de nómina
               </p>
-              <Button onClick={() => navigate('/nomina/nueva')} className="gap-2">
+              <Button onClick={() => navigate('/nomina/nueva')} >
                 <Plus className="h-4 w-4" />
                 Crear Primer Período
               </Button>
             </CardContent>
           </Card>
         ) : (
-          <Card className="bg-gradient-to-br from-muted/20 to-muted/5 border-dashed border-2">
+          <Card className="border-2 border-dashed bg-muted/30">
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Search className="h-16 w-16 text-muted-foreground mb-4" />
               <p className="text-lg font-semibold mb-2">No se encontraron resultados</p>

@@ -373,7 +373,7 @@ export function PromediosTab() {
 
   return (
     <TabLoadingGate loading={loading} message="Cargando promedios…">
-    <Card className="overflow-hidden bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
+    <Card className="overflow-hidden bg-card">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
@@ -404,7 +404,7 @@ export function PromediosTab() {
       <CardContent className="space-y-6">
         {/* KPIs */}
         <div className="grid gap-4 md:grid-cols-2">
-          <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/30">
+          <Card className="border-primary/20 bg-primary-soft">
             <CardContent className="pt-6">
               <div className="text-center">
                 <p className="text-sm text-muted-foreground mb-2">Promedio General {anioSeleccionado}</p>
@@ -415,14 +415,14 @@ export function PromediosTab() {
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/30">
+          <Card className="border-info/20 bg-info-soft">
             <CardContent className="pt-6">
               <div className="text-center">
                 <div className="flex items-center justify-center gap-2 mb-2">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">Última Actualización</p>
                 </div>
-                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                <p className="text-2xl font-bold text-info">
                   {obtenerUltimaActualizacion()
                     ? formatearFecha(obtenerUltimaActualizacion()!)
                     : 'N/A'}
@@ -536,7 +536,7 @@ export function PromediosTab() {
                             {registros.length > 0 && (
                               <div className="space-y-2">
                                 <div className="flex items-center justify-between gap-3">
-                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                                  <p className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground">
                                     <History className="h-3.5 w-3.5" />
                                     Últimos registros — {lote.nombre}
                                   </p>
@@ -635,7 +635,7 @@ export function PromediosTab() {
                               </div>
                             )}
                             {historial.length > 0 && (<>
-                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                            <p className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground">
                               <History className="h-3.5 w-3.5" />
                               Historial de promedios — {lote.nombre}
                             </p>
@@ -700,8 +700,8 @@ export function PromediosTab() {
         </div>
 
         {hayCambios && (
-          <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3">
-            <p className="text-sm text-amber-700 dark:text-amber-400">
+          <div className="rounded-lg bg-warning-soft border border-warning/20 p-3">
+            <p className="text-sm text-warning">
               Hay cambios sin guardar. Haz clic en "Guardar Cambios" para aplicarlos.
             </p>
           </div>

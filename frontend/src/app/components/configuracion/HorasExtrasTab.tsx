@@ -227,12 +227,12 @@ export function HorasExtrasTab() {
     <TabLoadingGate loading={loading} message="Cargando horas extra…">
     <div className="space-y-6">
       {/* Jornada Laboral Semanal */}
-      <Card className="overflow-hidden border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b bg-muted/40">
           <CardTitle>Jornada Laboral Semanal</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">Número de horas ordinarias por semana</p>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent>
           <div className="max-w-xs">
             <Label htmlFor="horasSemanales">Horas Semanales *</Label>
             <div className="flex items-center gap-3 mt-2">
@@ -254,8 +254,8 @@ export function HorasExtrasTab() {
       </Card>
 
       {/* Tipos de Horas Extras — solo lectura (catálogo legal colombiano). */}
-      <Card className="overflow-hidden border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b bg-muted/40">
           <div>
             <CardTitle>Tipos de Horas Extras</CardTitle>
             <p className="text-sm text-muted-foreground mt-1">
@@ -263,7 +263,7 @@ export function HorasExtrasTab() {
             </p>
           </div>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent>
           <div className="space-y-3">
             {tipos.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">

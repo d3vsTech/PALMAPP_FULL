@@ -45,6 +45,9 @@ import { BloqueConcepto, CAMPOS_AJUSTE } from './final/BloqueConcepto';
 import { PanelDeducciones, PanelDevengadosManuales } from './final/PanelesCaptura';
 import { TablaColaboradores } from './final/TablaColaboradores';
 import { useFormularioLiquidacion } from './final/useFormularioLiquidacion';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../../components/ui/select';
 
 /** Orden y textos de los cinco conceptos ajustables. */
 const CONCEPTOS: Array<{
@@ -251,7 +254,7 @@ export default function NuevaLiquidacionFinal() {
     return (
       <div className="space-y-6">
         <div className="space-y-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones?tab=liquidacion-final')} className="gap-2">
+          <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones?tab=liquidacion-final')} >
             <ArrowLeft className="h-4 w-4" />
             Volver a Liquidaciones
           </Button>
@@ -265,7 +268,7 @@ export default function NuevaLiquidacionFinal() {
           <CardHeader className="border-b">
             <CardTitle>Tipo de Liquidación</CardTitle>
           </CardHeader>
-          <CardContent className="p-6">
+          <CardContent>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <button
                 type="button"
@@ -339,7 +342,7 @@ export default function NuevaLiquidacionFinal() {
             setFicha(null);
             f.reiniciar();
           }}
-          className="gap-2"
+          
         >
           <ArrowLeft className="h-4 w-4" />
           {modoEdicion ? 'Volver al comprobante' : 'Cambiar tipo'}
@@ -431,7 +434,7 @@ export default function NuevaLiquidacionFinal() {
               </div>
 
               {ficha.empleado.fecha_retiro && (
-                <p className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400">
+                <p className="flex items-start gap-2 text-xs text-warning">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   La ficha ya registra el retiro el {fmtFecha(ficha.empleado.fecha_retiro)}. La
                   liquidación debe usar esa misma fecha.
@@ -441,7 +444,7 @@ export default function NuevaLiquidacionFinal() {
               {ficha.advertencias.map((a, i) => (
                 <p
                   key={`${a.code}-${i}`}
-                  className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400"
+                  className="flex items-start gap-2 text-xs text-warning"
                 >
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   {a.mensaje}
@@ -532,38 +535,43 @@ export default function NuevaLiquidacionFinal() {
                     <Label htmlFor="motivoRetiro">
                       Motivo de retiro <span className="text-destructive">*</span>
                     </Label>
-                    <select
-                      id="motivoRetiro"
+                    <Select
                       value={f.form.motivoRetiro}
-                      onChange={(e) =>
-                        f.setCampo('motivoRetiro', e.target.value as MotivoRetiroCodigo)
+                      onValueChange={(valor) =>
+                        f.setCampo('motivoRetiro', valor as MotivoRetiroCodigo)
                       }
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <option value="">Seleccione un motivo...</option>
-                      {ficha.motivos.map((m) => (
-                        <option key={m.codigo} value={m.codigo}>
-                          {m.etiqueta}
-                          {m.indemniza ? ' (con indemnización)' : ''}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger id="motivoRetiro">
+                        <SelectValue placeholder="Selecciona un motivo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ficha.motivos.map((m) => (
+                          <SelectItem key={m.codigo} value={m.codigo}>
+                            {m.etiqueta}
+                            {m.indemniza ? ' (con indemnización)' : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="tipoContrato">Tipo de contrato</Label>
-                    <select
-                      id="tipoContrato"
+                    <Select
                       value={f.form.tipoContrato}
-                      onChange={(e) => f.setCampo('tipoContrato', e.target.value as TipoContrato)}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      onValueChange={(valor) => f.setCampo('tipoContrato', valor as TipoContrato)}
                     >
-                      {(Object.keys(TIPO_CONTRATO_LABEL) as TipoContrato[]).map((t) => (
-                        <option key={t} value={t}>
-                          {TIPO_CONTRATO_LABEL[t]}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger id="tipoContrato">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(Object.keys(TIPO_CONTRATO_LABEL) as TipoContrato[]).map((t) => (
+                          <SelectItem key={t} value={t}>
+                            {TIPO_CONTRATO_LABEL[t]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <p className="text-xs text-muted-foreground">
                       Viene del contrato. Cambiarlo exige un motivo.
                     </p>
@@ -674,7 +682,7 @@ export default function NuevaLiquidacionFinal() {
             <CardHeader className="border-b">
               <CardTitle>Devengados adicionales</CardTitle>
             </CardHeader>
-            <CardContent className="p-6">
+            <CardContent>
               <PanelDevengadosManuales
                 items={f.devengados}
                 onAgregar={f.agregarDevengado}
@@ -689,7 +697,7 @@ export default function NuevaLiquidacionFinal() {
             <CardHeader className="border-b">
               <CardTitle>Deducciones</CardTitle>
             </CardHeader>
-            <CardContent className="p-6">
+            <CardContent>
               <PanelDeducciones
                 seguridadSocial={f.form.seguridadSocial}
                 onSeguridadSocial={(v) => f.setCampo('seguridadSocial', v)}
@@ -722,7 +730,7 @@ export default function NuevaLiquidacionFinal() {
                 key={`${b.code}-${i}`}
                 className={`flex items-start gap-2 rounded-lg border p-3 text-sm ${
                   esBloqueanteForzable(b)
-                    ? 'border-amber-200 bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-400'
+                    ? 'border-warning/20 bg-warning-soft text-warning'
                     : 'border-destructive/30 bg-destructive/5 text-destructive'
                 }`}
               >
@@ -778,7 +786,7 @@ export default function NuevaLiquidacionFinal() {
 
             <div className="barra-acciones flex flex-wrap justify-end gap-3 border-t border-border pt-4">
               {esSimulacion ? (
-                <Button onClick={() => void descargarSimulacion()} disabled={descargando} className="gap-2">
+                <Button onClick={() => void descargarSimulacion()} disabled={descargando} >
                   {descargando ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
@@ -787,7 +795,7 @@ export default function NuevaLiquidacionFinal() {
                   Descargar estado de cuenta
                 </Button>
               ) : (
-                <Button onClick={() => void guardar()} disabled={!puedeGuardar} className="gap-2">
+                <Button onClick={() => void guardar()} disabled={!puedeGuardar} >
                   {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   {modoEdicion ? 'Guardar cambios' : 'Guardar borrador'}
                 </Button>

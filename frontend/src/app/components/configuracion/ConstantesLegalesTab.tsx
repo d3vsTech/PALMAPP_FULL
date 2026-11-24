@@ -62,7 +62,7 @@ const aTexto = (v: number | string | null | undefined) =>
  */
 function SubtituloPolitica({ titulo }: { titulo: string }) {
   return (
-    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+    <p className="text-[13px] font-medium text-muted-foreground">
       {titulo}
     </p>
   );
@@ -189,8 +189,8 @@ export function ConstantesLegalesTab() {
     <TabLoadingGate loading={loading} message="Cargando constantes legales…">
     <div className="space-y-6">
       {/* ── General: lo que pesa en todas las liquidaciones ──────────────── */}
-      <Card className="overflow-hidden border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b bg-muted/40">
           <CardTitle>General</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">
             Valores y reglas que usan todas las liquidaciones. Cada liquidación los
@@ -323,8 +323,8 @@ export function ConstantesLegalesTab() {
       </Card>
 
       {/* ── Cesantías ──────────────────────────────────────────────────────── */}
-      <Card className="overflow-hidden border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b bg-muted/40">
           <CardTitle>Cesantías</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">Fecha de consignación y reglas de conteo de días</p>
         </CardHeader>
@@ -375,8 +375,8 @@ export function ConstantesLegalesTab() {
       </Card>
 
       {/* ── Intereses de cesantías ─────────────────────────────────────────── */}
-      <Card className="overflow-hidden border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b bg-muted/40">
           <CardTitle>Intereses de Cesantías</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">Tasa anual y fecha límite de pago</p>
         </CardHeader>
@@ -411,8 +411,8 @@ export function ConstantesLegalesTab() {
       </Card>
 
       {/* ── Prima de servicios ──────────────────────────────────────────────── */}
-      <Card className="overflow-hidden border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b bg-muted/40">
           <CardTitle>Prima de Servicios</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">Fechas límite por semestre y regla de días</p>
         </CardHeader>
@@ -453,8 +453,8 @@ export function ConstantesLegalesTab() {
       </Card>
 
       {/* ── Vacaciones ──────────────────────────────────────────────────────── */}
-      <Card className="overflow-hidden border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b bg-muted/40">
           <CardTitle>Vacaciones</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">Días anuales y reglas de conteo</p>
         </CardHeader>
@@ -500,12 +500,12 @@ export function ConstantesLegalesTab() {
       </Card>
 
       {/* ── Liquidación final de contrato ──────────────────────── */}
-      <Card className="overflow-hidden border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b bg-muted/40">
           <CardTitle>Liquidación Final</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">Qué se descuenta cuando alguien se retira</p>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent>
           <div className="space-y-4">
             <SubtituloPolitica titulo="Política de cálculo" />
 
@@ -528,7 +528,7 @@ export function ConstantesLegalesTab() {
 
       {/* Botón Guardar */}
       <div className="flex justify-end">
-        <Button onClick={handleSave} size="lg" className="gap-2">
+        <Button onClick={handleSave} size="lg">
           <Save className="h-5 w-5" />
           Guardar Constantes
         </Button>

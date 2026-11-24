@@ -31,10 +31,10 @@ const estadoConfig: Record<EstadoPedido, {
   borderColor: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = {
-  pendiente:   { label: 'Pendiente',     color: 'text-amber-600',  bgColor: 'bg-amber-50',     borderColor: 'border-amber-200',  icon: Clock },
-  confirmado:  { label: 'Confirmado',    color: 'text-blue-600',   bgColor: 'bg-blue-50',      borderColor: 'border-blue-200',   icon: CheckCircle },
-  preparando:  { label: 'En Preparación', color: 'text-purple-600', bgColor: 'bg-purple-50',    borderColor: 'border-purple-200', icon: ChefHat },
-  en_transito: { label: 'En Camino',     color: 'text-indigo-600', bgColor: 'bg-indigo-50',    borderColor: 'border-indigo-200', icon: Truck },
+  pendiente:   { label: 'Pendiente',     color: 'text-warning',  bgColor: 'bg-warning-soft',     borderColor: 'border-warning/20',  icon: Clock },
+  confirmado:  { label: 'Confirmado',    color: 'text-info',   bgColor: 'bg-info-soft',      borderColor: 'border-info/20',   icon: CheckCircle },
+  preparando:  { label: 'En Preparación', color: 'text-primary', bgColor: 'bg-primary-soft',    borderColor: 'border-primary/20', icon: ChefHat },
+  en_transito: { label: 'En Camino',     color: 'text-info', bgColor: 'bg-info-soft',    borderColor: 'border-info/20', icon: Truck },
   entregado:   { label: 'Entregado',     color: 'text-success',    bgColor: 'bg-success/10',   borderColor: 'border-success/20', icon: PackageCheck },
   cancelado:   { label: 'Cancelado',     color: 'text-destructive', bgColor: 'bg-destructive/10', borderColor: 'border-destructive/20', icon: XCircle },
 };
@@ -141,7 +141,7 @@ export default function PedidoDetalle() {
           variant="ghost"
           size="sm"
           onClick={() => navigate('/market/pedidos')}
-          className="mb-4 gap-2"
+          className="mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver a mis pedidos
@@ -169,7 +169,7 @@ export default function PedidoDetalle() {
                   variant="outline"
                   size="sm"
                   onClick={() => setDialogoCancelarAbierto(true)}
-                  className="gap-2 border-destructive/40 text-destructive hover:bg-destructive/5 hover:text-destructive"
+                  className="border-destructive/40 text-destructive hover:bg-destructive/5 hover:text-destructive"
                 >
                   <Ban className="h-4 w-4" />
                   Cancelar pedido
@@ -183,8 +183,8 @@ export default function PedidoDetalle() {
         <div className="lg:col-span-2 space-y-6">
           {/* Timeline del pedido */}
           {historial.length > 0 && (
-            <Card className="border-border">
-              <CardContent className="p-6">
+            <Card>
+              <CardContent>
                 <h2 className="text-xl font-bold text-foreground mb-6">Seguimiento del Pedido</h2>
 
                 <div className="relative">
@@ -228,8 +228,8 @@ export default function PedidoDetalle() {
           )}
 
           {/* Productos */}
-          <Card className="overflow-hidden border-border">
-            <CardContent className="p-6">
+          <Card className="overflow-hidden">
+            <CardContent>
               <h2 className="text-xl font-bold text-foreground mb-4">Productos</h2>
 
               <div className="space-y-4">
@@ -267,8 +267,8 @@ export default function PedidoDetalle() {
           </Card>
 
           {/* Información de entrega */}
-          <Card className="border-border">
-            <CardContent className="p-6">
+          <Card>
+            <CardContent>
               <h2 className="text-xl font-bold text-foreground mb-4">Información de Entrega</h2>
 
               <div className="space-y-4">
@@ -344,7 +344,7 @@ export default function PedidoDetalle() {
                           && (
                             <Button
                               size="sm"
-                              className="mt-3 gap-2"
+                              className="mt-3"
                               onClick={() => setModalReintentoAbierto(true)}
                             >
                               <CreditCard className="h-4 w-4" />
@@ -365,7 +365,7 @@ export default function PedidoDetalle() {
         {/* Resumen del pedido */}
         <div className="lg:col-span-1">
           <div className="sticky top-8 space-y-4">
-            <Card className="border-border">
+            <Card>
               <CardContent className="p-6 space-y-4">
                 <h2 className="text-xl font-bold text-foreground">Resumen del Pedido</h2>
 
@@ -397,7 +397,7 @@ export default function PedidoDetalle() {
               </CardContent>
             </Card>
 
-            <Card className="border-border bg-muted/30">
+            <Card className="bg-muted/30">
               <CardContent className="p-4 flex items-start gap-3">
                 <Calendar className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
                 <div>

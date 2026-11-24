@@ -375,15 +375,15 @@ export function DatosEmpresaTab() {
     <TabLoadingGate loading={loading} message="Cargando datos de empresa…">
     <div className="space-y-6">
       {/* Logo de la finca */}
-      <Card className="overflow-hidden border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b bg-muted/40">
           <CardTitle>Logo de la Finca / Empresa</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">
             Este logo aparecerá en todos los documentos descargables del sistema
             (desprendibles, liquidaciones, novedades, etc.)
           </p>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent>
           <div className="flex flex-wrap items-center gap-8">
             {/* Recuadro de vista previa. Punteado y con la leyenda "Sin logo"
                 mientras la finca no tenga uno cargado. */}
@@ -417,7 +417,7 @@ export function DatosEmpresaTab() {
                 type="button"
                 variant="outline"
                 onClick={() => logoInputRef.current?.click()}
-                className="gap-2"
+                
               >
                 <Upload className="h-4 w-4" />
                 {logoUrl || logoPreview ? 'Cambiar logo' : 'Subir logo'}
@@ -448,12 +448,12 @@ export function DatosEmpresaTab() {
       </Card>
 
       {/* Información Legal */}
-      <Card className="overflow-hidden border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b bg-muted/40">
           <CardTitle>Información Legal</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">Datos de identificación y tipo de persona</p>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent>
           <div className="space-y-6">
             {/* Tipo de Persona */}
             <div className="max-w-md">
@@ -591,12 +591,12 @@ export function DatosEmpresaTab() {
       </Card>
 
       {/* Datos de contacto */}
-      <Card className="overflow-hidden border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b bg-muted/40">
           <CardTitle>Datos de contacto</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">Dirección, teléfonos y correos electrónicos</p>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent>
           <div className="space-y-6">
             {/* Ubicación */}
             <div>
@@ -614,33 +614,34 @@ export function DatosEmpresaTab() {
 
                 <div className="space-y-2">
                   <Label htmlFor="departamento">Departamento *</Label>
-                  <select
-                    id="departamento"
-                    value={deptoCodigo}
-                    onChange={(e) => onDepartamentoChange(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  >
-                    <option value="">Seleccionar departamento...</option>
-                    {[...departamentos].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((d) => (
-                      <option key={d.codigo} value={d.codigo}>{d.nombre}</option>
-                    ))}
-                  </select>
+                  <Select value={deptoCodigo} onValueChange={onDepartamentoChange}>
+                    <SelectTrigger id="departamento">
+                      <SelectValue placeholder="Seleccionar departamento" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[...departamentos].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((d) => (
+                        <SelectItem key={d.codigo} value={d.codigo}>{d.nombre}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="municipio">Municipio *</Label>
-                  <select
-                    id="municipio"
+                  <Select
                     value={datosEmpresa.municipio}
-                    onChange={(e) => onMunicipioChange(e.target.value)}
+                    onValueChange={onMunicipioChange}
                     disabled={!deptoCodigo}
-                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <option value="">Seleccionar municipio...</option>
-                    {[...municipios].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((m) => (
-                      <option key={m.codigo} value={m.nombre}>{m.nombre}</option>
-                    ))}
-                  </select>
+                    <SelectTrigger id="municipio">
+                      <SelectValue placeholder="Seleccionar municipio" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[...municipios].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((m) => (
+                        <SelectItem key={m.codigo} value={m.nombre}>{m.nombre}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>
@@ -697,7 +698,7 @@ export function DatosEmpresaTab() {
 
       {/* Botón Guardar */}
       <div className="flex justify-end">
-        <Button onClick={handleSave} size="lg" disabled={guardando} className="gap-2">
+        <Button onClick={handleSave} size="lg" disabled={guardando}>
           <Save className="h-5 w-5" />
           {guardando ? 'Guardando...' : 'Guardar Cambios'}
         </Button>

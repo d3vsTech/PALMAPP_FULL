@@ -20,6 +20,9 @@ import { ArrowLeft, Save, Factory, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { extractorasApi, type Extractora } from '../../../api/viajes';
 import { getDepartamentos, getMunicipios } from '../../../api/plantacion';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../../components/ui/select';
 
 type DaneItem = { codigo: string; nombre: string };
 
@@ -172,7 +175,7 @@ export default function NuevaExtractora() {
       </div>
 
       {/* Información de la Empresa */}
-      <Card className="border-border">
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-primary">
             <Factory className="h-5 w-5" />
@@ -209,11 +212,9 @@ export default function NuevaExtractora() {
               se limpia el municipio para evitar combinaciones inválidas. */}
           <div className="space-y-2">
             <Label htmlFor="departamento_codigo">Departamento</Label>
-            <select
-              id="departamento_codigo"
+            <Select
               value={formData.departamento_codigo}
-              onChange={(e) => {
-                const codigo = e.target.value;
+              onValueChange={(codigo) => {
                 setFormData((prev) => ({
                   ...prev,
                   departamento_codigo: codigo,
@@ -222,34 +223,38 @@ export default function NuevaExtractora() {
                 }));
               }}
               disabled={loading}
-              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
             >
-              <option value="">Seleccionar departamento...</option>
-              {[...departamentos].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((d) => (
-                <option key={d.codigo} value={d.codigo}>{d.nombre}</option>
-              ))}
-            </select>
+              <SelectTrigger id="departamento_codigo">
+                <SelectValue placeholder="Seleccionar departamento" />
+              </SelectTrigger>
+              <SelectContent>
+                {[...departamentos].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((d) => (
+                  <SelectItem key={d.codigo} value={d.codigo}>{d.nombre}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="ciudad">Ciudad</Label>
-            <select
-              id="ciudad"
+            <Select
               value={formData.municipio_codigo}
-              onChange={(e) => {
-                const codigo = e.target.value;
+              onValueChange={(codigo) => {
                 const nombre = municipios.find((m) => m.codigo === codigo)?.nombre ?? '';
                 setFormData((prev) => ({ ...prev, municipio_codigo: codigo, ciudad: nombre }));
               }}
               disabled={loading || !formData.departamento_codigo}
-              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <option value="">
-                {formData.departamento_codigo ? 'Seleccionar municipio...' : 'Selecciona departamento primero'}
-              </option>
-              {[...municipios].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((m) => (
-                <option key={m.codigo} value={m.codigo}>{m.nombre}</option>
-              ))}
-            </select>
+              <SelectTrigger id="ciudad">
+                <SelectValue placeholder={formData.departamento_codigo
+                  ? 'Seleccionar municipio'
+                  : 'Selecciona departamento primero'} />
+              </SelectTrigger>
+              <SelectContent>
+                {[...municipios].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((m) => (
+                  <SelectItem key={m.codigo} value={m.codigo}>{m.nombre}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="ubicacion">Dirección</Label>
@@ -265,7 +270,7 @@ export default function NuevaExtractora() {
       </Card>
 
       {/* Información de Contacto */}
-      <Card className="border-border">
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-primary">
             <User className="h-5 w-5" />
@@ -322,7 +327,7 @@ export default function NuevaExtractora() {
         <Button
           onClick={handleSave}
           disabled={saving || loading}
-          className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-6"
+          className="rounded-full px-6"
         >
           <Save className="h-4 w-4" />
           {saving ? 'Guardando…' : 'Guardar'}

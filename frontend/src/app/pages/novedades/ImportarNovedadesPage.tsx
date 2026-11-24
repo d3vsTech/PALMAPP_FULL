@@ -167,7 +167,7 @@ export default function ImportarNovedadesPage() {
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" size="sm" onClick={() => navigate('/novedades')} className="gap-2">
+      <Button variant="ghost" size="sm" onClick={() => navigate('/novedades')} >
         <ArrowLeft className="h-4 w-4" />Volver a Novedades
       </Button>
 
@@ -229,21 +229,21 @@ export default function ImportarNovedadesPage() {
           >
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-lg border border-border bg-muted/20 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Se cargan</p>
+                <p className="text-[13px] font-medium text-muted-foreground">Se cargan</p>
                 <p className="text-2xl font-bold text-success">{resumen.validas}</p>
               </div>
               <div className="rounded-lg border border-border bg-muted/20 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Con error</p>
+                <p className="text-[13px] font-medium text-muted-foreground">Con error</p>
                 <p className={`text-2xl font-bold ${conError > 0 ? 'text-destructive' : 'text-foreground'}`}>
                   {conError}
                 </p>
               </div>
               <div className="rounded-lg border border-border bg-muted/20 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Colaboradores</p>
+                <p className="text-[13px] font-medium text-muted-foreground">Colaboradores</p>
                 <p className="text-2xl font-bold text-foreground">{resumen.colaboradores}</p>
               </div>
               <div className="rounded-lg border border-border bg-muted/20 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Días calendario</p>
+                <p className="text-[13px] font-medium text-muted-foreground">Días calendario</p>
                 <p className="text-2xl font-bold text-foreground">{resumen.dias_calendario}</p>
                 {resumen.parciales > 0 && (
                   <p className="text-xs text-muted-foreground">
@@ -256,7 +256,7 @@ export default function ImportarNovedadesPage() {
             {/* D5 — Con qué estado nacen. Si es PENDIENTE, la nómina no las
                 toma hasta que alguien las apruebe, y eso hay que decirlo
                 antes de cargar, no después. */}
-            <div className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50/60 p-3 text-sm text-sky-800 dark:border-sky-900 dark:bg-sky-950/20 dark:text-sky-300">
+            <div className="flex items-start gap-2 rounded-lg border border-info/20 bg-info-soft p-3 text-sm text-info">
               <Info className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
                 Las novedades van a quedar en estado{' '}
@@ -272,7 +272,7 @@ export default function ImportarNovedadesPage() {
                 {analisis.advertencias.map((a, i) => (
                   <p
                     key={`${a.code}-${i}`}
-                    className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400"
+                    className="flex items-start gap-2 text-sm text-warning"
                   >
                     <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                     {a.mensaje || ADVERTENCIA_NOVEDAD_LABEL[a.code] || a.code}
@@ -319,7 +319,7 @@ export default function ImportarNovedadesPage() {
                       <td className="px-3 py-2.5 align-top">
                         {periodoFila(f)}
                         {f.novedad.parcial && (
-                          <span className="ml-2 rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-800 dark:bg-sky-950/40 dark:text-sky-300">
+                          <span className="ml-2 rounded-full bg-info-soft px-2 py-0.5 text-xs text-info">
                             Parcial
                           </span>
                         )}
@@ -363,7 +363,7 @@ export default function ImportarNovedadesPage() {
               <Button
                 onClick={confirmar}
                 disabled={!puedeCargar}
-                className="gap-2 bg-success hover:bg-success/90"
+                className="bg-success hover:bg-success/90"
               >
                 {cargando
                   ? <Loader2 className="h-4 w-4 animate-spin" />

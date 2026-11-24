@@ -182,7 +182,7 @@ export default function VerLiquidacion() {
             variant="ghost"
             size="sm"
             onClick={() => navigate(`/nomina/${nominaId}`)}
-            className="mb-4 gap-2"
+            className="mb-4"
           >
             <ArrowLeft className="h-4 w-4" />
             Volver
@@ -208,7 +208,7 @@ export default function VerLiquidacion() {
 
       </div>
 
-      <Card className="border-border">
+      <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-xl">
             <FileText className="h-6 w-6 text-primary" />
@@ -239,7 +239,7 @@ export default function VerLiquidacion() {
         </CardContent>
       </Card>
 
-      <Card className="border-border">
+      <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-xl">
             <TrendingUp className="h-6 w-6 text-success" />
@@ -306,7 +306,7 @@ export default function VerLiquidacion() {
         </CardContent>
       </Card>
 
-      <Card className="border-border">
+      <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-xl">
             <TrendingDown className="h-6 w-6 text-destructive" />
@@ -388,7 +388,7 @@ export default function VerLiquidacion() {
           variant="outline"
           size="lg"
           onClick={() => navigate(`/nomina/${nominaId}`)}
-          className="gap-2"
+          
         >
           <ArrowLeft className="h-5 w-5" />
           Volver
@@ -396,7 +396,7 @@ export default function VerLiquidacion() {
         <Button
           size="lg"
           onClick={() => navigate(`/nomina/${nominaId}`)}
-          className="gap-2 bg-success hover:bg-success/90"
+          className="bg-success hover:bg-success/90"
         >
           <Check className="h-5 w-5" />
           Aceptar
@@ -406,7 +406,7 @@ export default function VerLiquidacion() {
           size="lg"
           onClick={() => void pedirPdf('imprimir')}
           disabled={descargando}
-          className="gap-2"
+          
         >
           <Printer className="h-5 w-5" />
           Imprimir
@@ -416,7 +416,7 @@ export default function VerLiquidacion() {
           size="lg"
           onClick={enviarWhatsapp}
           disabled={generandoWa}
-          className="gap-2 text-primary border-primary hover:bg-primary/5"
+          className="text-primary border-primary hover:bg-primary/5"
         >
           {generandoWa ? <Loader2 className="h-5 w-5 animate-spin" /> : <MessageCircle className="h-5 w-5" />}
           WhatsApp
@@ -426,7 +426,7 @@ export default function VerLiquidacion() {
           size="lg"
           onClick={() => void pedirPdf('descargar')}
           disabled={descargando}
-          className="gap-2"
+          
         >
           {descargando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
           Descargar PDF

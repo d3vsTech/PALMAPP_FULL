@@ -95,7 +95,7 @@ function SelectorEstadoFinal({
 function Indicador({ titulo, valor, tono }: { titulo: string; valor: string; tono?: string }) {
   return (
     <div className="rounded-xl border border-border bg-card p-3">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{titulo}</p>
+      <p className="text-[13px] font-medium text-muted-foreground">{titulo}</p>
       <p className={`text-2xl font-bold tabular-nums ${tono ?? 'text-foreground'}`}>{valor}</p>
     </div>
   );
@@ -265,7 +265,7 @@ export default function ImportarViajesPage() {
             <Button
               onClick={() => void cargue.importar(false)}
               disabled={!puedeImportar}
-              className="gap-2"
+              
             >
               <Upload className="h-4 w-4" />
               {cargue.importando

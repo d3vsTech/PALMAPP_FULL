@@ -35,7 +35,7 @@ interface Props {
 function Linea({ label, valor, fuerte }: { label: string; valor: React.ReactNode; fuerte?: boolean }) {
   return (
     <div className="flex justify-between items-center">
-      <span className={`text-xs uppercase tracking-wide font-medium ${fuerte ? 'font-bold text-primary' : 'text-muted-foreground'}`}>
+      <span className={`text-[13px] font-medium ${fuerte ? 'font-bold text-primary' : 'text-muted-foreground'}`}>
         {label}
       </span>
       <span className={`text-sm ${fuerte ? 'font-bold text-primary' : 'font-medium'}`}>{valor}</span>
@@ -67,7 +67,7 @@ export default function DesprendibleFilaCard({
         : null;
 
   return (
-    <Card className="border-border overflow-hidden print:break-inside-avoid">
+    <Card className="overflow-hidden print:break-inside-avoid">
       {/* Encabezado del desprendible */}
       <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-background">
         <div className="h-9 w-9 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center justify-center text-xs font-bold shrink-0">
@@ -112,7 +112,7 @@ export default function DesprendibleFilaCard({
             <TrendingUp className="h-4 w-4 text-primary" />
             <span className="text-sm font-semibold text-primary">Base de Cálculo</span>
             {metodoLabel && (
-              <span className="text-[10px] uppercase tracking-wide text-muted-foreground ml-auto">{metodoLabel}</span>
+              <span className="ml-auto text-xs font-medium text-muted-foreground">{metodoLabel}</span>
             )}
           </div>
 
@@ -161,7 +161,7 @@ export default function DesprendibleFilaCard({
               </div>
               <div className="mx-5 my-3 border-t border-primary/20" />
               <div className="flex justify-between items-center px-5 pb-4">
-                <span className="text-xs uppercase tracking-wide font-bold text-primary">Fórmula</span>
+                <span className="text-xs font-semibold text-primary">Fórmula</span>
                 <span className="text-xs text-primary">
                   {detalle?.resultado.formula_aplicada ?? txt.formulaGenerica}
                 </span>
@@ -175,7 +175,7 @@ export default function DesprendibleFilaCard({
           <div className="px-5 pt-4 pb-2 space-y-2">
             <Linea label="Días" valor={fila.dias_computados} />
             <div className="flex justify-between items-center">
-              <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Fórmula</span>
+              <span className="text-[13px] font-medium text-muted-foreground">Fórmula</span>
               <span className="text-xs text-muted-foreground">
                 {detalle?.resultado.formula_aplicada ?? txt.formulaGenerica}
               </span>
@@ -184,16 +184,16 @@ export default function DesprendibleFilaCard({
         )}
         <div className={`mx-5 border-t-2 border-primary/20 ${conBaseSalarial ? '' : 'mt-4'}`} />
         <div className="flex justify-between items-center px-5 py-4">
-          <span className="text-sm uppercase tracking-wide font-bold">{txt.totalCardLabel}</span>
+          <span className="text-sm font-semibold">{txt.totalCardLabel}</span>
           <span className="text-xl font-bold text-primary">{fmtCOP(fila.valor_final)}</span>
         </div>
 
         {/* Estado del giro */}
-        <div className={`px-5 py-3 border-t border-border ${girada ? 'bg-success/5' : 'bg-orange-50'}`}>
+        <div className={`px-5 py-3 border-t border-border ${girada ? 'bg-success/5' : 'bg-warning-soft'}`}>
           {girada ? (
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
-                <p className="text-xs uppercase tracking-wide font-semibold text-success">{txt.giradoLabel}</p>
+                <p className="text-xs font-semibold text-success">{txt.giradoLabel}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {fila.fecha_pago ? formatFecha(fila.fecha_pago) : ''}
                   {fila.metodo_pago ? ` · ${fila.metodo_pago}` : ''}
@@ -204,12 +204,12 @@ export default function DesprendibleFilaCard({
               <div className="text-right">
                 <p className="text-sm font-bold text-success">{fmtCOP(fila.valor_pagado ?? fila.valor_final)}</p>
                 {fila.dias_mora != null && fila.dias_mora > 0 && (
-                  <p className="text-xs text-orange-600">{fila.dias_mora} día(s) de mora</p>
+                  <p className="text-xs text-warning">{fila.dias_mora} día(s) de mora</p>
                 )}
               </div>
             </div>
           ) : (
-            <p className="text-xs uppercase tracking-wide font-semibold text-orange-700">
+            <p className="text-xs font-semibold text-warning">
               {txt.pendienteGiroLabel}
             </p>
           )}
@@ -228,7 +228,7 @@ export default function DesprendibleFilaCard({
             {detalle && (
               <>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                  <p className="mb-2 text-[13px] font-medium text-muted-foreground">
                     Tiempo de servicio
                   </p>
                   <div className="space-y-1.5">
@@ -252,7 +252,7 @@ export default function DesprendibleFilaCard({
 
                 {conBaseSalarial && (
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                    <p className="mb-2 text-[13px] font-medium text-muted-foreground">
                       Componentes del período
                     </p>
                     <div className="space-y-1.5">
@@ -274,7 +274,7 @@ export default function DesprendibleFilaCard({
                 {detalle.advertencias.length > 0 && (
                   <div className="space-y-1.5">
                     {detalle.advertencias.map((a, i) => (
-                      <p key={i} className="text-xs text-orange-700 flex items-start gap-1.5">
+                      <p key={i} className="text-xs text-warning flex items-start gap-1.5">
                         <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                         {a.mensaje ?? a.code}
                       </p>
@@ -292,12 +292,12 @@ export default function DesprendibleFilaCard({
 
         {/* Acciones */}
         <div className="flex items-center gap-2 px-5 py-3 border-t border-border flex-wrap print:hidden">
-          <Button variant="ghost" size="sm" onClick={onToggleDetalle} className="gap-1.5">
+          <Button variant="ghost" size="sm" onClick={onToggleDetalle}>
             {expandido ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             {expandido ? 'Ocultar desglose' : 'Ver desglose'}
           </Button>
           <div className="ml-auto flex gap-2 flex-wrap">
-            <Button variant="outline" size="sm" onClick={onDescargarPdf} disabled={descargandoPdf} className="gap-1.5">
+            <Button variant="outline" size="sm" onClick={onDescargarPdf} disabled={descargandoPdf}>
               {descargandoPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
               Desprendible PDF
             </Button>
@@ -306,13 +306,13 @@ export default function DesprendibleFilaCard({
                 variant="ghost"
                 size="sm"
                 onClick={onAnularGiro}
-                className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
               >
                 <Undo2 className="h-4 w-4" />
                 Anular
               </Button>
             ) : (
-              <Button size="sm" onClick={onRegistrarGiro} className="gap-1.5">
+              <Button size="sm" onClick={onRegistrarGiro}>
                 <Banknote className="h-4 w-4" />
                 {txt.girarFila}
               </Button>

@@ -103,10 +103,10 @@ export default function UsuarioNuevoEditar() {
       </div>
 
       <form onSubmit={handleSubmit}>
-        <Card className="glass-subtle border-border shadow-lg">
+        <Card className="glass-subtle">
           <CardHeader>
             <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-primary/20 bg-primary-soft">
                 <User className="h-6 w-6 text-primary" />
               </div>
               <div>
@@ -180,10 +180,10 @@ export default function UsuarioNuevoEditar() {
         </Card>
 
         <div className="barra-acciones flex justify-end gap-3 mt-6">
-          <Button type="button" variant="outline" onClick={() => navigate('/usuarios')} className="gap-2">
+          <Button type="button" variant="outline" onClick={() => navigate('/usuarios')} >
             <X className="h-4 w-4" /> Cancelar
           </Button>
-          <Button type="submit" disabled={loading} className="gap-2 bg-primary hover:bg-primary/90">
+          <Button type="submit" disabled={loading}>
             <Save className="h-4 w-4" /> {esEdicion ? 'Guardar Cambios' : 'Crear Usuario'}
           </Button>
         </div>

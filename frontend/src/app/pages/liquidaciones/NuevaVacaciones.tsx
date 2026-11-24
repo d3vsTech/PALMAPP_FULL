@@ -367,7 +367,7 @@ export default function NuevaVacaciones() {
   if (!empleadoId || !detalle) {
     return (
       <div className="space-y-4">
-        <Button variant="ghost" size="sm" asChild className="gap-2">
+        <Button variant="ghost" size="sm" asChild>
           <Link to="/liquidaciones?tab=vacaciones"><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
         </Button>
         <p className="text-muted-foreground">
@@ -496,7 +496,7 @@ export default function NuevaVacaciones() {
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" size="sm" asChild className="gap-2">
+      <Button variant="ghost" size="sm" asChild>
         <Link to="/liquidaciones?tab=vacaciones"><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
       </Button>
 
@@ -514,19 +514,19 @@ export default function NuevaVacaciones() {
       {/* PR-N4 — Lo que pidió el colaborador, para que el liquidador vea de
           dónde salen los campos prellenados y qué cambió si los ajusta. */}
       {solicitud && (
-        <div className="flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50/60 p-4 text-sm dark:border-orange-900 dark:bg-orange-950/20">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-orange-700 dark:text-orange-400" />
+        <div className="flex items-start gap-3 rounded-xl border border-warning/20 bg-warning-soft p-4 text-sm">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <div className="space-y-1">
-            <p className="font-semibold text-orange-800 dark:text-orange-300">
+            <p className="font-semibold text-warning">
               Solicitud {solicitud.numero_comprobante}
             </p>
-            <p className="text-orange-700 dark:text-orange-400">
+            <p className="text-warning">
               Pidió {solicitud.dias_habiles} días hábiles
               {solicitud.fecha_inicio && ` desde el ${String(solicitud.fecha_inicio).slice(0, 10)}`}.
               Puedes ajustar los días antes de liquidar; lo que guardes es lo que queda.
             </p>
             {solicitud.observacion && (
-              <p className="text-xs text-orange-700/90 dark:text-orange-400/90">
+              <p className="text-xs text-foreground">
                 Observación: {solicitud.observacion}
               </p>
             )}
@@ -537,7 +537,7 @@ export default function NuevaVacaciones() {
       {/* ── Colaborador ──────────────────────────────────────────────────
           Una sola tarjeta con tres franjas: identidad, causación y base. Todo
           sale del detalle del backend; aquí no se recalcula nada. */}
-      <Card className="overflow-hidden border-border">
+      <Card className="overflow-hidden">
         <div className="flex flex-wrap items-center gap-4 border-b border-border bg-muted/10 px-5 py-4">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-sm font-bold text-primary">
             {getIniciales(emp.nombre_completo)}
@@ -629,7 +629,7 @@ export default function NuevaVacaciones() {
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-2"
+                
                 onClick={() => {
                   const abriendo = !modoBaseManual;
                   setModoBaseManual(abriendo);
@@ -687,7 +687,7 @@ export default function NuevaVacaciones() {
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0 space-y-1">
                   {ajusteLevantaBloqueo && !ajusteAplicado && (
-                    <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                    <p className="text-xs text-success">
                       Con esta base ya no aplica el bloqueo por falta de nóminas cerradas.
                     </p>
                   )}
@@ -700,7 +700,7 @@ export default function NuevaVacaciones() {
                 </div>
                 <Button
                   size="sm"
-                  className="gap-2"
+                  
                   disabled={calculandoPreview}
                   onClick={aplicarBaseManual}
                 >
@@ -739,7 +739,7 @@ export default function NuevaVacaciones() {
       )}
 
       {/* ── Formulario ───────────────────────────────────────────────────── */}
-      <Card className="border-border">
+      <Card>
         <CardContent className="space-y-6 p-6">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
@@ -800,7 +800,7 @@ export default function NuevaVacaciones() {
 
             <div className="space-y-1.5">
               <Label>
-                <span className="font-semibold text-amber-600">Días en dinero</span>
+                <span className="font-semibold text-warning">Días en dinero</span>
                 <span className="ml-2 text-xs text-muted-foreground">(compensación, opcional)</span>
               </Label>
               <Input
@@ -980,14 +980,14 @@ export default function NuevaVacaciones() {
 
           {/* Acuerdo escrito: sin él la compensación no es válida */}
           {nDinero > 0 && (
-            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800/30 dark:bg-amber-950/20">
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-warning/20 bg-warning-soft px-4 py-3">
               <Checkbox
                 checked={acuerdoEscrito}
                 onCheckedChange={(v) => setAcuerdoEscrito(v === true)}
                 className="mt-0.5"
               />
               <span className="text-sm">
-                <span className="font-semibold text-amber-800 dark:text-amber-400">
+                <span className="font-semibold text-warning">
                   Hay acuerdo escrito con el trabajador
                 </span>
                 <span className="mt-0.5 block text-muted-foreground">
@@ -1014,7 +1014,7 @@ export default function NuevaVacaciones() {
                 <div
                   className={`h-full rounded-full transition ${
                     excedeSaldo ? 'bg-destructive'
-                      : totalPedido / maxDisfrute > 0.75 ? 'bg-amber-500'
+                      : totalPedido / maxDisfrute > 0.75 ? 'bg-warning'
                       : 'bg-success'
                   }`}
                   style={{ width: `${Math.min((totalPedido / maxDisfrute) * 100, 100)}%` }}
@@ -1027,7 +1027,7 @@ export default function NuevaVacaciones() {
                 </span>
                 {nDinero > 0 && (
                   <span className="flex items-center gap-1.5">
-                    <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+                    <span className="inline-block h-2 w-2 rounded-full bg-warning" />
                     Dinero: {fmtDias(nDinero)} días
                   </span>
                 )}
@@ -1106,9 +1106,9 @@ export default function NuevaVacaciones() {
           )}
 
           {preview.advertencias.length > 0 && (
-            <div className="space-y-1 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-800/30 dark:bg-amber-950/20">
+            <div className="space-y-1 rounded-xl border border-warning/20 bg-warning-soft px-4 py-3 text-sm">
               {preview.advertencias.map((a, i) => (
-                <p key={`${a.code}-${i}`} className="flex gap-2 text-amber-800 dark:text-amber-400">
+                <p key={`${a.code}-${i}`} className="flex gap-2 text-warning">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   {a.mensaje ?? ADVERTENCIA_PAGO_NOMINA_LABEL[a.code] ?? a.code}
                 </p>
@@ -1116,7 +1116,7 @@ export default function NuevaVacaciones() {
             </div>
           )}
 
-          <Card className="overflow-hidden border-border">
+          <Card className="overflow-hidden">
             <div className="flex flex-wrap items-center gap-3 border-b border-border bg-muted/20 px-5 py-3">
               <DollarSign className="h-4 w-4 shrink-0 text-primary" />
               <p className="text-sm font-semibold">Resumen de liquidación</p>
@@ -1131,10 +1131,10 @@ export default function NuevaVacaciones() {
                 <table className="w-full min-w-[560px]">
                   <thead>
                     <tr className="border-b border-border">
-                      <th className="px-5 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Concepto</th>
-                      <th className="px-5 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">Días</th>
-                      <th className="px-5 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">Valor día</th>
-                      <th className="px-5 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Valor</th>
+                      <th className="px-5 py-2.5 text-left text-[13px] font-semibold text-muted-foreground">Concepto</th>
+                      <th className="px-5 py-2.5 text-center text-[13px] font-semibold text-muted-foreground">Días</th>
+                      <th className="px-5 py-2.5 text-center text-[13px] font-semibold text-muted-foreground">Valor día</th>
+                      <th className="px-5 py-2.5 text-right text-[13px] font-semibold text-muted-foreground">Valor</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1164,8 +1164,8 @@ export default function NuevaVacaciones() {
                       </tr>
                     )}
                     {preview.resultado.dias_dinero > 0 && (
-                      <tr className="border-b border-border bg-amber-50/60 dark:bg-amber-950/10">
-                        <td className="px-5 py-3 text-sm font-medium text-amber-700 dark:text-amber-400">
+                      <tr className="border-b border-border bg-warning-soft">
+                        <td className="px-5 py-3 text-sm font-medium text-warning">
                           Días en dinero (Art. 189 CST)
                         </td>
                         <td className="px-5 py-3 text-center text-sm text-foreground">
@@ -1174,7 +1174,7 @@ export default function NuevaVacaciones() {
                         <td className="px-5 py-3 text-center text-sm text-foreground">
                           {fmtCOP(preview.resultado.valor_dia)}
                         </td>
-                        <td className="px-5 py-3 text-right text-sm font-semibold text-amber-700 dark:text-amber-400">
+                        <td className="px-5 py-3 text-right text-sm font-semibold text-warning">
                           {fmtCOP(preview.resultado.valor_dinero)}
                         </td>
                       </tr>
@@ -1271,7 +1271,7 @@ export default function NuevaVacaciones() {
 
           {/* Saldo después y períodos que se consumen */}
           {preview.saldo && (
-            <Card className="border-border">
+            <Card>
               <CardContent className="space-y-4 p-5">
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div>
@@ -1313,7 +1313,7 @@ export default function NuevaVacaciones() {
                 )}
 
                 {preview.saldo.usa_periodo_en_curso && (
-                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800/30 dark:bg-amber-950/20 dark:text-amber-400">
+                  <p className="rounded-lg border border-warning/20 bg-warning-soft px-3 py-2 text-xs text-warning">
                     Se están usando días del año en curso. Si el trabajador se retira antes de
                     cumplirlo, esos días no se le pueden cobrar.
                   </p>
@@ -1326,13 +1326,13 @@ export default function NuevaVacaciones() {
 
       {/* ── Acciones ─────────────────────────────────────────────────────── */}
       <div className="barra-acciones flex justify-between">
-        <Button variant="outline" asChild className="gap-2">
+        <Button variant="outline" asChild>
           <Link to="/liquidaciones?tab=vacaciones"><ArrowLeft className="h-4 w-4" />Cancelar</Link>
         </Button>
         <Button
           onClick={() => confirmar(false)}
           disabled={!puedeConfirmar || confirmando}
-          className="gap-2 bg-success hover:bg-success/90"
+          className="bg-success hover:bg-success/90"
         >
           {confirmando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
           Confirmar Liquidación
@@ -1357,7 +1357,7 @@ export default function NuevaVacaciones() {
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={confirmando}>Cancelar</AlertDialogCancel>
-            <Button onClick={() => confirmar(true)} disabled={confirmando} className="gap-2">
+            <Button onClick={() => confirmar(true)} disabled={confirmando} >
               {confirmando && <Loader2 className="h-4 w-4 animate-spin" />}
               Liquidar de todos modos
             </Button>
@@ -1396,7 +1396,7 @@ function EstadoAjuste({ calculando, aplicado, sinDias, conError }: {
   }
   if (aplicado) {
     return (
-      <p className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
+      <p className="flex items-center gap-1.5 text-xs text-success">
         <Check className="h-3.5 w-3.5" />
         El cálculo de abajo ya usa esta base. Confirme para guardarla con su motivo.
       </p>
@@ -1404,7 +1404,7 @@ function EstadoAjuste({ calculando, aplicado, sinDias, conError }: {
   }
   if (sinDias) {
     return (
-      <p className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+      <p className="flex items-center gap-1.5 text-xs text-warning">
         <AlertTriangle className="h-3.5 w-3.5" />
         Capture los días a liquidar: el recálculo sale con ellos.
       </p>
@@ -1412,7 +1412,7 @@ function EstadoAjuste({ calculando, aplicado, sinDias, conError }: {
   }
   if (conError) return null;
   return (
-    <p className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+    <p className="flex items-center gap-1.5 text-xs text-warning">
       <AlertTriangle className="h-3.5 w-3.5" />
       El cálculo todavía no trae la base manual. Revise el motivo y los días.
     </p>
@@ -1466,7 +1466,7 @@ function PlanDePago({ preview }: { preview: ComprobanteVacaciones | null }) {
       )}
 
       {sinCubrir && (
-        <p className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800/40 dark:bg-amber-950/20 dark:text-amber-200">
+        <p className="flex items-start gap-2 rounded-lg border border-warning/20 bg-warning-soft p-3 text-xs text-warning">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
             Quedan {fmtDias(sinNomina?.dias ?? 0)} días ({fmtCOP(sinNomina?.valor ?? 0)}) que

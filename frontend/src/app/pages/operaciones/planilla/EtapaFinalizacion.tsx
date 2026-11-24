@@ -263,7 +263,7 @@ export function EtapaFinalizacion({
                     type="button"
                     onClick={agregarAusente}
                     disabled={!colaboradorAusenteSeleccionado || !motivoAusenteSeleccionado}
-                    className="w-full gap-2 md:w-auto md:px-6"
+                    className="w-full md:w-auto md:px-6"
                   >
                     <Plus className="h-4 w-4" />
                     Agregar
@@ -272,7 +272,7 @@ export function EtapaFinalizacion({
               </div>
 
               {(horaInicioAusente || horaFinAusente) && (
-                <div className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-300">
+                <div className="flex items-start gap-2 rounded-lg border border-info/20 bg-info-soft p-3 text-xs text-info">
                   <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <p>
                     Con horario la novedad es informativa: se registra el permiso
@@ -329,7 +329,7 @@ export function EtapaFinalizacion({
                         <td className="p-3 text-sm whitespace-nowrap">
                           {periodo}
                           {ausente.horaInicio && (
-                            <span className="ml-2 rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-800 dark:bg-sky-950/40 dark:text-sky-300">
+                            <span className="ml-2 rounded-full bg-info-soft px-2 py-0.5 text-xs text-info">
                               Parcial
                             </span>
                           )}

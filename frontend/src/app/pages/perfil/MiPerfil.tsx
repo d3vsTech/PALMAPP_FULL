@@ -127,7 +127,7 @@ export default function MiPerfil() {
 
       {/* Avatar + info actual */}
       <Card>
-        <CardContent className="p-6">
+        <CardContent>
           <div className="flex items-center gap-4">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 border-2 border-primary/20 text-xl font-bold text-primary shrink-0">
               {iniciales}
@@ -191,7 +191,7 @@ export default function MiPerfil() {
             </div>
 
             <div className="flex justify-end">
-              <Button type="submit" disabled={savingPerfil} className="gap-2 min-w-[160px]">
+              <Button type="submit" disabled={savingPerfil} className="min-w-[160px]">
                 {savingPerfil
                   ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</>
                   : <><Save className="w-4 h-4" /> Guardar datos</>
@@ -280,7 +280,7 @@ export default function MiPerfil() {
             </div>
 
             <div className="flex justify-end">
-              <Button type="submit" disabled={savingPass} className="gap-2 min-w-[180px]">
+              <Button type="submit" disabled={savingPass} className="min-w-[180px]">
                 {savingPass
                   ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</>
                   : <><Save className="w-4 h-4" /> Cambiar contraseña</>

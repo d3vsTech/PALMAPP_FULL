@@ -77,11 +77,11 @@ export function ConceptosNominaTab() {
   const getTipoColor = (tipo: TipoConcepto): string => {
     switch (tipo) {
       case 'APORTE_LEGAL':
-        return 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/30';
+        return 'bg-primary-soft text-primary border-primary/20';
       case 'DEDUCCION_LEGAL':
         return 'bg-destructive/10 text-destructive border-destructive/30';
       case 'DEDUCCION_VOLUNTARIA':
-        return 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30';
+        return 'bg-warning-soft text-warning border-warning/20';
       case 'BONIFICACION_FIJA':
         return 'bg-success/10 text-success border-success/30';
       case 'BONIFICACION_VARIABLE':
@@ -171,8 +171,8 @@ export function ConceptosNominaTab() {
         </div>
 
       <TabLoadingGate loading={loading} message="Cargando conceptos…">
-      <Card className="overflow-hidden border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b bg-muted/40">
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
@@ -189,7 +189,7 @@ export function ConceptosNominaTab() {
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent>
           {conceptos.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">

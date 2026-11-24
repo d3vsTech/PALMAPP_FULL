@@ -105,14 +105,14 @@ export function ParametrosNominaTab() {
 
   return (
     <TabLoadingGate loading={loading} message="Cargando parámetros de nómina…">
-    <Card className="overflow-hidden border-border">
-      <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+    <Card className="overflow-hidden">
+      <CardHeader className="border-b bg-muted/40">
         <CardTitle>Parámetros de Nómina</CardTitle>
         <p className="text-sm text-muted-foreground mt-1">
           Configura la periodicidad y fechas de corte de la nómina
         </p>
       </CardHeader>
-      <CardContent className="p-6">
+      <CardContent>
         <div className="space-y-6">
           {/* Periodicidad */}
           <div className="max-w-md">
@@ -304,8 +304,8 @@ export function ParametrosNominaTab() {
           </div>
 
           {/* Nota informativa */}
-          <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 p-4">
-            <p className="text-sm text-blue-900 dark:text-blue-100">
+          <div className="rounded-lg bg-info-soft border border-info/20 p-4">
+            <p className="text-sm text-info">
               <strong>Nota:</strong> Estos parámetros definen los periodos de corte para el procesamiento de la nómina.
               Asegúrate de que las fechas correspondan con las políticas de pago de tu empresa.
             </p>
@@ -313,7 +313,7 @@ export function ParametrosNominaTab() {
 
           {/* Botón Guardar */}
           <div className="flex justify-end pt-4">
-            <Button onClick={handleSave} size="lg" className="gap-2">
+            <Button onClick={handleSave} size="lg">
               <Save className="h-5 w-5" />
               Guardar Parámetros
             </Button>

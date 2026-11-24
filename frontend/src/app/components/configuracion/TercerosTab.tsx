@@ -153,7 +153,7 @@ function FormOperario({
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs flex items-center gap-1"><HardHat className="h-3 w-3 text-amber-600" /> ARL</Label>
+          <Label className="text-xs flex items-center gap-1"><HardHat className="h-3 w-3 text-warning" /> ARL</Label>
           <Select value={form.arl ?? ''} onValueChange={v => set('arl', v)} disabled={arlCargando || (arlOptions?.length ?? 0) === 0}>
             <SelectTrigger className="h-9">
               <SelectValue placeholder={arlCargando ? 'Cargando…' : (arlOptions?.length ? 'Seleccionar ARL' : 'Sin catálogo')} />
@@ -168,7 +168,6 @@ function FormOperario({
         <Button size="sm" variant="outline" onClick={onCancelar} disabled={guardando}>Cancelar</Button>
         <Button
           size="sm"
-          className="bg-primary hover:bg-primary/90 gap-1.5"
           disabled={!form.nombres || !form.apellidos || guardando}
           onClick={guardar}
         >
@@ -339,7 +338,7 @@ export function TercerosTab() {
     <>
       {ConfirmDeleteDialog}
       <TabLoadingGate loading={loading} message="Cargando terceros…">
-      <Card className="overflow-hidden border-border">
+      <Card className="overflow-hidden">
         <CardHeader className="border-b">
           <div className="flex items-center justify-between">
             <div>
@@ -352,7 +351,7 @@ export function TercerosTab() {
                 {totalOperariosCargados > 0 && ` · ${totalOperariosCargados} operario${totalOperariosCargados !== 1 ? 's' : ''} cargado${totalOperariosCargados !== 1 ? 's' : ''}`}
               </CardDescription>
             </div>
-            <Button onClick={() => navigate('/configuracion/terceros/nuevo')} className="gap-2 bg-primary hover:bg-primary/90">
+            <Button onClick={() => navigate('/configuracion/terceros/nuevo')}>
               <Plus className="h-4 w-4" /> Nuevo Tercero
             </Button>
           </div>
@@ -363,7 +362,7 @@ export function TercerosTab() {
             <div className="text-center py-14 text-muted-foreground">
               <Building2 className="h-10 w-10 mx-auto mb-3 opacity-30" />
               <p className="text-sm">Sin terceros registrados.</p>
-              <Button size="sm" className="mt-3 gap-2" onClick={() => navigate('/configuracion/terceros/nuevo')}>
+              <Button size="sm" className="mt-3" onClick={() => navigate('/configuracion/terceros/nuevo')}>
                 <Plus className="h-4 w-4" /> Agregar primer tercero
               </Button>
             </div>
@@ -456,7 +455,7 @@ export function TercerosTab() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="gap-1.5 h-8"
+                              className="h-8"
                               onClick={() => abrirModalOperario(t.id)}
                             >
                               <UserPlus className="h-3.5 w-3.5" /> Agregar Operario
@@ -479,7 +478,7 @@ export function TercerosTab() {
                                       <span className="flex items-center gap-1"><ShieldCheck className="h-3 w-3 text-primary" /> EPS</span>
                                     </th>
                                     <th className="text-left p-3 font-semibold">
-                                      <span className="flex items-center gap-1"><HardHat className="h-3 w-3 text-amber-600" /> ARL</span>
+                                      <span className="flex items-center gap-1"><HardHat className="h-3 w-3 text-warning" /> ARL</span>
                                     </th>
                                     <th className="text-center p-3 font-semibold">Estado</th>
                                     <th className="text-center p-3 font-semibold w-16">Acciones</th>

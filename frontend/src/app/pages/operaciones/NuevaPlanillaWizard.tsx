@@ -2655,7 +2655,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       {/* Overlay de carga durante el guardado */}
       {guardando && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card p-8 shadow-xl">
+          <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card p-8 shadow-md">
             <Loader2 className="h-10 w-10 animate-spin text-primary" />
             <p className="font-semibold text-foreground">Guardando planilla...</p>
           </div>
@@ -3028,7 +3028,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
               variant="outline"
               onClick={etapaAnterior}
               disabled={etapaActual === 1}
-              className="gap-2"
+              
             >
               <ArrowLeft className="h-4 w-4" />
               Anterior
@@ -3042,7 +3042,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   variant="outline"
                   onClick={() => guardarTodo()}
                   disabled={guardando}
-                  className="gap-2 border-success text-success hover:bg-success/10"
+                  className="border-success text-success hover:bg-success/10"
                   title="Guardar cambios y volver al listado"
                 >
                   {guardando ? (
@@ -3062,7 +3062,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 <Button
                   onClick={siguienteEtapa}
                   disabled={etapaActual === 1 && !puedeAvanzarEtapa1 && !modoLectura}
-                  className="gap-2"
+                  
                 >
                   Siguiente
                   <ArrowRight className="h-4 w-4" />
@@ -3073,14 +3073,14 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 // superior o "Anterior", lo cual no es evidente.
                 <Button
                   onClick={() => navigate('/operaciones')}
-                  className="gap-2"
+                  
                 >
                   <Check className="h-4 w-4" />
                   Finalizar
                 </Button>
               ) : (
                 <Button
-                  onClick={() => guardarTodo()} disabled={guardando} className="gap-2"
+                  onClick={() => guardarTodo()} disabled={guardando} 
                 >
                   {guardando ? (
                     <>
@@ -3612,7 +3612,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                               {/* PR-N3 — un rango o un horario cambian lo que
                                   nómina va a descontar: va a la vista. */}
                               {ausente.horaInicio && ausente.horaFin ? (
-                                <div className="text-xs text-sky-700 mt-0.5 dark:text-sky-400">
+                                <div className="text-xs text-info mt-0.5">
                                   {ausente.horaInicio} a {ausente.horaFin} · parcial
                                 </div>
                               ) : ausente.fechaFin && ausente.fechaFin !== fecha ? (

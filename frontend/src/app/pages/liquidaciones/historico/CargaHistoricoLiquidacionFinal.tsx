@@ -249,7 +249,7 @@ export default function CargaHistoricoLiquidacionFinal() {
           variant="ghost"
           size="sm"
           onClick={() => navigate('/liquidaciones?tab=liquidacion-final')}
-          className="gap-2"
+          
         >
           <ArrowLeft className="h-4 w-4" />
           Volver a Liquidaciones
@@ -365,7 +365,7 @@ export default function CargaHistoricoLiquidacionFinal() {
               </div>
               <div className="rounded-lg border border-border p-3">
                 <p className="text-xs text-muted-foreground">Reemplazan</p>
-                <p className="text-2xl font-bold text-amber-600">{resumen.a_sobrescribir}</p>
+                <p className="text-2xl font-bold text-warning">{resumen.a_sobrescribir}</p>
               </div>
               <div className="rounded-lg border border-border p-3">
                 <p className="text-xs text-muted-foreground">Con error</p>
@@ -392,7 +392,7 @@ export default function CargaHistoricoLiquidacionFinal() {
             {(resumen.sin_contrato > 0 || resumen.sin_desglose > 0) && (
               <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
                 {resumen.sin_contrato > 0 && (
-                  <span className="flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-800 dark:border-amber-800/30 dark:bg-amber-950/30 dark:text-amber-400">
+                  <span className="flex items-center gap-1.5 rounded-full border border-warning/20 bg-warning-soft px-3 py-1 text-warning">
                     <AlertTriangle className="h-3.5 w-3.5" />
                     {resumen.sin_contrato} sin contrato enlazado
                   </span>
@@ -416,7 +416,7 @@ export default function CargaHistoricoLiquidacionFinal() {
             ))}
 
             {hayYaCargados && (
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/30 dark:bg-amber-950/30">
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-warning/20 bg-warning-soft p-4">
                 <Checkbox
                   checked={sobrescribir}
                   onCheckedChange={(v) => cambiarSobrescribir(v === true)}
@@ -467,7 +467,7 @@ export default function CargaHistoricoLiquidacionFinal() {
                 <Button
                   onClick={() => void cargar()}
                   disabled={!listoParaCargar || !puedeCargar}
-                  className="gap-2"
+                  
                 >
                   {cargando ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -484,7 +484,7 @@ export default function CargaHistoricoLiquidacionFinal() {
 
       {/* Las mismas reglas que trae la hoja de instrucciones de la plantilla,
           aquí donde se leen antes de subir el archivo. */}
-      <Card className="border-border">
+      <Card>
         <CardHeader className="border-b">
           <CardTitle className="text-base">Cómo llenar el archivo</CardTitle>
         </CardHeader>
@@ -553,7 +553,7 @@ export default function CargaHistoricoLiquidacionFinal() {
           </div>
 
           <p className="flex items-start gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
             Si este archivo se sube por error a la pantalla de cesantías o de prima, esas lo
             rechazan por cabeceras. Los prefijos <code>liq_</code> y <code>ded_</code> existen
             justamente para eso.
@@ -671,7 +671,7 @@ function TablaFilasLiquidacion({ filas }: { filas: FilaHistoricoLiquidacionFinal
                       <span
                         className={`text-xs ${
                           l.contrato_enlace === 'SIN_CONTRATO'
-                            ? 'font-medium text-amber-600'
+                            ? 'font-medium text-warning'
                             : 'text-muted-foreground'
                         }`}
                       >

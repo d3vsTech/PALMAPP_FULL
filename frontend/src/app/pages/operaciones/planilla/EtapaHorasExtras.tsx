@@ -63,7 +63,7 @@ export function EtapaHorasExtras({
               </p>
             </div>
           </div>
-          <Button onClick={agregarHoraExtra} className="gap-2 self-end sm:self-auto">
+          <Button onClick={agregarHoraExtra} className="self-end sm:self-auto">
             <Plus className="h-4 w-4" />
             Agregar hora extra
           </Button>
@@ -175,7 +175,7 @@ export function EtapaHorasExtras({
               <Button variant="outline" onClick={cancelarHoraExtra}>
                 Cancelar
               </Button>
-              <Button onClick={guardarHoraExtra} className="gap-2">
+              <Button onClick={guardarHoraExtra}>
                 <Check className="h-4 w-4" />
                 Guardar
               </Button>
@@ -245,10 +245,9 @@ export function EtapaHorasExtras({
       })}
 
       {horasExtras.length === 0 && !horaExtraEnEdicion && (
-        <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
-          <Clock className="h-12 w-12 opacity-20" />
-          <p>No hay horas extras registradas</p>
-          <p className="text-sm">Haz clic en "Agregar hora extra" para crear una</p>
+        <div className="space-y-1 py-12 text-center">
+          <h3 className="text-base font-semibold text-foreground">Todavía no hay horas extras</h3>
+          <p className="text-sm text-muted-foreground">Agrégalas con el botón de arriba.</p>
         </div>
       )}
 

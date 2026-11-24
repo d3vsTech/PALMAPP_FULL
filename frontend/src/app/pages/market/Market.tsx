@@ -216,14 +216,14 @@ export default function Market() {
           <Button
             variant="outline"
             onClick={() => navigate('/market/pedidos')}
-            className="gap-2"
+            
           >
             <Package className="h-5 w-5" />
             Mis Pedidos
           </Button>
           <Button
             onClick={() => navigate('/market/carrito')}
-            className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 relative"
+            className="relative"
           >
             <ShoppingCart className="h-5 w-5" />
             Carrito
@@ -250,7 +250,7 @@ export default function Market() {
               <Button
                 variant="outline"
                 size="icon"
-                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full shadow-lg bg-background"
+                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-background shadow-md"
                 onClick={() => setIndiceCarrusel(Math.max(0, indiceCarrusel - 1))}
               >
                 <ChevronLeft className="h-5 w-5" />
@@ -267,7 +267,7 @@ export default function Market() {
                       key={cat.slug}
                       className={`cursor-pointer transition duration-300 border-2 ${
                         isSelected
-                          ? 'border-primary bg-primary/5 shadow-lg'
+                          ? 'border-primary bg-primary-soft'
                           : 'border-border hover:border-primary/50 hover:shadow-md'
                       }`}
                       onClick={() => setCategoriaSlug(cat.slug)}
@@ -300,7 +300,7 @@ export default function Market() {
               <Button
                 variant="outline"
                 size="icon"
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full shadow-lg bg-background"
+                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-background shadow-md"
                 onClick={() => setIndiceCarrusel(indiceCarrusel + 1)}
               >
                 <ChevronRight className="h-5 w-5" />
@@ -311,7 +311,7 @@ export default function Market() {
       </div>
 
       {/* Filtros y búsqueda */}
-      <Card className="border-border">
+      <Card>
         <CardContent className="pt-6">
           <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -379,7 +379,7 @@ export default function Market() {
             Cargando productos...
           </div>
         ) : productos.length === 0 ? (
-          <Card className="border-border">
+          <Card>
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
                 <Package className="h-8 w-8 text-muted-foreground" />
@@ -399,7 +399,7 @@ export default function Market() {
                 <Card
                   key={producto.id}
                   id={`prod-${producto.id}`}
-                  className="glass-subtle border-border hover:shadow-lg transition duration-300 overflow-hidden group cursor-pointer scroll-mt-24"
+                  className="glass-subtle transition-colors overflow-hidden group cursor-pointer scroll-mt-24"
                   onClick={() => verProducto(producto.id)}
                 >
                   <div className="aspect-square bg-muted relative overflow-hidden">
@@ -410,12 +410,12 @@ export default function Market() {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5">
+                      <div className="absolute inset-0 flex items-center justify-center bg-primary-soft">
                         <Package className="h-16 w-16 text-primary/30" />
                       </div>
                     )}
                     {producto.stock_bajo && (
-                      <Badge className="absolute top-2 right-2 bg-amber-500">Stock bajo</Badge>
+                      <Badge className="absolute top-2 right-2 bg-warning">Stock bajo</Badge>
                     )}
                     {producto.destacado && (
                       <Badge className="absolute top-2 left-2 bg-primary">Destacado</Badge>
@@ -438,7 +438,7 @@ export default function Market() {
                             key={i}
                             className={`h-3 w-3 ${
                               i < Math.floor(rating > 0 ? rating : 5)
-                                ? 'fill-amber-400 text-amber-400'
+                                ? 'fill-warning text-warning'
                                 : 'text-muted'
                             }`}
                           />
@@ -468,7 +468,7 @@ export default function Market() {
                             e.stopPropagation();
                             abrirModalProducto(producto);
                           }}
-                          className="w-full gap-2"
+                          className="w-full"
                           size="sm"
                           disabled={producto.stock_disponible <= 0}
                         >
@@ -491,10 +491,10 @@ export default function Market() {
                 <Card
                   key={producto.id}
                   id={`prod-${producto.id}`}
-                  className="overflow-hidden glass-subtle border-border hover:shadow-lg transition duration-300 cursor-pointer scroll-mt-24"
+                  className="overflow-hidden glass-subtle transition-colors cursor-pointer scroll-mt-24"
                   onClick={() => verProducto(producto.id)}
                 >
-                  <CardContent className="p-6">
+                  <CardContent>
                     <div className="flex gap-6">
                       <div className="w-32 h-32 bg-muted rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
                         {producto.imagen_principal ? (
@@ -511,7 +511,7 @@ export default function Market() {
                             </h3>
                             <p className="text-sm text-muted-foreground">{producto.descripcion}</p>
                           </div>
-                          {producto.stock_bajo && <Badge className="bg-amber-500">Stock bajo</Badge>}
+                          {producto.stock_bajo && <Badge className="bg-warning">Stock bajo</Badge>}
                         </div>
 
                         <div className="flex items-center gap-1">
@@ -520,7 +520,7 @@ export default function Market() {
                               key={i}
                               className={`h-3 w-3 ${
                                 i < Math.floor(rating > 0 ? rating : 5)
-                                  ? 'fill-amber-400 text-amber-400'
+                                  ? 'fill-warning text-warning'
                                   : 'text-muted'
                               }`}
                             />
@@ -564,7 +564,7 @@ export default function Market() {
                               abrirModalProducto(producto);
                             }}
                             size="sm"
-                            className="gap-2"
+                            
                             disabled={producto.stock_disponible <= 0}
                           >
                             <ShoppingCart className="h-4 w-4" />
@@ -592,7 +592,7 @@ export default function Market() {
                 size="sm"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={meta.current_page === 1}
-                className="gap-1"
+                
               >
                 <ChevronLeft className="h-4 w-4" />
                 Anterior
@@ -602,7 +602,7 @@ export default function Market() {
                 size="sm"
                 onClick={() => setPage((p) => Math.min(meta.last_page, p + 1))}
                 disabled={meta.current_page === meta.last_page}
-                className="gap-1"
+                
               >
                 Siguiente
                 <ChevronRight className="h-4 w-4" />
@@ -650,7 +650,7 @@ export default function Market() {
                           key={i}
                           className={`h-4 w-4 ${
                             i < Math.floor(rating > 0 ? rating : 5)
-                              ? 'fill-amber-400 text-amber-400'
+                              ? 'fill-warning text-warning'
                               : 'text-muted'
                           }`}
                         />
@@ -733,7 +733,7 @@ export default function Market() {
                     </Button>
                     <Button
                       onClick={agregarAlCarrito}
-                      className="flex-1 gap-2"
+                      className="flex-1"
                       disabled={agregando}
                     >
                       {agregando ? (

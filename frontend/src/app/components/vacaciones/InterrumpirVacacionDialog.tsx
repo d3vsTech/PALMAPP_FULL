@@ -179,7 +179,7 @@ export function InterrumpirVacacionDialog({
           )}
 
           {(preview?.advertencias?.length ?? 0) > 0 && (
-            <div className="space-y-1 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-700">
+            <div className="space-y-1 rounded-lg border border-warning/20 bg-warning-soft px-3 py-2 text-sm text-warning">
               {preview!.advertencias.map((a, i) => (
                 <p key={`${a.code}-${i}`}>{a.mensaje ?? a.code}</p>
               ))}
@@ -277,7 +277,7 @@ function ComparacionInterrupcion({ preview }: { preview: PreviewInterrupcionVaca
       </p>
 
       {reintegro.estado === 'PENDIENTE' ? (
-        <p className="rounded-md bg-amber-500/10 px-2.5 py-2 text-sm text-amber-700">
+        <p className="rounded-md bg-warning-soft px-2.5 py-2 text-sm text-warning">
           Se pagaron <strong>{fmt(reintegro.bruto)}</strong> de más. Descontando los aportes
           devueltos ({fmt(montoDeducciones(reintegro.deducciones))}), quedan
           {' '}<strong>{fmt(reintegro.neto)}</strong> por reintegrar.

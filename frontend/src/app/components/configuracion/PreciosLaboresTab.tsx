@@ -55,10 +55,10 @@ function palmaLabelInput(p: Labor): string {
 }
 
 const PALMA_GRADIENT: Record<PalmaKey, string> = {
-  PLATEO: 'from-amber-50/50 to-amber-50/10 dark:from-amber-950/20 dark:to-amber-950/5',
-  PODA: 'from-purple-50/50 to-purple-50/10 dark:from-purple-950/20 dark:to-purple-950/5',
-  SANIDAD: 'from-red-50/50 to-red-50/10 dark:from-red-950/20 dark:to-red-950/5',
-  OTROS: 'from-slate-50/50 to-slate-50/10 dark:from-slate-950/20 dark:to-slate-950/5',
+  PLATEO: 'from-warning-soft to-transparent',
+  PODA: 'from-primary-soft to-transparent',
+  SANIDAD: 'from-destructive-soft to-transparent',
+  OTROS: 'from-muted to-transparent',
 };
 
 const PALMA_VALUE: Record<PalmaKey, string> = {
@@ -145,7 +145,7 @@ function BotonGuardarSeccion({ onGuardar }: { onGuardar: () => Promise<void> | v
 
   return (
     <div className="flex justify-end pt-2">
-      <Button ref={ref} onClick={click} className="gap-2">
+      <Button ref={ref} onClick={click}>
         <Save className="h-4 w-4" />
         Guardar
       </Button>
@@ -829,8 +829,8 @@ export function PreciosLaboresTab() {
               independiente del tipo_pago de la labor. Si la labor está en
               JORNAL_FIJO se SUMA un acordeón aparte (más abajo). */}
           <AccordionItem value="cosecha" className="border-0">
-            <Card className="overflow-hidden border-border">
-              <CardHeader className="border-b bg-gradient-to-r from-green-50/50 to-green-50/10 dark:from-green-950/20 dark:to-green-950/5">
+            <Card className="overflow-hidden">
+              <CardHeader className="border-b bg-success-soft">
                 <AccordionTrigger className="hover:no-underline py-0">
                   <div className="text-left">
                     <CardTitle>Precios de Cosecha</CardTitle>
@@ -841,7 +841,7 @@ export function PreciosLaboresTab() {
                 </AccordionTrigger>
               </CardHeader>
               <AccordionContent>
-                <CardContent className="p-6">
+                <CardContent>
                   {/* Tabla inline: una fila por SUBLOTE del tenant.
                       Como el precio_cosecha del backend es por (lote_id, anio),
                       varios sublotes del mismo lote leen del mismo input — al
@@ -909,8 +909,8 @@ export function PreciosLaboresTab() {
 
           {/* "Escala de Abonada" siempre visible (mismo criterio que Cosecha). */}
           <AccordionItem value="abonada" className="border-0">
-            <Card className="overflow-hidden border-border">
-              <CardHeader className="border-b bg-gradient-to-r from-emerald-50/50 to-emerald-50/10 dark:from-emerald-950/20 dark:to-emerald-950/5">
+            <Card className="overflow-hidden">
+              <CardHeader className="border-b bg-success-soft">
                 <AccordionTrigger className="hover:no-underline py-0">
                   <div className="text-left">
                     <CardTitle>Escala de Abonada</CardTitle>
@@ -925,7 +925,7 @@ export function PreciosLaboresTab() {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <h3 className="font-semibold">Rangos de Abonada</h3>
-                      <Button onClick={agregarNuevoRango} size="sm" variant="outline" className="gap-2">
+                      <Button onClick={agregarNuevoRango} size="sm" variant="outline">
                         <Plus className="h-4 w-4" />
                         Agregar Rango
                       </Button>
@@ -1220,10 +1220,10 @@ export function PreciosLaboresTab() {
             .filter((p) => (p.tipo === 'COSECHA' || p.tipo === 'FERTILIZACION') && p.tipo_pago === 'JORNAL_FIJO')
             .map((labor) => (
             <AccordionItem key={`jornal-${labor.id}`} value={`palma-jornal-${labor.id}`} className="border-0">
-              <Card className="border-border">
-                <CardHeader className={`border-b bg-gradient-to-r ${labor.tipo === 'COSECHA'
-                  ? 'from-green-50/50 to-green-50/10 dark:from-green-950/20 dark:to-green-950/5'
-                  : 'from-emerald-50/50 to-emerald-50/10 dark:from-emerald-950/20 dark:to-emerald-950/5'}`}>
+              <Card>
+                <CardHeader className={`border-b ${labor.tipo === 'COSECHA'
+                  ? 'from-success-soft to-transparent'
+                  : 'from-success-soft to-transparent'}`}>
                   <AccordionTrigger className="hover:no-underline py-0">
                     <div className="text-left">
                       <CardTitle>{labor.tipo === 'COSECHA' ? 'Precio Cosecha' : 'Precio Fertilización'}</CardTitle>
@@ -1232,7 +1232,7 @@ export function PreciosLaboresTab() {
                   </AccordionTrigger>
                 </CardHeader>
                 <AccordionContent>
-                  <CardContent className="p-6">
+                  <CardContent>
                     <div className="max-w-md space-y-3">
                       <Label htmlFor={`precio-jornal-${labor.id}`}>Valor por Jornal</Label>
                       <div className="flex items-center gap-2">
@@ -1274,8 +1274,8 @@ export function PreciosLaboresTab() {
             })
             .map((palma) => (
             <AccordionItem key={`fija-${palma.id}`} value={PALMA_VALUE[palma.tipo]} className="border-0">
-              <Card className="border-border">
-                <CardHeader className={`border-b bg-gradient-to-r ${PALMA_GRADIENT[palma.tipo]}`}>
+              <Card>
+                <CardHeader className={`border-b ${PALMA_GRADIENT[palma.tipo]}`}>
                   <AccordionTrigger className="hover:no-underline py-0">
                     <div className="text-left">
                       <CardTitle>{PALMA_LABEL[palma.tipo]}</CardTitle>
@@ -1331,8 +1331,8 @@ export function PreciosLaboresTab() {
               escribió en "Operaciones → Trabajos / Labores". */}
           {[...laboresPalmaCustom].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((labor) => (
             <AccordionItem key={`custom-${labor.id}`} value={`palma-custom-${labor.id}`} className="border-0">
-              <Card className="overflow-hidden border-border">
-                <CardHeader className="border-b bg-gradient-to-r from-amber-50/50 to-amber-50/10 dark:from-amber-950/20 dark:to-amber-950/5">
+              <Card className="overflow-hidden">
+                <CardHeader className="border-b bg-warning-soft">
                   <AccordionTrigger className="hover:no-underline py-0">
                     <div className="text-left">
                       <CardTitle>{labor.nombre}</CardTitle>
@@ -1397,8 +1397,8 @@ export function PreciosLaboresTab() {
             </p>
           </div>
         ) : (
-          <Card className="overflow-hidden border-border">
-            <CardContent className="p-6">
+          <Card className="overflow-hidden">
+            <CardContent>
               <div className="rounded-lg border border-border overflow-x-auto">
                 <table className="w-full min-w-[720px] table-fixed">
                   <thead className="bg-muted/50">

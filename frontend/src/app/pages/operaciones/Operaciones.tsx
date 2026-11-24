@@ -85,13 +85,13 @@ function paramsDelPeriodo(periodo: PeriodoIndicadores, o: OpcionesPeriodo): Para
   return { periodo };
 }
 
-/** Períodos del filtro, con la forma del diseño. */
+/** Períodos que acepta el desplegable. */
 const PERIODOS: OpcionPeriodo<PeriodoIndicadores>[] = [
-  { valor: 'semanal', etiqueta: 'Semana' },
-  { valor: 'quincenal', etiqueta: 'Quincena' },
-  { valor: 'mensual', etiqueta: 'Mes' },
-  { valor: 'anual', etiqueta: 'Año' },
-  { valor: 'personalizado', etiqueta: 'Fechas' },
+  { valor: 'semanal', etiqueta: 'Semanal' },
+  { valor: 'quincenal', etiqueta: 'Quincenal' },
+  { valor: 'mensual', etiqueta: 'Mensual' },
+  { valor: 'anual', etiqueta: 'Anual' },
+  { valor: 'personalizado', etiqueta: 'Personalizado' },
 ];
 
 export default function Operaciones() {
@@ -378,10 +378,10 @@ export default function Operaciones() {
           )}
           {periodoKPI === 'personalizado' && (
             <div className="flex items-center gap-1.5">
-              <Input type="date" aria-label="Fecha de inicio" className="h-9 w-[138px]"
+              <Input type="date" aria-label="Fecha de inicio" className="w-[138px]"
                 value={fechaInicioKPI} onChange={(e) => setFechaInicioKPI(e.target.value)} />
               <span className="text-xs text-muted-foreground">a</span>
-              <Input type="date" aria-label="Fecha de fin" className="h-9 w-[138px]"
+              <Input type="date" aria-label="Fecha de fin" className="w-[138px]"
                 value={fechaFinKPI} onChange={(e) => setFechaFinKPI(e.target.value)} />
             </div>
           )}

@@ -16,6 +16,7 @@ import { useNavigate } from 'react-router';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
 import { Label } from '../../../components/ui/label';
+import { Textarea } from '../../../components/ui/textarea';
 import {
   Dialog, DialogContent, DialogDescription, DialogTitle,
 } from '../../../components/ui/dialog';
@@ -500,7 +501,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
             */}
             {esAusencia && detalle && (
               <div className="border-t border-border px-6 py-4">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <p className="mb-2 text-[13px] font-medium text-muted-foreground">
                   Soporte adjunto
                 </p>
                 {detalle.documento ? (
@@ -514,12 +515,12 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {detalle.documento.previsualizable && (
-                        <Button size="sm" variant="outline" onClick={() => void bajarAdjunto(true)} className="gap-2">
+                        <Button size="sm" variant="outline" onClick={() => void bajarAdjunto(true)} >
                           <Eye className="h-3.5 w-3.5" />
                           Ver
                         </Button>
                       )}
-                      <Button size="sm" variant="outline" onClick={() => void bajarAdjunto(false)} className="gap-2">
+                      <Button size="sm" variant="outline" onClick={() => void bajarAdjunto(false)} >
                         <Download className="h-3.5 w-3.5" />
                         Descargar
                       </Button>
@@ -556,7 +557,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                         variant="outline"
                         onClick={() => archivoRef.current?.click()}
                         disabled={cargando}
-                        className="gap-2"
+                        
                       >
                         {cargando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
                         {detalle.documento ? 'Reemplazar soporte' : 'Subir soporte'}
@@ -609,7 +610,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                   <Button variant="outline" size="sm" onClick={() => setAccion(null)} disabled={cargando}>
                     Cancelar
                   </Button>
-                  <Button size="sm" variant="destructive" onClick={eliminar} disabled={cargando} className="gap-2">
+                  <Button size="sm" variant="destructive" onClick={eliminar} disabled={cargando}>
                     {cargando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                     Eliminar
                   </Button>
@@ -618,7 +619,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
             ) : accion === 'rechazar' ? (
               <div className="space-y-2 border-t border-border px-6 py-4">
                 <Label htmlFor="detallenov-motivo-del-rechazo">Motivo del rechazo</Label>
-                <textarea id="detallenov-motivo-del-rechazo"
+                <Textarea id="detallenov-motivo-del-rechazo"
                   rows={3}
                   maxLength={500}
                   value={motivoRechazo}
@@ -626,7 +627,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                   placeholder={esSolicitudVacacion
                     ? 'Ej: no hay cobertura en campo esa semana'
                     : 'Ej: no llegó el soporte después de 5 días hábiles'}
-                  className="flex w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="resize-none"
                 />
                 {esSolicitudVacacion && (
                   <p className="text-xs text-muted-foreground">
@@ -637,7 +638,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                   <Button variant="outline" size="sm" onClick={() => setAccion(null)} disabled={cargando}>
                     Cancelar
                   </Button>
-                  <Button size="sm" variant="destructive" onClick={rechazar} disabled={cargando} className="gap-2">
+                  <Button size="sm" variant="destructive" onClick={rechazar} disabled={cargando}>
                     {cargando && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                     Rechazar
                   </Button>
@@ -655,7 +656,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                       variant="outline"
                       onClick={() => void bajarActa()}
                       disabled={bajandoActa}
-                      className="gap-2 border-primary/40 text-primary hover:border-primary hover:bg-primary/5"
+                      className="border-primary/40 text-primary hover:border-primary hover:bg-primary/5"
                     >
                       {bajandoActa
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -671,7 +672,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                       size="sm"
                       variant="outline"
                       onClick={() => irA(`/liquidaciones/liquidacion-final/${terminacion.liquidacion!.id}`)}
-                      className="gap-2"
+                      
                     >
                       <Receipt className="h-3.5 w-3.5" />
                       Liquidación final
@@ -681,7 +682,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                     const destino = rutaDelDetalle(fila);
                     if (!destino) return null;
                     return (
-                      <Button size="sm" variant="outline" onClick={() => irA(destino.ruta)} className="gap-2">
+                      <Button size="sm" variant="outline" onClick={() => irA(destino.ruta)} >
                         {fila.fuente === 'TERMINACION'
                           ? <User className="h-3.5 w-3.5" />
                           : <ArrowUpRight className="h-3.5 w-3.5" />}
@@ -701,7 +702,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                       variant="outline"
                       onClick={() => setAccion('editar')}
                       disabled={cargando}
-                      className="gap-2"
+                      
                     >
                       <Pencil className="h-3.5 w-3.5" />
                       Editar
@@ -713,7 +714,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                       variant="outline"
                       onClick={() => setAccion('eliminar')}
                       disabled={cargando}
-                      className="gap-2 text-destructive hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
+                      className="text-destructive hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                       Eliminar
@@ -721,11 +722,11 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                   )}
                   {esAusencia && fila.estado === 'PENDIENTE' && permisos?.puede_aprobar && (
                     <>
-                      <Button size="sm" variant="outline" onClick={() => setAccion('rechazar')} disabled={cargando} className="gap-2">
+                      <Button size="sm" variant="outline" onClick={() => setAccion('rechazar')} disabled={cargando} >
                         <X className="h-3.5 w-3.5" />
                         Rechazar
                       </Button>
-                      <Button size="sm" onClick={aprobar} disabled={cargando} className="gap-2 bg-success hover:bg-success/90">
+                      <Button size="sm" onClick={aprobar} disabled={cargando} className="bg-success hover:bg-success/90">
                         {cargando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                         Aprobar
                       </Button>
@@ -740,7 +741,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                       variant="outline"
                       onClick={() => setAccion('rechazar')}
                       disabled={cargando}
-                      className="gap-2 text-destructive hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
+                      className="text-destructive hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
                     >
                       <X className="h-3.5 w-3.5" />
                       Rechazar solicitud

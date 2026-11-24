@@ -23,18 +23,18 @@ export const SEMAFORO: Record<EstadoVencimiento, EstiloSemaforo> = {
     label: 'Vencida',
   },
   URGENTE: {
-    dot: 'bg-red-500',
-    badge: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800/30',
+    dot: 'bg-destructive',
+    badge: 'bg-destructive-soft text-destructive border-destructive/20',
     label: 'Urgente',
   },
   PROXIMA: {
-    dot: 'bg-amber-400',
-    badge: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/30',
+    dot: 'bg-warning',
+    badge: 'bg-warning-soft text-warning border-warning/20',
     label: 'Próxima',
   },
   CON_TIEMPO: {
-    dot: 'bg-emerald-500',
-    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800/30',
+    dot: 'bg-success',
+    badge: 'bg-success-soft text-success border-success/20',
     label: 'Con tiempo',
   },
   AL_DIA: {
@@ -48,10 +48,10 @@ export const SEMAFORO: Record<EstadoVencimiento, EstiloSemaforo> = {
 // Novedades, sin valores y sin consumir saldo. Se pinta en ámbar fuerte
 // porque pide acción: liquidarla o rechazarla.
 export const ESTADO_VACACION_BADGE: Record<EstadoVacacion, string> = {
-  APROBADA: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/30',
-  PAGADA: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800/30',
+  APROBADA: 'bg-warning-soft text-warning border-warning/20',
+  PAGADA: 'bg-success-soft text-success border-success/20',
   CANCELADA: 'bg-destructive/10 text-destructive border-destructive/30',
-  PENDIENTE: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800/30',
+  PENDIENTE: 'bg-warning-soft text-warning border-warning/20',
 };
 
 export const ESTADO_VACACION_LABEL: Record<EstadoVacacion, string> = {
@@ -65,7 +65,7 @@ export const ESTADO_VACACION_LABEL: Record<EstadoVacacion, string> = {
 // NOMINA el modulo no gira nada, cada nomina paga su tramo del disfrute.
 export const MODO_PAGO_BADGE: Record<ModoPagoVacacion, string> = {
   DIRECTO: 'bg-muted/50 text-muted-foreground border-border',
-  NOMINA: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/30 dark:text-sky-400 dark:border-sky-800/30',
+  NOMINA: 'bg-info-soft text-info border-info/20',
 };
 
 export const ORIGEN_LABEL: Record<OrigenVacacion, string> = {

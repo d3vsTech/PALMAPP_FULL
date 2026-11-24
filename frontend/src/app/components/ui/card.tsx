@@ -81,13 +81,27 @@ const CardAction = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">>
 );
 CardAction.displayName = "CardAction";
 
+/**
+ * El contenido trae su propio espacio arriba y abajo, asi la tarjeta sin
+ * encabezado no sale con el texto pegado al borde.
+ *
+ * Va como clase normal, no condicional, para que tailwind-merge la descarte
+ * cuando la pantalla declara la suya: un `p-4` o un `p-0` escrito afuera le
+ * gana al molde.
+ *
+ * Las reglas con `:not` apagan el espacio del lado donde hay un hermano, que
+ * es donde el hueco ya lo pone el `gap-6` de la tarjeta.
+ */
 const CardContent = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">>(
   ({ className, ...props }, ref) => {
     return (
       <div
         ref={ref}
         data-slot="card-content"
-        className={cn("px-6 [&:last-child]:pb-6", className)}
+        className={cn(
+          "px-6 py-6 [&:not(:first-child)]:pt-0 [&:not(:last-child)]:pb-0",
+          className,
+        )}
         {...props}
       />
     );

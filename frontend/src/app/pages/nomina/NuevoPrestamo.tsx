@@ -239,7 +239,7 @@ export default function NuevoPrestamo() {
         </div>
       </div>
 
-      <Card className="border-border/50">
+      <Card>
         <CardHeader className="rounded-t-xl border-b bg-muted/20 py-4">
           <CardTitle className="text-base">Información del Préstamo</CardTitle>
         </CardHeader>
@@ -277,7 +277,7 @@ export default function NuevoPrestamo() {
                 </button>
               )}
               {mostrarSugerencias && colaboradoresFiltrados.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-background border border-border rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                <div className="absolute z-50 w-full mt-1 bg-background border border-border rounded-lg shadow-md max-h-64 overflow-y-auto">
                   {colaboradoresFiltrados.map((c) => (
                     <button
                       key={c.id}
@@ -495,7 +495,7 @@ export default function NuevoPrestamo() {
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Desde</p>
+                  <p className="text-xs font-medium text-muted-foreground">Desde</p>
                   <p className="text-sm font-semibold">
                     {periodicidadTenant === 'QUINCENAL' && inicioQuincena
                       ? labelQuincena(inicioAnio, inicioMes, inicioQuincena)
@@ -503,7 +503,7 @@ export default function NuevoPrestamo() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Hasta</p>
+                  <p className="text-xs font-medium text-muted-foreground">Hasta</p>
                   <p className="text-sm font-semibold text-primary">
                     {periodicidadTenant === 'QUINCENAL' && 'quincena' in periodoFin
                       ? labelQuincena(periodoFin.anio, periodoFin.mes, periodoFin.quincena as 1 | 2)
@@ -511,18 +511,18 @@ export default function NuevoPrestamo() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Cuota</p>
+                  <p className="text-xs font-medium text-muted-foreground">Cuota</p>
                   <p className="text-sm font-semibold">
                     ${cuotaFinal > 0 ? cuotaFinal.toLocaleString('es-CO') : '—'} / {periodicidadTenant === 'QUINCENAL' ? 'quincena' : 'mes'}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Total descontado</p>
+                  <p className="text-xs font-medium text-muted-foreground">Total descontado</p>
                   <p className="text-sm font-semibold text-primary">${totalCalculado.toLocaleString('es-CO')}</p>
                 </div>
               </div>
               {totalCalculado !== totalIngresado && totalIngresado > 0 && (
-                <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 rounded-lg">
+                <p className="text-xs text-warning bg-warning-soft px-3 py-1.5 rounded-lg">
                   El total descontado (${totalCalculado.toLocaleString('es-CO')}) difiere del valor del préstamo (${totalIngresado.toLocaleString('es-CO')}).
                 </p>
               )}
@@ -553,7 +553,6 @@ export default function NuevoPrestamo() {
             <Button
               onClick={handleSave}
               disabled={guardando}
-              className="gap-2 bg-primary hover:bg-primary/90"
             >
               {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Guardar Préstamo

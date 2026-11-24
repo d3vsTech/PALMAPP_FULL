@@ -78,7 +78,7 @@ export function TabOtros({
   return (
     <>
                       <div className="flex justify-end">
-                        <Button onClick={agregarOtros} className="gap-2">
+                        <Button onClick={agregarOtros}>
                           <Plus className="h-4 w-4" />
                           Agregar otros
                         </Button>
@@ -113,7 +113,7 @@ export function TabOtros({
                                             {col.nombres} {col.apellidos}
                                             {col.terceroNombre && (
                                               <span
-                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle"
+                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-warning-soft text-warning border border-warning/20 font-medium align-middle"
                                                 title={`Operario del tercero ${col.terceroNombre}`}
                                               >
                                                 Tercero · {col.terceroNombre}
@@ -243,7 +243,7 @@ export function TabOtros({
                               <Button variant="outline" onClick={cancelarOtros}>
                                 Cancelar
                               </Button>
-                              <Button onClick={guardarOtros} className="gap-2">
+                              <Button onClick={guardarOtros}>
                                 <Check className="h-4 w-4" />
                                 Guardar
                               </Button>

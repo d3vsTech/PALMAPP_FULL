@@ -18,7 +18,7 @@ export { fmtCOP, getIniciales, descargarBlob } from '../periodo/textos';
 export const ESTADO_BADGE: Record<EstadoLiquidacionFinal, string> = {
   BORRADOR: 'bg-muted text-muted-foreground border-muted',
   APROBADA:
-    'bg-primary/5 text-primary border-blue-200 dark:bg-primary/10 dark:border-blue-900/30',
+    'bg-primary/5 text-primary border-info/20 dark:bg-primary/10',
   PAGADA: 'bg-success/10 text-success border-success/30',
   ANULADA: 'bg-destructive/10 text-destructive border-destructive/30',
 };

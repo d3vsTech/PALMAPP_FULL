@@ -10,6 +10,7 @@ import { Card, CardContent } from '../../../components/ui/card';
 import { Badge } from '../../../components/ui/badge';
 import { Input } from '../../../components/ui/input';
 import { Label } from '../../../components/ui/label';
+import { Textarea } from '../../../components/ui/textarea';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../../components/ui/select';
@@ -24,11 +25,6 @@ import type { CategoriaInit } from '../../../../api/novedades';
 import {
   calcularDias, entidadDeLaFicha, esIncapacidad, etiquetaDias, formatHora, formatPorcentaje,
 } from '../tipos';
-
-const CLASE_TEXTAREA =
-  'flex w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ' +
-  'ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none ' +
-  'focus-visible:ring-2 focus-visible:ring-ring';
 
 interface Props {
   borrador: BorradorNovedad;
@@ -61,7 +57,7 @@ export function PasoDetalles({ borrador, categorias, soporte, onCambiar }: Props
     : vacaciones ? 'Datos de la solicitud' : 'Datos de la novedad';
 
   return (
-    <Card className="border-border">
+    <Card>
       <CardContent className="space-y-6 p-4 sm:p-6">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
@@ -310,11 +306,11 @@ export function PasoDetalles({ borrador, categorias, soporte, onCambiar }: Props
         )}
 
         {terminacion && (
-          <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/30 dark:bg-amber-950/20">
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <div className="flex items-start gap-3 rounded-lg border border-warning/20 bg-warning-soft p-4">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
             <div className="text-sm">
-              <p className="font-semibold text-amber-800 dark:text-amber-300">Esto no liquida</p>
-              <p className="mt-0.5 text-amber-700 dark:text-amber-400">
+              <p className="font-semibold text-warning">Esto no liquida</p>
+              <p className="mt-0.5 text-warning">
                 Al confirmar queda el retiro en la ficha y el contrato terminado. La liquidación
                 final se hace después, desde el enlace que aparece al terminar.
               </p>
@@ -341,14 +337,14 @@ export function PasoDetalles({ borrador, categorias, soporte, onCambiar }: Props
           <Label htmlFor="pasodetall-observaciones-span-classname-font-normal-text-muted-foreground-opcional-span">
             Observaciones <span className="font-normal text-muted-foreground">(opcional)</span>
           </Label>
-          <textarea id="pasodetall-observaciones-span-classname-font-normal-text-muted-foreground-opcional-span"
+          <Textarea id="pasodetall-observaciones-span-classname-font-normal-text-muted-foreground-opcional-span"
             aria-label="Detalles adicionales sobre la novedad..."
             value={borrador.observacion}
             onChange={(e) => onCambiar({ observacion: e.target.value })}
             rows={3}
             maxLength={terminacion ? 500 : 2000}
             placeholder="Detalles adicionales sobre la novedad..."
-            className={CLASE_TEXTAREA}
+            className="resize-none"
           />
         </div>
       </CardContent>

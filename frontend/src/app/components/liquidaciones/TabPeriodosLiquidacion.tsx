@@ -229,7 +229,7 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
           <Button
             onClick={() => navigate(`${txt.ruta}/nueva`)}
             size="lg"
-            className="w-full gap-2 sm:w-auto"
+            className="w-full sm:w-auto"
           >
             <Plus className="h-5 w-5" />
             {txt.botonNuevo}
@@ -239,8 +239,8 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
 
       {/* Alerta vencimiento */}
       {alertaLimite && (
-        <div className="flex items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
-          <AlertTriangle className="h-4 w-4 shrink-0 text-orange-500" />
+        <div className="flex items-center gap-3 rounded-xl border border-warning/20 bg-warning-soft px-4 py-3 text-sm text-warning">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
           <span>
             {alertaLimite.vencida ? (
               <>La fecha límite de <strong>{alertaLimite.periodo.descripcion}</strong> ya venció ({formatFecha(alertaLimite.periodo.fecha_limite_legal)}). Riesgo de sanción moratoria.</>
@@ -252,7 +252,7 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
       )}
 
       {/* KPIs */}
-      <Card className="border-border">
+      <Card>
         <CardContent className="p-5">
           <p className="text-sm font-semibold text-foreground mb-4">Resumen</p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -278,14 +278,14 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
               </div>
             </div>
 
-            <div className="flex items-center justify-between p-4 rounded-xl bg-orange-50 border border-orange-200">
+            <div className="flex items-center justify-between p-4 rounded-xl bg-warning-soft border border-warning/20">
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-1">Períodos Pendientes</p>
-                <p className="text-2xl font-bold text-orange-600">{resumen?.periodos_pendientes ?? 0}</p>
+                <p className="text-2xl font-bold text-warning">{resumen?.periodos_pendientes ?? 0}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">Por liquidar o girar</p>
               </div>
-              <div className="h-11 w-11 rounded-xl bg-orange-100 flex items-center justify-center shrink-0">
-                <Clock className="h-5 w-5 text-orange-500" />
+              <div className="h-11 w-11 rounded-xl bg-warning-soft flex items-center justify-center shrink-0">
+                <Clock className="h-5 w-5 text-warning" />
               </div>
             </div>
 
@@ -298,7 +298,7 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
                 <p className="text-xs text-muted-foreground mt-0.5">{txt.cardPendienteSub}</p>
               </div>
               <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${(resumen?.monto_pendiente ?? 0) > 0 ? 'bg-destructive/10' : 'bg-muted'}`}>
-                <Users className={`h-5 w-5 ${(resumen?.monto_pendiente ?? 0) > 0 ? 'text-destructive' : 'text-muted-foreground'}`} />
+                <Users className={`h-5 w-5 ${(resumen?.monto_pendiente ?? 0)> 0 ? 'text-destructive' : 'text-muted-foreground'}`} />
               </div>
             </div>
           </div>
@@ -306,7 +306,7 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
       </Card>
 
       {/* Filtros */}
-      <Card className="border-border">
+      <Card>
         <CardContent className="p-5">
           <div className="flex items-center gap-3 mb-4">
             <Filter className="h-4 w-4 text-muted-foreground" />
@@ -369,32 +369,32 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
         </div>
 
         {cargando ? (
-          <Card className="border-border">
+          <Card>
             <CardContent className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
               Cargando períodos...
             </CardContent>
           </Card>
         ) : periodosFiltrados.length > 0 ? (
-          <Card className="overflow-hidden border-border">
+          <Card className="overflow-hidden">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border bg-muted/30">
-                      <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Período</th>
-                      <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Estado</th>
+                      <th className="text-left p-4 text-[13px] font-semibold text-muted-foreground">Período</th>
+                      <th className="text-left p-4 text-[13px] font-semibold text-muted-foreground">Estado</th>
                       {esPrima && (
-                        <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Semestre</th>
+                        <th className="text-left p-4 text-[13px] font-semibold text-muted-foreground">Semestre</th>
                       )}
-                      <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Colaboradores</th>
+                      <th className="text-right p-4 text-[13px] font-semibold text-muted-foreground">Colaboradores</th>
                       {esPrima && (
-                        <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Días prom.</th>
+                        <th className="text-right p-4 text-[13px] font-semibold text-muted-foreground">Días prom.</th>
                       )}
-                      <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{txt.colTotal}</th>
-                      <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{txt.colPagado}</th>
-                      <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Fecha Límite</th>
-                      <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Acciones</th>
+                      <th className="text-right p-4 text-[13px] font-semibold text-muted-foreground">{txt.colTotal}</th>
+                      <th className="text-right p-4 text-[13px] font-semibold text-muted-foreground">{txt.colPagado}</th>
+                      <th className="text-right p-4 text-[13px] font-semibold text-muted-foreground">Fecha Límite</th>
+                      <th className="text-right p-4 text-[13px] font-semibold text-muted-foreground">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -485,7 +485,7 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
                                   size="sm"
                                   variant="outline"
                                   onClick={() => navigate(`${txt.ruta}/${periodo.id}`)}
-                                  className="gap-1 hover:bg-primary/10 hover:text-primary hover:border-primary"
+                                  className="hover:bg-primary/10 hover:text-primary hover:border-primary"
                                 >
                                   <Eye className="h-4 w-4" />
                                   Ver
@@ -505,7 +505,7 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
                                 <Button
                                   size="sm"
                                   onClick={() => navigate(`${txt.ruta}/${periodo.id}`)}
-                                  className="gap-1 bg-primary hover:bg-primary/90"
+                                 
                                 >
                                   <Calculator className="h-4 w-4" />
                                   Liquidar
@@ -525,7 +525,7 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
                                 size="sm"
                                 variant="outline"
                                 onClick={() => navigate(`${txt.ruta}/${periodo.id}`)}
-                                className="gap-1 hover:bg-primary/10 hover:text-primary hover:border-primary"
+                                className="hover:bg-primary/10 hover:text-primary hover:border-primary"
                               >
                                 <Eye className="h-4 w-4" />
                                 Ver
@@ -546,7 +546,7 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
               <IconoTab className="h-16 w-16 text-muted-foreground mb-4" />
               <p className="text-lg font-semibold mb-2">{txt.emptyTitulo}</p>
               <p className="text-sm text-muted-foreground mb-4">Crea el primer período para comenzar</p>
-              <Button onClick={() => navigate(`${txt.ruta}/nueva`)} className="gap-2">
+              <Button onClick={() => navigate(`${txt.ruta}/nueva`)} >
                 <Plus className="h-4 w-4" />
                 {txt.botonNuevo}
               </Button>

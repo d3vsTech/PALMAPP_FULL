@@ -168,7 +168,7 @@ export default function NuevaNovedadPage() {
   if (!init) {
     return (
       <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/novedades')} className="gap-2">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/novedades')} >
           <ArrowLeft className="h-4 w-4" />Volver a Novedades
         </Button>
         <div className="flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
@@ -181,7 +181,7 @@ export default function NuevaNovedadPage() {
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" size="sm" onClick={() => navigate('/novedades')} className="gap-2">
+      <Button variant="ghost" size="sm" onClick={() => navigate('/novedades')} >
         <ArrowLeft className="h-4 w-4" />Volver a Novedades
       </Button>
 
@@ -192,7 +192,7 @@ export default function NuevaNovedadPage() {
         </p>
       </div>
 
-      <Card className="border-border">
+      <Card>
         <CardContent className="p-4 sm:p-6">
           <BarraPasos actual={paso} />
         </CardContent>
@@ -226,15 +226,15 @@ export default function NuevaNovedadPage() {
       )}
 
       <div className="barra-acciones flex flex-wrap justify-between gap-3">
-        <Button variant="outline" onClick={retroceder} disabled={guardando} className="gap-2">
+        <Button variant="outline" onClick={retroceder} disabled={guardando}>
           <ArrowLeft className="h-4 w-4" />{paso === 1 ? 'Cancelar' : 'Anterior'}
         </Button>
         {paso < TOTAL_PASOS ? (
-          <Button onClick={avanzar} className="gap-2">
+          <Button onClick={avanzar}>
             Siguiente<ArrowRight className="h-4 w-4" />
           </Button>
         ) : (
-          <Button onClick={confirmar} disabled={guardando} className="gap-2 bg-success hover:bg-success/90">
+          <Button onClick={confirmar} disabled={guardando} className="bg-success hover:bg-success/90">
             {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
             {esAusencia(borrador) ? 'Registrar Novedad'
               : esVacaciones(borrador) ? 'Registrar Solicitud'

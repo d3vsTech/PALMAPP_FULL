@@ -294,7 +294,7 @@ export default function Checkout() {
           variant="ghost"
           size="sm"
           onClick={() => navigate('/market/carrito')}
-          className="mb-4 gap-2"
+          className="mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver al carrito
@@ -306,8 +306,8 @@ export default function Checkout() {
       </div>
 
       {/* Indicador de pasos */}
-      <Card className="border-border">
-        <CardContent className="p-6">
+      <Card>
+        <CardContent>
           <div className="flex items-center justify-between">
             {ETAPAS_CHECKOUT.map((etapa, index) => {
               const Icon = etapa.icon;
@@ -365,7 +365,7 @@ export default function Checkout() {
         <div className="lg:col-span-2 space-y-6">
           {/* Paso 1: Dirección */}
           {paso === 1 && (
-            <Card className="border-border">
+            <Card>
               <CardContent className="p-6 space-y-6">
                 <div className="flex items-center gap-3">
                   <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -535,7 +535,7 @@ export default function Checkout() {
 
           {/* Paso 2: Método de pago */}
           {paso === 2 && (
-            <Card className="border-border">
+            <Card>
               <CardContent className="p-6 space-y-6">
                 <div className="flex items-center gap-3">
                   <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -679,7 +679,7 @@ export default function Checkout() {
 
           {/* Paso 3: Confirmación */}
           {paso === 3 && (
-            <Card className="border-border">
+            <Card>
               <CardContent className="p-6 space-y-6">
                 <div className="flex items-center gap-3">
                   <div className="h-12 w-12 rounded-xl bg-success/10 flex items-center justify-center">
@@ -762,7 +762,7 @@ export default function Checkout() {
         {/* Resumen del pedido */}
         <div className="lg:col-span-1">
           <div className="sticky top-8 space-y-4">
-            <Card className="border-border">
+            <Card>
               <CardContent className="p-6 space-y-4">
                 <h2 className="text-xl font-bold text-foreground">Resumen del Pedido</h2>
 
@@ -810,7 +810,7 @@ export default function Checkout() {
               </CardContent>
             </Card>
 
-            <Card className="border-border bg-primary/5">
+            <Card className="bg-primary/5">
               <CardContent className="p-4 flex items-start gap-3">
                 <Truck className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
                 <div>

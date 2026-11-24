@@ -143,14 +143,14 @@ export default function CrearEditarLote() {
         </div>
       </div>
 
-      <Card className="gap-4 border-border shadow-sm">
+      <Card className="gap-4">
         <CardHeader className="rounded-t-xl border-b bg-muted/60 pb-6">
           <CardTitle className="text-2xl">Información del lote</CardTitle>
           <CardDescription>
             Los campos marcados con <span className="text-destructive font-semibold">*</span> son obligatorios
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent>
           <div className="space-y-8">
 
             {/* Predio */}
@@ -292,7 +292,7 @@ export default function CrearEditarLote() {
               className="h-12 px-6 text-base">
               Cancelar
             </Button>
-            <Button onClick={handleSave} disabled={loading} className="h-12 gap-2 px-8 text-base">
+            <Button onClick={handleSave} disabled={loading} className="h-12 px-8 text-base">
               {loading
                 ? <><Loader2 className="h-5 w-5 animate-spin" />Guardando</>
                 : <><Save className="h-5 w-5" strokeWidth={2} />{isEditing ? 'Guardar cambios' : 'Crear lote'}</>}

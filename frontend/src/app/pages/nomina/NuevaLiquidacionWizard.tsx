@@ -181,7 +181,7 @@ export default function NuevaLiquidacionWizard() {
           variant="ghost"
           size="sm"
           onClick={() => navigate('/nomina')}
-          className="mb-4 gap-2"
+          className="mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver
@@ -244,7 +244,7 @@ export default function NuevaLiquidacionWizard() {
       </div>
 
       {/* Contenido */}
-      <Card className="border-border">
+      <Card>
         <CardContent className="p-8">
           {/* Paso 1: Tipo de liquidación */}
           {pasoActual === 1 && (
@@ -276,7 +276,7 @@ export default function NuevaLiquidacionWizard() {
                       }`}
                       onClick={() => setTipoSeleccionado(tipo.id)}
                     >
-                      <CardContent className="p-6">
+                      <CardContent>
                         <div className="flex items-start justify-between mb-3">
                           <div
                             className={`h-12 w-12 rounded-xl flex items-center justify-center ${
@@ -392,7 +392,7 @@ export default function NuevaLiquidacionWizard() {
                 </div>
               </div>
 
-              <Card className="border-border mb-6">
+              <Card className="mb-6">
                 <CardContent className="p-4">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
@@ -497,8 +497,8 @@ export default function NuevaLiquidacionWizard() {
                 </div>
               </div>
 
-              <Card className="border-border">
-                <CardContent className="p-6">
+              <Card>
+                <CardContent>
                   <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                     <FileText className="h-5 w-5 text-primary" />
                     Información de la Liquidación
@@ -554,7 +554,7 @@ export default function NuevaLiquidacionWizard() {
                 </CardContent>
               </Card>
 
-              <Card className="border-border">
+              <Card>
                 <CardContent className="p-4">
                   <p className="text-sm text-muted-foreground">
                     Al guardar esta liquidación, se registrará el pago pendiente. Podrás
@@ -573,19 +573,19 @@ export default function NuevaLiquidacionWizard() {
           variant="outline"
           onClick={handleAtras}
           disabled={pasoActual === 1}
-          className="gap-2"
+          
         >
           <ArrowLeft className="h-4 w-4" />
           Atrás
         </Button>
 
         {pasoActual < 4 ? (
-          <Button onClick={handleSiguiente} disabled={!puedeAvanzar()} className="gap-2">
+          <Button onClick={handleSiguiente} disabled={!puedeAvanzar()}>
             Siguiente
             <ArrowRight className="h-4 w-4" />
           </Button>
         ) : (
-          <Button onClick={handleFinalizar} className="gap-2">
+          <Button onClick={handleFinalizar}>
             <Check className="h-4 w-4" />
             Guardar Liquidación
           </Button>

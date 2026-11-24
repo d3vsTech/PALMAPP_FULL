@@ -201,7 +201,7 @@ export default function LiquidacionFinalDetalle() {
     <div className="space-y-6">
       {/* Encabezado */}
       <div className="space-y-4 print:hidden">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones?tab=liquidacion-final')} className="gap-2">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones?tab=liquidacion-final')} >
           <ArrowLeft className="h-4 w-4" />
           Volver a Liquidaciones
         </Button>
@@ -214,7 +214,7 @@ export default function LiquidacionFinalDetalle() {
                 {ESTADO_LIQUIDACION_LABEL[estado]}
               </Badge>
               {esHistorica && (
-                <Badge variant="outline" className="border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                <Badge variant="outline" className="border-border bg-muted text-foreground">
                   Histórico
                 </Badge>
               )}
@@ -229,7 +229,7 @@ export default function LiquidacionFinalDetalle() {
               <Button
                 variant="outline"
                 onClick={() => navigate(`/liquidaciones/liquidacion-final/${liq.id}/editar`)}
-                className="gap-2"
+                
               >
                 <Pencil className="h-4 w-4" />
                 Volver a editar
@@ -237,14 +237,14 @@ export default function LiquidacionFinalDetalle() {
             )}
 
             {esBorrador && puedeLiquidar && (
-              <Button onClick={() => setAprobando(true)} className="gap-2">
+              <Button onClick={() => setAprobando(true)} >
                 <CheckCircle className="h-4 w-4" />
                 Aceptar
               </Button>
             )}
 
             {esAprobada && puedePagar && (
-              <Button onClick={() => setPagando(true)} className="gap-2">
+              <Button onClick={() => setPagando(true)} >
                 <Banknote className="h-4 w-4" />
                 Registrar pago
               </Button>
@@ -254,7 +254,7 @@ export default function LiquidacionFinalDetalle() {
               variant="outline"
               disabled={descargando}
               onClick={() => void abrirPdf(true)}
-              className="gap-2"
+              
             >
               <Printer className="h-4 w-4" />
               Imprimir
@@ -264,7 +264,7 @@ export default function LiquidacionFinalDetalle() {
               variant="outline"
               disabled={descargando}
               onClick={() => void abrirPdf(false)}
-              className="gap-2"
+              
             >
               {descargando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
               PDF
@@ -274,7 +274,7 @@ export default function LiquidacionFinalDetalle() {
               <Button
                 variant="outline"
                 onClick={() => window.open(liq.compartir!.whatsapp_url, '_blank', 'noopener')}
-                className="gap-2"
+                
               >
                 <MessageCircle className="h-4 w-4" />
                 WhatsApp
@@ -321,7 +321,7 @@ export default function LiquidacionFinalDetalle() {
         </div>
 
         {liq.marca && (
-          <p className="flex items-center gap-2 rounded-lg bg-amber-50 p-3 text-sm font-medium text-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
+          <p className="flex items-center gap-2 rounded-lg bg-warning-soft p-3 text-sm font-medium text-warning">
             <Info className="h-4 w-4" />
             {liq.marca}
           </p>
@@ -341,7 +341,7 @@ export default function LiquidacionFinalDetalle() {
         {liq.bloqueantes.map((b, i) => (
           <p
             key={`${b.code}-${i}`}
-            className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/30 dark:bg-amber-950/30 dark:text-amber-400"
+            className="flex items-start gap-2 rounded-lg border border-warning/20 bg-warning-soft p-3 text-sm text-warning"
           >
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             {b.mensaje}
@@ -359,7 +359,7 @@ export default function LiquidacionFinalDetalle() {
                 Datos del trabajador
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-6">
+            <CardContent>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                 <div>
                   <p className="text-xs text-muted-foreground">Cédula</p>
@@ -393,14 +393,14 @@ export default function LiquidacionFinalDetalle() {
                   <p className="font-medium">
                     {liq.retiro.motivo_etiqueta ?? '—'}
                     {liq.retiro.indemniza && (
-                      <span className="ml-2 text-xs text-amber-600">genera indemnización</span>
+                      <span className="ml-2 text-xs text-warning">genera indemnización</span>
                     )}
                   </p>
                 </div>
               </div>
 
               {liq.contrato.tipo_contrato_origen === 'MANUAL' && (
-                <p className="mt-4 flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400">
+                <p className="mt-4 flex items-start gap-2 text-xs text-warning">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   El tipo de contrato se cambió a mano en esta liquidación.
                 </p>
@@ -494,7 +494,7 @@ export default function LiquidacionFinalDetalle() {
               <CardHeader className="border-b">
                 <CardTitle>Observaciones</CardTitle>
               </CardHeader>
-              <CardContent className="p-6">
+              <CardContent>
                 <p className="text-sm text-muted-foreground">{liq.observaciones}</p>
               </CardContent>
             </Card>
@@ -589,7 +589,7 @@ export default function LiquidacionFinalDetalle() {
               <CardHeader className="border-b">
                 <CardTitle className="text-base">Retención en la fuente</CardTitle>
               </CardHeader>
-              <CardContent className="p-6">
+              <CardContent>
                 <p className="text-xs text-muted-foreground">{liq.retencion.nota}</p>
               </CardContent>
             </Card>

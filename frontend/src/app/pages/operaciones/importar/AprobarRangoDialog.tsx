@@ -147,7 +147,7 @@ export function AprobarRangoDialog({ abierto, onCerrar, onAprobado }: Props) {
           <Button variant="outline" onClick={onCerrar} disabled={enviando}>
             Cancelar
           </Button>
-          <Button onClick={() => void aprobar(false)} disabled={!rangoValido || enviando} className="gap-2">
+          <Button onClick={() => void aprobar(false)} disabled={!rangoValido || enviando} >
             {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
             Aprobar
           </Button>

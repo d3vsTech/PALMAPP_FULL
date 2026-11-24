@@ -216,7 +216,7 @@ export default function AbonosPrestamo() {
     <div className="space-y-6">
       {/* Volver + header */}
       <div>
-        <Button variant="ghost" size="sm" asChild className="mb-4 gap-2">
+        <Button variant="ghost" size="sm" asChild className="mb-4">
           <Link to="/nomina/prestamos">
             <ArrowLeft className="h-4 w-4" />
             Volver a Préstamos
@@ -232,7 +232,6 @@ export default function AbonosPrestamo() {
           {puedeRegistrarAbono && (
             <Button
               onClick={() => setModalAbierto(true)}
-              className="bg-primary hover:bg-primary/90 gap-2"
             >
               <Plus className="h-4 w-4" />
               Registrar pago
@@ -242,11 +241,11 @@ export default function AbonosPrestamo() {
       </div>
 
       {/* Resumen del préstamo */}
-      <Card className="border-border">
+      <Card>
         <CardContent className="p-5">
           <div className="flex flex-wrap gap-6 items-start justify-between">
             <div className="space-y-1">
-              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+              <p className="text-[13px] font-medium text-muted-foreground">
                 {p.concepto}
               </p>
               <div className="flex items-center gap-3 mt-2">
@@ -297,7 +296,7 @@ export default function AbonosPrestamo() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        <Card className="border-border">
+        <Card>
           <CardContent className="p-4 flex items-center gap-3">
             <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
               <CheckCircle2 className="h-4 w-4 text-primary" />
@@ -308,7 +307,7 @@ export default function AbonosPrestamo() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-border">
+        <Card>
           <CardContent className="p-4 flex items-center gap-3">
             <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
               <DollarSign className="h-4 w-4 text-primary" />
@@ -321,14 +320,14 @@ export default function AbonosPrestamo() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-border">
+        <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
-              <Clock className="h-4 w-4 text-amber-600" />
+            <div className="h-9 w-9 rounded-lg bg-warning-soft flex items-center justify-center flex-shrink-0">
+              <Clock className="h-4 w-4 text-warning" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Saldo pendiente</p>
-              <p className={`text-xl font-bold ${saldoPendiente === 0 ? 'text-success' : 'text-amber-600'}`}>
+              <p className={`text-xl font-bold ${saldoPendiente === 0 ? 'text-success' : 'text-warning'}`}>
                 ${saldoPendiente.toLocaleString('es-CO')}
               </p>
             </div>
@@ -337,7 +336,7 @@ export default function AbonosPrestamo() {
       </div>
 
       {/* Tabla de pagos */}
-      <Card className="overflow-hidden border-border">
+      <Card className="overflow-hidden">
         <CardHeader className="pb-0">
           <CardTitle className="text-base">Historial de pagos</CardTitle>
         </CardHeader>
@@ -390,7 +389,7 @@ export default function AbonosPrestamo() {
                         )}
                         {a.tipo === 'LIQUIDACION_FINAL' && (
                           <span
-                            className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 font-medium align-middle dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/30"
+                            className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-warning-soft text-warning border border-warning/20 font-medium align-middle"
                             title="Saldado al pagar la liquidación final de contrato"
                           >
                             Liquidación final
@@ -413,7 +412,7 @@ export default function AbonosPrestamo() {
                             size="sm"
                             variant="outline"
                             onClick={() => void descargarComprobanteAbono(prestamo, a)}
-                            className="gap-1.5 text-xs"
+                            className="text-xs"
                             title="Descargar el comprobante de este pago"
                           >
                             <Download className="h-3.5 w-3.5" />
@@ -578,7 +577,6 @@ export default function AbonosPrestamo() {
             <Button
               onClick={guardarAbono}
               disabled={guardando}
-              className="bg-primary hover:bg-primary/90 gap-2"
             >
               {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               {saldarTodo ? 'Saldar préstamo' : 'Registrar pago'}

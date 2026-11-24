@@ -237,7 +237,7 @@ export function MultiSelectColaboradores({
                         {col.nombres} {col.apellidos}
                       </span>
                       {motivo && (
-                        <span className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-amber-700 dark:text-amber-500">
+                        <span className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-warning">
                           {col.enVacaciones
                             ? <Plane className="h-3 w-3 shrink-0" />
                             : <AlertTriangle className="h-3 w-3 shrink-0" />}
@@ -246,7 +246,7 @@ export function MultiSelectColaboradores({
                       )}
                     </span>
                     {col.terceroNombre && (
-                      <span className="shrink-0 rounded-full border border-amber-200/50 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-700">
+                      <span className="shrink-0 rounded-full border border-warning/20 bg-warning-soft px-1.5 py-0.5 text-[10px] text-warning">
                         Tercero · {col.terceroNombre}
                       </span>
                     )}
@@ -266,8 +266,8 @@ export function MultiSelectColaboradores({
                   )}
 
                   {confirmando && (
-                    <div className="mx-3 mb-2 ml-10 rounded-md border border-amber-300 bg-amber-50 p-2 dark:border-amber-800/40 dark:bg-amber-950/20">
-                      <p className="flex gap-1.5 text-[11px] text-amber-900 dark:text-amber-200">
+                    <div className="mx-3 mb-2 ml-10 rounded-md border border-warning/20 bg-warning-soft p-2">
+                      <p className="flex gap-1.5 text-[11px] text-warning">
                         <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
                         {col.enVacaciones
                           ? 'Está de vacaciones.'

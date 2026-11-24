@@ -116,7 +116,7 @@ export function AprobarLiquidacionDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800/30 dark:bg-amber-950/30 dark:text-amber-400">
+          <div className="space-y-2 rounded-lg border border-warning/20 bg-warning-soft p-3 text-sm text-warning">
             <p className="font-medium">Al aprobar, el sistema hace tres cosas:</p>
             <ul className="ml-4 list-disc space-y-1 text-xs">
               <li>Congela el cálculo: los valores ya no se recalculan.</li>
@@ -150,7 +150,7 @@ export function AprobarLiquidacionDialog({
               {forzables.map((b, i) => (
                 <p
                   key={`${b.code}-${i}`}
-                  className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400"
+                  className="flex items-start gap-2 text-sm text-warning"
                 >
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   {b.mensaje}
@@ -175,7 +175,7 @@ export function AprobarLiquidacionDialog({
           <Button variant="outline" onClick={onCerrar} disabled={enviando}>
             Cancelar
           </Button>
-          <Button onClick={() => void aprobar()} disabled={!listo || enviando} className="gap-2">
+          <Button onClick={() => void aprobar()} disabled={!listo || enviando} >
             {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
             Aprobar y aplicar el retiro
           </Button>
@@ -313,7 +313,7 @@ export function PagoLiquidacionDialog({ liquidacion, onCerrar, onPagada }: Props
           <Button variant="outline" onClick={onCerrar} disabled={enviando}>
             Cancelar
           </Button>
-          <Button onClick={() => void registrar()} disabled={!fechaPago || enviando} className="gap-2">
+          <Button onClick={() => void registrar()} disabled={!fechaPago || enviando} >
             {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />}
             Registrar pago
           </Button>
@@ -390,7 +390,7 @@ export function AnularLiquidacionDialog({
         </DialogHeader>
 
         {!esPago && aplicoRetiro && (
-          <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800/30 dark:bg-amber-950/30 dark:text-amber-400">
+          <p className="flex items-start gap-2 rounded-lg border border-warning/20 bg-warning-soft p-3 text-sm text-warning">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             Esta liquidación aplicó el retiro. Al anularla se intenta revertirlo; si alguien
             cambió la ficha o el contrato después, habrá que corregirlo a mano.
@@ -421,7 +421,7 @@ export function AnularLiquidacionDialog({
             variant="destructive"
             onClick={() => void anular()}
             disabled={!listo || enviando}
-            className="gap-2"
+            
           >
             {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
             {esPago ? 'Anular pago' : 'Anular liquidación'}

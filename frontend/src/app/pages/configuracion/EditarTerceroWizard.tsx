@@ -665,8 +665,8 @@ export default function EditarTerceroWizard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="min-w-0 space-y-6 lg:col-span-2">
           {/* Stepper */}
-          <Card className="border-border">
-            <CardContent className="p-6">
+          <Card>
+            <CardContent>
               <div className="flex items-center justify-between">
                 {STEPS.map((s, i) => (
                   <React.Fragment key={s.num}>
@@ -713,20 +713,20 @@ export default function EditarTerceroWizard() {
 
           {/* Navegación */}
           <div className="barra-acciones flex items-center justify-between pt-2">
-            <Button variant="outline" className="gap-2"
+            <Button variant="outline" 
               onClick={() => paso === 1 ? navigate('/configuracion') : setPaso(p => p - 1)}
               disabled={guardando}>
               <ArrowLeft className="h-4 w-4" />
               {paso === 1 ? 'Cancelar' : 'Anterior'}
             </Button>
             {paso < 3 ? (
-              <Button className="gap-2 bg-primary hover:bg-primary/90"
+              <Button
                 disabled={!pasoValido || guardando}
                 onClick={() => setPaso(p => p + 1)}>
                 Siguiente <ArrowRight className="h-4 w-4" />
               </Button>
             ) : (
-              <Button className="gap-2 bg-primary hover:bg-primary/90"
+              <Button
                 onClick={handleGuardar}
                 disabled={guardando}>
                 <Save className="h-4 w-4" />
@@ -738,13 +738,13 @@ export default function EditarTerceroWizard() {
 
         {/* Panel de resumen */}
         <div className="lg:col-span-1">
-          <Card className="sticky top-8 border-border">
+          <Card className="sticky top-8">
             <CardHeader className="border-b">
               <CardTitle className="text-base">Resumen</CardTitle>
             </CardHeader>
             <CardContent className="p-5 space-y-5">
               <div className="space-y-3 pb-4 border-b border-border">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Tercero</p>
+                <p className="text-[13px] font-medium text-muted-foreground">Tercero</p>
                 {datos.razonSocial ? (
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
@@ -765,7 +765,7 @@ export default function EditarTerceroWizard() {
               </div>
 
               <div className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <p className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground">
                   <DollarSign className="h-3.5 w-3.5" /> Precios configurados
                 </p>
                 <Badge variant="outline" className="text-xs border-primary/30 text-primary">
@@ -774,7 +774,7 @@ export default function EditarTerceroWizard() {
               </div>
 
               <div className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <p className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground">
                   <Users className="h-3.5 w-3.5" /> Operarios
                 </p>
                 <Badge variant="outline" className="text-xs border-primary/30 text-primary">

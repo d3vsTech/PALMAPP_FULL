@@ -37,7 +37,7 @@ import { AvisosCargueNominas } from './importar/AvisosCargueNominas';
 function Indicador({ titulo, valor, tono }: { titulo: string; valor: string; tono?: string }) {
   return (
     <div className="rounded-lg border border-border bg-muted/20 p-3">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{titulo}</p>
+      <p className="text-[13px] font-medium text-muted-foreground">{titulo}</p>
       <p className={`text-2xl font-bold ${tono ?? 'text-foreground'}`}>{valor}</p>
     </div>
   );
@@ -62,7 +62,7 @@ export default function ImportarNominasPage() {
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" size="sm" onClick={() => navigate('/nomina')} className="gap-2">
+      <Button variant="ghost" size="sm" onClick={() => navigate('/nomina')} >
         <ArrowLeft className="h-4 w-4" />
         Volver a Nómina
       </Button>
@@ -191,7 +191,7 @@ export default function ImportarNominasPage() {
             <Button
               onClick={() => void cargue.importar()}
               disabled={!puedeImportar}
-              className="gap-2"
+              
             >
               <Upload className="h-4 w-4" />
               {cargue.importando ? 'Cargando...' : `Importar ${aEscribir} fila(s)`}

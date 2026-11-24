@@ -63,9 +63,9 @@ function toNumber(v: string | number | null | undefined): number {
 type LaborMeta = { header: string; bg: string; chip: string };
 
 const LABOR_META_COSECHA: LaborMeta = {
-  header: 'text-amber-600',
-  bg: 'bg-amber-50/60 dark:bg-amber-950/20',
-  chip: 'bg-amber-500/10 text-amber-700 border-amber-500/30',
+  header: 'text-warning',
+  bg: 'bg-warning-soft',
+  chip: 'bg-warning-soft text-warning border-warning/20',
 };
 const LABOR_META_PODA: LaborMeta = {
   header: 'text-[#1E5631]',
@@ -74,24 +74,24 @@ const LABOR_META_PODA: LaborMeta = {
 };
 const LABOR_META_PLATEO: LaborMeta = LABOR_META_PODA;
 const LABOR_META_FERTILIZACION: LaborMeta = {
-  header: 'text-blue-600',
-  bg: 'bg-blue-50/60 dark:bg-blue-950/20',
-  chip: 'bg-blue-500/10 text-blue-700 border-blue-500/30',
+  header: 'text-info',
+  bg: 'bg-info-soft',
+  chip: 'bg-info-soft text-info border-info/20',
 };
 const LABOR_META_ABONADA: LaborMeta = {
-  header: 'text-purple-600',
-  bg: 'bg-purple-50/60 dark:bg-purple-950/20',
-  chip: 'bg-purple-500/10 text-purple-700 border-purple-500/30',
+  header: 'text-primary',
+  bg: 'bg-primary-soft',
+  chip: 'bg-primary-soft text-primary border-primary/20',
 };
 const LABOR_META_SANIDAD: LaborMeta = {
-  header: 'text-rose-600',
-  bg: 'bg-rose-50/60 dark:bg-rose-950/20',
-  chip: 'bg-rose-500/10 text-rose-700 border-rose-500/30',
+  header: 'text-destructive',
+  bg: 'bg-destructive-soft',
+  chip: 'bg-destructive-soft text-destructive border-destructive/20',
 };
 const LABOR_META_FINCA: LaborMeta = {
-  header: 'text-zinc-700 dark:text-zinc-300',
-  bg: 'bg-zinc-100/80 dark:bg-zinc-800/40',
-  chip: 'bg-zinc-500/10 text-zinc-700 border-zinc-500/30 dark:text-zinc-300',
+  header: 'text-foreground',
+  bg: 'bg-muted',
+  chip: 'bg-muted text-foreground border-border',
 };
 
 /** Resuelve el color según el nombre de la labor (case-insensitive). */
@@ -473,7 +473,7 @@ export default function LiquidarTerceroDetalle() {
           <Button variant="outline" onClick={() => navigate(-1)}>
             Volver
           </Button>
-          <Button onClick={calcularActa} disabled={calculandoActa} className="gap-1.5">
+          <Button onClick={calcularActa} disabled={calculandoActa}>
             {calculandoActa ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -567,7 +567,7 @@ export default function LiquidarTerceroDetalle() {
           variant="ghost"
           size="sm"
           onClick={() => navigate(`/nomina/${nominaId}`)}
-          className="mb-4 gap-2"
+          className="mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver
@@ -582,13 +582,13 @@ export default function LiquidarTerceroDetalle() {
         <div className={`flex items-center justify-between px-5 py-4 border-b border-border ${
           estaPagada
             ? 'bg-[#1E5631]/5'
-            : 'bg-amber-50/40 dark:bg-amber-950/10'
+            : 'bg-warning-soft'
         }`}>
           <div className="flex items-center gap-3">
             <div className={`h-10 w-10 rounded-xl flex items-center justify-center font-bold text-sm ${
               estaPagada
                 ? 'bg-[#1E5631]/10 text-[#1E5631]'
-                : 'bg-amber-500/10 text-amber-700'
+                : 'bg-warning-soft text-warning'
             }`}>
               {nombre.charAt(0)}
             </div>
@@ -610,14 +610,13 @@ export default function LiquidarTerceroDetalle() {
             <Badge className={`text-xs ${
               estaPagada
                 ? 'bg-[#1E5631]/10 text-[#1E5631] border-[#1E5631]/20'
-                : 'bg-amber-500/10 text-amber-700 border-amber-300'
+                : 'bg-warning-soft text-warning border-warning/20'
             }`}>
               {estaPagada ? 'Liquidado' : 'Pendiente'}
             </Badge>
             {sinLiquidar ? (
               <Button
                 size="sm"
-                className="bg-primary hover:bg-primary/90 gap-1.5"
                 onClick={calcularActa}
                 disabled={calculandoActa}
               >
@@ -640,7 +639,7 @@ export default function LiquidarTerceroDetalle() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="gap-1.5"
+                  
                   onClick={calcularActa}
                   disabled={calculandoActa}
                 >
@@ -655,7 +654,6 @@ export default function LiquidarTerceroDetalle() {
                 </Button>
                 <Button
                   size="sm"
-                  className="bg-primary hover:bg-primary/90 gap-1.5"
                   onClick={() => setModalPagoAbierto(true)}
                 >
                   <FileText className="h-3.5 w-3.5" />
@@ -666,7 +664,7 @@ export default function LiquidarTerceroDetalle() {
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-1.5 text-[#1E5631] border-[#1E5631]/30"
+                className="text-[#1E5631] border-[#1E5631]/30"
                 onClick={descargarPdf}
               >
                 <Download className="h-3.5 w-3.5" />
@@ -726,7 +724,7 @@ export default function LiquidarTerceroDetalle() {
                   onClick={() => toggleExpandido(o.operario_id)}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 rounded-full bg-amber-500/10 text-amber-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                    <div className="h-8 w-8 rounded-full bg-warning-soft text-warning flex items-center justify-center text-xs font-bold flex-shrink-0">
                       {iniciales}
                     </div>
                     <div>
@@ -987,7 +985,7 @@ export default function LiquidarTerceroDetalle() {
           return (
             <div className="border-t border-destructive/20">
               <div className="flex items-center justify-between px-5 py-3 bg-destructive/5">
-                <p className="text-xs font-bold uppercase tracking-wide text-destructive">
+                <p className="text-xs font-semibold text-destructive">
                   Descuentos
                 </p>
                 {puedeEditar && (
@@ -995,7 +993,7 @@ export default function LiquidarTerceroDetalle() {
                     size="sm"
                     variant="ghost"
                     onClick={() => abrirModalDescuento(null, nombre)}
-                    className="h-7 gap-1 text-destructive hover:bg-destructive/10 font-semibold"
+                    className="h-7 text-destructive hover:bg-destructive/10 font-semibold"
                   >
                     <Plus className="h-3.5 w-3.5" />
                     Agregar
@@ -1119,9 +1117,9 @@ export default function LiquidarTerceroDetalle() {
                 </span>
               </div>
             </div>
-            <div className="rounded-lg border border-amber-400/40 bg-amber-50/60 p-3 flex gap-2">
-              <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-700">
+            <div className="rounded-lg border border-warning/20 bg-warning-soft p-3 flex gap-2">
+              <AlertCircle className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-warning">
                 Al confirmar, la orden quedará marcada como liquidada. Asegúrate de haber revisado todos los valores antes de continuar.
               </p>
             </div>
@@ -1137,7 +1135,6 @@ export default function LiquidarTerceroDetalle() {
             <Button
               onClick={() => registrarPago(totalEmpresa)}
               disabled={confirmando}
-              className="bg-primary hover:bg-primary/90 gap-2"
             >
               {confirmando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               Confirmar Liquidación
@@ -1216,7 +1213,6 @@ export default function LiquidarTerceroDetalle() {
             <Button
               onClick={guardarDescuento}
               disabled={guardandoDescuento}
-              className="gap-2 bg-primary hover:bg-primary/90"
             >
               {guardandoDescuento ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               Agregar
@@ -1254,7 +1250,6 @@ export default function LiquidarTerceroDetalle() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <Button
                 onClick={cerrarModalExito}
-                className="bg-primary hover:bg-primary/90 gap-1.5"
               >
                 <Check className="h-4 w-4" />
                 Aceptar
@@ -1262,7 +1257,7 @@ export default function LiquidarTerceroDetalle() {
               <Button
                 variant="outline"
                 onClick={imprimirPdf}
-                className="gap-1.5"
+                
               >
                 <Printer className="h-4 w-4" />
                 Imprimir
@@ -1271,7 +1266,7 @@ export default function LiquidarTerceroDetalle() {
                 variant="outline"
                 onClick={enviarWhatsapp}
                 disabled={enviandoWhatsapp}
-                className="gap-1.5 text-primary border-primary/30 hover:bg-primary/5"
+                className="text-primary border-primary/30 hover:bg-primary/5"
               >
                 {enviandoWhatsapp
                   ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -1283,7 +1278,7 @@ export default function LiquidarTerceroDetalle() {
               variant="outline"
               onClick={descargarPdf}
               disabled={descargandoPdf}
-              className="w-full gap-2"
+              className="w-full"
             >
               {descargandoPdf
                 ? <Loader2 className="h-4 w-4 animate-spin" />

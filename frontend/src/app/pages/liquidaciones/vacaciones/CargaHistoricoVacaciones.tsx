@@ -224,7 +224,7 @@ export default function CargaHistoricoVacaciones() {
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" size="sm" asChild className="gap-2">
+      <Button variant="ghost" size="sm" asChild>
         <Link to="/liquidaciones?tab=vacaciones"><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
       </Button>
 
@@ -262,7 +262,7 @@ export default function CargaHistoricoVacaciones() {
       </Card>
 
       {!puedeCargar && (
-        <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800/30 dark:bg-amber-950/20 dark:text-amber-400">
+        <div className="flex gap-3 rounded-xl border border-warning/20 bg-warning-soft px-4 py-3 text-sm text-warning">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <p>Puedes consultar, pero no registrar: hace falta el permiso de editar liquidaciones.</p>
         </div>
@@ -271,7 +271,7 @@ export default function CargaHistoricoVacaciones() {
       <div className="grid gap-6 lg:grid-cols-[22rem_1fr]">
 
         {/* ── Panel izquierdo: colaboradores ──────────────────────────────── */}
-        <Card className="border-border">
+        <Card>
           <div className="border-b border-border p-4">
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -319,7 +319,7 @@ export default function CargaHistoricoVacaciones() {
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-sm font-bold text-amber-600">
+                      <p className="text-sm font-bold text-warning">
                         {fmtDias(f.dias_disponibles_exigibles)}
                       </p>
                       <Badge variant="outline" className={`${s.badge} mt-0.5 text-[10px]`}>
@@ -336,7 +336,7 @@ export default function CargaHistoricoVacaciones() {
         {/* ── Panel derecho: detalle y formulario ─────────────────────────── */}
         <div className="space-y-6">
           {!empleadoId ? (
-            <Card className="border-border">
+            <Card>
               <CardContent className="py-20 text-center">
                 <History className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
                 <p className="font-medium text-foreground">Elige un colaborador</p>
@@ -351,7 +351,7 @@ export default function CargaHistoricoVacaciones() {
               Cargando colaborador...
             </div>
           ) : !detalle ? (
-            <Card className="border-border">
+            <Card>
               <CardContent className="py-20 text-center text-muted-foreground">
                 No se pudo cargar el colaborador.
               </CardContent>
@@ -359,7 +359,7 @@ export default function CargaHistoricoVacaciones() {
           ) : (
             <>
               {/* Períodos de causación */}
-              <Card className="overflow-hidden border-border">
+              <Card className="overflow-hidden">
                 <div className="border-b border-border bg-muted/20 px-5 py-3">
                   <p className="text-sm font-semibold">
                     Períodos de {detalle.empleado.nombre_completo}
@@ -403,7 +403,7 @@ export default function CargaHistoricoVacaciones() {
                               <td className="p-3 text-center text-sm">{fmtDias(p.dias_generados)}</td>
                               <td className="p-3 text-center text-sm">{fmtDias(p.dias_disfrutados)}</td>
                               <td className="p-3 text-center text-sm">{fmtDias(p.dias_compensados)}</td>
-                              <td className={`p-3 text-center text-sm font-bold ${p.saldo > 0 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                              <td className={`p-3 text-center text-sm font-bold ${p.saldo > 0 ? 'text-warning' : 'text-muted-foreground'}`}>
                                 {fmtDias(p.saldo)}
                               </td>
                             </tr>
@@ -416,7 +416,7 @@ export default function CargaHistoricoVacaciones() {
               </Card>
 
               {/* Ya cargado */}
-              <Card className="border-border">
+              <Card>
                 <div className="border-b border-border bg-muted/20 px-5 py-3">
                   <p className="text-sm font-semibold">
                     Ya cargado
@@ -455,7 +455,7 @@ export default function CargaHistoricoVacaciones() {
                             size="sm"
                             variant="outline"
                             onClick={() => setAAnular(v)}
-                            className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                           >
                             <Ban className="h-3.5 w-3.5" />
                             Anular
@@ -468,7 +468,7 @@ export default function CargaHistoricoVacaciones() {
               </Card>
 
               {/* Formulario */}
-              <Card className="border-border">
+              <Card>
                 <div className="border-b border-border bg-muted/20 px-5 py-3">
                   <p className="text-sm font-semibold">Agregar histórico</p>
                 </div>
@@ -556,7 +556,7 @@ export default function CargaHistoricoVacaciones() {
                       variant="outline"
                       disabled={!puedeCargar || guardando}
                       onClick={() => guardar(true)}
-                      className="gap-2"
+                      
                     >
                       {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
                       Guardar y agregar otro
@@ -564,7 +564,7 @@ export default function CargaHistoricoVacaciones() {
                     <Button
                       disabled={!puedeCargar || guardando}
                       onClick={() => guardar(false)}
-                      className="gap-2"
+                      
                     >
                       {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                       Guardar
@@ -600,7 +600,7 @@ export default function CargaHistoricoVacaciones() {
             <Button
               onClick={anular}
               disabled={anulando}
-              className="gap-2 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {anulando && <Loader2 className="h-4 w-4 animate-spin" />}
               Anular

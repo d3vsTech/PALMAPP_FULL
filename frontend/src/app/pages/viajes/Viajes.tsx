@@ -60,7 +60,7 @@ const PER_PAGE = 25;
 
 /** Los filtros de la tabla en limpio. Sirve de valor inicial y de "borrar todo". */
 const FILTROS_VACIOS = {
-  remision: '', estado: '',
+  remision: '', fecha: '', estado: '',
   vehiculo: '', conductor: '', extractora: '',
 };
 
@@ -147,13 +147,13 @@ function getEstadoBadge(estado: EstadoViaje) {
 /** Los períodos que acepta el filtro de viajes. */
 type PeriodoViajes = 'semanal' | 'quincenal' | 'mensual' | 'anual' | 'personalizado';
 
-/** Períodos del filtro, con la forma del diseño. */
+/** Períodos que acepta el desplegable. */
 const PERIODOS: OpcionPeriodo<PeriodoViajes>[] = [
-  { valor: 'semanal', etiqueta: 'Semana' },
-  { valor: 'quincenal', etiqueta: 'Quincena' },
-  { valor: 'mensual', etiqueta: 'Mes' },
-  { valor: 'anual', etiqueta: 'Año' },
-  { valor: 'personalizado', etiqueta: 'Fechas' },
+  { valor: 'semanal', etiqueta: 'Semanal' },
+  { valor: 'quincenal', etiqueta: 'Quincenal' },
+  { valor: 'mensual', etiqueta: 'Mensual' },
+  { valor: 'anual', etiqueta: 'Anual' },
+  { valor: 'personalizado', etiqueta: 'Personalizado' },
 ];
 
 // ─── componente ───────────────────────────────────────────────────────────────
@@ -323,7 +323,9 @@ export default function Viajes() {
       if (f.vehiculo)   params.vehiculo = f.vehiculo;
       if (f.conductor)  params.conductor = f.conductor;
       if (f.extractora) params.extractora_id = Number(f.extractora);
-      // La fecha la manda el selector del encabezado, no la tabla.
+      // El día exacto lo elige la tabla; el rango sale del selector de
+      // arriba. Van juntos: el día tiene que caer dentro del período.
+      if (f.fecha)      params.fecha = f.fecha;
       if (rangoPeriodo.desde) params.fecha_desde = rangoPeriodo.desde;
       if (rangoPeriodo.hasta) params.fecha_hasta = rangoPeriodo.hasta;
       const res = await viajesApi.listar(params);
@@ -445,7 +447,7 @@ export default function Viajes() {
       <AlertDialog open={!!viajeAEliminar} onOpenChange={open => !open && setViajeAEliminar(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogTitle>¿Eliminar el viaje?</AlertDialogTitle>
             <AlertDialogDescription>
               <span>Esto eliminará permanentemente el viaje <strong>{viajeAEliminar?.remision}</strong>. Esta acción no se puede deshacer.</span>
             </AlertDialogDescription>
@@ -518,7 +520,7 @@ export default function Viajes() {
               porque el callout tiene contenido en formato bloque + icono. */}
           <AlertDialogHeader className="text-left">
             <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <AlertTriangle className="h-5 w-5 text-warning" />
               Pasar a En Validación
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
@@ -532,13 +534,13 @@ export default function Viajes() {
                     gajos/peso reportados por el colaborador como definitivos. Eso
                     impacta el cálculo de nómina, así que el usuario debe verlo
                     claramente antes de confirmar. */}
-                <div className="rounded-lg border border-amber-400/40 bg-amber-50/60 dark:bg-amber-950/20 p-4 flex gap-3 text-left">
-                  <Info className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="rounded-lg border border-warning/20 bg-warning-soft p-4 flex gap-3 text-left">
+                  <Info className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />
                   <div className="space-y-1">
-                    <p className="text-sm font-semibold text-amber-800 dark:text-amber-400">
+                    <p className="text-sm font-semibold text-warning">
                       Importante: datos que tomará el sistema
                     </p>
-                    <p className="text-xs text-amber-700 dark:text-amber-500 leading-relaxed">
+                    <p className="text-xs text-warning leading-relaxed">
                       Si no ingresas la información de la extractora durante la validación, el sistema tomará como definitivos los <span className="font-semibold">gajos y kilogramos reportados por el colaborador</span>. Estos valores serán los usados para calcular la nómina.
                     </p>
                   </div>
@@ -548,7 +550,7 @@ export default function Viajes() {
           </AlertDialogHeader>
           <AlertDialogFooter className="sm:justify-end">
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmarValidar} className="bg-primary hover:bg-primary/90">
+            <AlertDialogAction onClick={confirmarValidar}>
               Confirmar
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -595,7 +597,7 @@ export default function Viajes() {
           {periodoKPI === 'quincenal' && (
             <Select value={String(quincenaKPI)}
               onValueChange={(v) => setQuincenaKPI(Number(v) as QuincenaViajes)}>
-              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Quincena" className="w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="1">Del 1 al 15</SelectItem>
                 <SelectItem value="2">Del 16 al fin de mes</SelectItem>
@@ -604,10 +606,10 @@ export default function Viajes() {
           )}
           {periodoKPI === 'personalizado' && (
             <div className="flex items-center gap-1.5">
-              <Input type="date" aria-label="Fecha de inicio" className="h-9 w-[138px]"
+              <Input type="date" aria-label="Fecha de inicio" className="w-[138px]"
                 value={fechaInicioKPI} onChange={e => setFechaInicioKPI(e.target.value)} />
               <span className="text-xs text-muted-foreground">a</span>
-              <Input type="date" aria-label="Fecha de fin" className="h-9 w-[138px]"
+              <Input type="date" aria-label="Fecha de fin" className="w-[138px]"
                 value={fechaFinKPI} onChange={e => setFechaFinKPI(e.target.value)} />
             </div>
           )}
@@ -635,23 +637,34 @@ export default function Viajes() {
         {/* Filtros. Van siempre: si se escondieran al quedar la tabla
             vacía, el filtro que dejó cero resultados no se podría
             borrar y la pantalla quedaría trancada. */}
-        <div className="grid gap-3 rounded-xl border border-border bg-muted/40 p-4 md:grid-cols-2 lg:grid-cols-5">
-          <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-muted-foreground" htmlFor="viajes-remision">Remisión</label>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
-              <Input id="viajes-remision" placeholder="REM-2026-001" value={filtros.remision}
-                onChange={e => handleFiltroChange('remision', e.target.value)} className="h-9 pl-8" />
-            </div>
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+          <div className="relative w-full lg:w-64">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
+            <Input
+              id="viajes-remision"
+              type="search"
+              aria-label="Buscar remisión"
+              placeholder="Buscar remisión"
+              value={filtros.remision}
+              onChange={e => handleFiltroChange('remision', e.target.value)}
+              className="pl-9"
+            />
           </div>
-          <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-muted-foreground" htmlFor="viajes-estado">Estado</label>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:flex lg:flex-1 lg:flex-wrap lg:justify-end">
+            <Input
+              id="viajes-fecha"
+              type="date"
+              aria-label="Fecha del viaje"
+              value={filtros.fecha}
+              onChange={e => handleFiltroChange('fecha', e.target.value)}
+              className="col-span-2 sm:col-span-1 lg:w-[150px]"
+            />
             <Select
               value={filtros.estado || '__todos__'}
               onValueChange={(v) => handleFiltroChange('estado', v === '__todos__' ? '' : v)}
             >
-              <SelectTrigger id="viajes-estado" className="h-9 w-full">
-                <SelectValue placeholder="Todos los estados" />
+              <SelectTrigger id="viajes-estado" aria-label="Estado" className="col-span-2 w-full sm:col-span-1 lg:w-52">
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__todos__">Todos los estados</SelectItem>
@@ -660,32 +673,31 @@ export default function Viajes() {
                 <SelectItem value="Finalizado">Finalizado</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-muted-foreground" htmlFor="viajes-vehiculo">Vehículo</label>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
-              <Input id="viajes-vehiculo" placeholder="ABC-123" value={filtros.vehiculo}
-                onChange={e => handleFiltroChange('vehiculo', e.target.value)} className="h-9 pl-8" />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-muted-foreground" htmlFor="viajes-conductor">Conductor</label>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
-              <Input id="viajes-conductor" placeholder="Nombre" value={filtros.conductor}
-                onChange={e => handleFiltroChange('conductor', e.target.value)} className="h-9 pl-8" />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-muted-foreground" htmlFor="viajes-extractora">Extractora</label>
+            <Input
+              id="viajes-vehiculo"
+              aria-label="Vehículo"
+              placeholder="Placa"
+              value={filtros.vehiculo}
+              onChange={e => handleFiltroChange('vehiculo', e.target.value)}
+              className="lg:w-28"
+            />
+            <Input
+              id="viajes-conductor"
+              aria-label="Conductor"
+              placeholder="Conductor"
+              value={filtros.conductor}
+              onChange={e => handleFiltroChange('conductor', e.target.value)}
+              className="lg:w-36"
+            />
             <Select
               value={filtros.extractora || '__todas__'}
               onValueChange={(v) => handleFiltroChange('extractora', v === '__todas__' ? '' : v)}
             >
-              <SelectTrigger id="viajes-extractora" className="h-9"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="viajes-extractora" aria-label="Extractora" className="col-span-2 w-full sm:col-span-1 lg:w-56">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__todas__">Todas</SelectItem>
+                <SelectItem value="__todas__">Todas las extractoras</SelectItem>
                 {extractoras.map((e) => (
                   <SelectItem key={e.id} value={String(e.id)}>{e.razon_social}</SelectItem>
                 ))}
@@ -726,11 +738,11 @@ export default function Viajes() {
           <Card className="gap-0 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-muted/60 text-[13px] text-muted-foreground">
+                <thead className="bg-muted/60 text-[13px] font-medium text-muted-foreground">
                   <tr>
                     <th className="px-5 py-2.5 text-left font-semibold">Remisión</th>
                     <th className="px-4 py-2.5 text-left font-semibold">Estado</th>
-                    <th className="hidden px-4 py-2.5 text-left font-semibold md:table-cell">Vehículo y conductor</th>
+                    <th className="hidden px-4 py-2.5 text-left font-semibold md:table-cell">Vehículo</th>
                     <th className="hidden px-4 py-2.5 text-left font-semibold lg:table-cell">Extractora</th>
                     <th className="hidden px-4 py-2.5 text-right font-semibold sm:table-cell">Gajos</th>
                     <th className="px-4 py-2.5 text-right font-semibold">Peso (kg)</th>
@@ -750,12 +762,13 @@ export default function Viajes() {
                             {viaje.remisionId}
                           </Link>
                           {viaje.importado && (
-                            <span
-                              className="ml-2 rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                            <Badge
+                              variant="outline"
+                              className="ml-2 align-middle text-[11px]"
                               title="Entró por el cargue de histórico"
                             >
                               Importado
-                            </span>
+                            </Badge>
                           )}
                           {/* La fecha va debajo de la remisión. Como columna
                               aparte no cabía en celular y empujaba la tabla
@@ -767,21 +780,17 @@ export default function Viajes() {
                         <td className="px-4 py-3">{getEstadoBadge(viaje.estado)}</td>
                         <td className="hidden px-4 py-3 md:table-cell">
                           <span className="block font-medium text-foreground">{viaje.placaVehiculo}</span>
-                          <span className="text-xs text-muted-foreground">{viaje.conductor}</span>
+                          <span className="block text-xs text-muted-foreground">{viaje.conductor}</span>
                         </td>
                         <td className="hidden px-4 py-3 text-muted-foreground lg:table-cell">{viaje.extractora}</td>
-                        <td className="hidden px-4 py-3 text-right tabular-nums text-foreground sm:table-cell">
+                        <td className="hidden px-4 py-3 text-right tabular-nums sm:table-cell">
                           {num(viaje.gajosEstimados)}
                         </td>
-                        <td className="px-4 py-3 text-right">
-                          {viaje.peso ? (
-                            <span className="font-semibold tabular-nums text-foreground">{num(viaje.peso)}</span>
-                          ) : (
-                            <span className="text-muted-foreground">Pendiente</span>
-                          )}
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {viaje.peso ? num(viaje.peso) : <span className="text-muted-foreground">Pendiente</span>}
                         </td>
                         <td className="px-2 py-3">
-                          <div className="flex items-center justify-end gap-0.5">
+                          <div className="flex justify-end gap-0.5">
                             {viaje.estado === 'Creado' ? (
                               <>
                                 {/* La remisión se imprime ANTES de salir: es el
@@ -906,11 +915,8 @@ export default function Viajes() {
               </table>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3 text-sm text-muted-foreground">
-              <p>
-                Mostrando <span className="font-semibold text-foreground">{num(viajesFiltrados.length)}</span> de{' '}
-                <span className="font-semibold text-foreground">{num(totalLista)}</span> viajes
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3 text-xs text-muted-foreground">
+              <p>Mostrando {num(viajesFiltrados.length)} de {num(totalLista)} viajes</p>
               {ultimaPagina > 1 && (
                 <div className="flex items-center gap-2">
                   <span>Página {pagina} de {ultimaPagina}</span>

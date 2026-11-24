@@ -1252,7 +1252,7 @@ export default function NuevoPredioWizard() {
         {predioNombre && (
           <>
             <div className="space-y-2">
-              <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Predio</h4>
+              <h4 className="text-sm font-semibold text-muted-foreground">Predio</h4>
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
                   <span className="text-sm">Nombre</span>
@@ -1284,7 +1284,7 @@ export default function NuevoPredioWizard() {
 
         {/* Resumen Detallado */}
         <div className="space-y-3">
-          <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Resumen Detallado</h4>
+          <h4 className="text-sm font-semibold text-muted-foreground">Resumen Detallado</h4>
           <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
             {lotes.map(lote => {
               const sublotesDelLote = sublotes.filter(s => s.loteId === lote.id);
@@ -1393,7 +1393,7 @@ export default function NuevoPredioWizard() {
             WebkitBackdropFilter: 'blur(2px)',
           }}
         >
-          <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card px-5 py-3 shadow-xl">
+          <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card px-5 py-3 shadow-md">
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             <span className="text-sm font-medium">
               {cargandoPredio
@@ -1427,7 +1427,7 @@ export default function NuevoPredioWizard() {
         <div className="min-w-0 space-y-8 lg:col-span-2">
 
           {/* Stepper horizontal — exacto al diseño del .zip */}
-          <Card className="border-border">
+          <Card>
             <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 {ETAPAS.map((e, idx) => {
@@ -1489,7 +1489,7 @@ export default function NuevoPredioWizard() {
 
           {/* ── Paso 1: Predio ──────────────────────────────────────── */}
           {etapa === 1 && (
-            <Card className="border-border">
+            <Card>
               <CardHeader>
                 <CardTitle>Información del Predio</CardTitle>
                 <p className="text-sm text-muted-foreground">
@@ -1548,7 +1548,7 @@ export default function NuevoPredioWizard() {
 
           {/* ── Paso 2: Lotes ───────────────────────────────────────── */}
           {etapa === 2 && (
-            <Card className="border-border">
+            <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
@@ -1557,7 +1557,7 @@ export default function NuevoPredioWizard() {
                       Hectáreas disponibles: {haDisponibles.toFixed(2)} ha
                     </p>
                   </div>
-                  <Button onClick={() => setShowFormLote(true)} className="gap-2">
+                  <Button onClick={() => setShowFormLote(true)} >
                     <Plus className="h-4 w-4" /> Agregar Lote
                   </Button>
                 </div>
@@ -1618,10 +1618,9 @@ export default function NuevoPredioWizard() {
                   </div>
                 ))}
                 {lotes.length === 0 && !showFormLote && (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <Grid3x3 className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                    <p>No hay lotes registrados</p>
-                    <p className="text-sm">Agrega tu primer lote para continuar</p>
+                  <div className="space-y-1 py-12 text-center">
+                    <h3 className="text-base font-semibold text-foreground">Todavía no hay lotes</h3>
+                    <p className="text-sm text-muted-foreground">Agrega el primero para continuar.</p>
                   </div>
                 )}
                 {showFormLote && (
@@ -1639,7 +1638,7 @@ export default function NuevoPredioWizard() {
 
           {/* ── Paso 3: Sublotes ────────────────────────────────────── */}
           {etapa === 3 && (
-            <Card className="border-border">
+            <Card>
               <CardHeader>
                 <CardTitle>Sublotes</CardTitle>
                 <p className="text-sm text-muted-foreground">
@@ -1656,7 +1655,7 @@ export default function NuevoPredioWizard() {
                           <h3 className="font-semibold text-lg">{lote.nombre}</h3>
                           <p className="text-sm text-muted-foreground">{subls.length} sublotes</p>
                         </div>
-                        <Button variant="outline" size="sm" onClick={() => setShowFormSublote(lote.id)} className="gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setShowFormSublote(lote.id)} >
                           <Plus className="h-4 w-4" />
                           Agregar Sublote
                         </Button>
@@ -1725,9 +1724,9 @@ export default function NuevoPredioWizard() {
                   );
                 })}
               {lotes.length === 0 && (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Trees className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                  <p>Primero debes crear al menos un lote</p>
+                <div className="space-y-1 py-12 text-center">
+                  <h3 className="text-base font-semibold text-foreground">Falta crear un lote</h3>
+                  <p className="text-sm text-muted-foreground">Vuelve al paso anterior y agrega al menos uno.</p>
                 </div>
               )}
               </CardContent>
@@ -1736,7 +1735,7 @@ export default function NuevoPredioWizard() {
 
           {/* ── Paso 4: Líneas (opcional) ───────────────────────────── */}
           {etapa === 4 && (
-            <Card className="border-border">
+            <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <CardTitle>Líneas</CardTitle>
@@ -1780,7 +1779,7 @@ export default function NuevoPredioWizard() {
                               agregarLinea(sub.id, 0);
                             }
                           }}
-                          className="gap-2"
+                          
                         >
                           <Plus className="h-4 w-4" />
                           Agregar Línea
@@ -1812,9 +1811,9 @@ export default function NuevoPredioWizard() {
                   );
                 })}
               {sublotes.length === 0 && (
-                <div className="text-center py-12 text-muted-foreground">
-                  <GitBranch className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                  <p>Primero debes crear sublotes</p>
+                <div className="space-y-1 py-12 text-center">
+                  <h3 className="text-base font-semibold text-foreground">Faltan los sublotes</h3>
+                  <p className="text-sm text-muted-foreground">Vuelve al paso anterior y agrega al menos uno.</p>
                 </div>
               )}
 
@@ -1829,7 +1828,7 @@ export default function NuevoPredioWizard() {
 
           {/* ── Paso 5: Palmas ──────────────────────────────────────── */}
           {etapa === 5 && (
-            <Card className="border-border">
+            <Card>
               <CardHeader>
                 <CardTitle>Registrar Palmas</CardTitle>
               </CardHeader>
@@ -1876,7 +1875,7 @@ export default function NuevoPredioWizard() {
                                 [lineaField]: '',
                               }));
                             }}
-                            className="gap-1 bg-success hover:bg-success/90 text-primary hover:text-primary"
+                            className="bg-success hover:bg-success/90 text-primary hover:text-primary"
                           >
                             <Plus className="h-3.5 w-3.5" />
                             Agregar Palmas
@@ -1918,16 +1917,19 @@ export default function NuevoPredioWizard() {
                           </div>
                           <div className="space-y-2">
                             <Label className="text-sm" htmlFor="nuevopredi-linea">Línea</Label>
-                            <select id="nuevopredi-linea"
+                            <Select
                               value={lineaSel}
-                              onChange={e => setCantPalmasForm(prev => ({ ...prev, [lineaField]: e.target.value }))}
-                              className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                              onValueChange={valor => setCantPalmasForm(prev => ({ ...prev, [lineaField]: valor }))}
                             >
-                              <option value="">Seleccionar línea...</option>
-                              {linSub.map(ln => (
-                                <option key={ln.id} value={ln.id}>Línea {ln.numero}</option>
-                              ))}
-                            </select>
+                              <SelectTrigger id="nuevopredi-linea">
+                                <SelectValue placeholder="Seleccionar línea" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {linSub.map(ln => (
+                                  <SelectItem key={ln.id} value={String(ln.id)}>Línea {ln.numero}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                           <div className="flex gap-2">
                             <Button
@@ -2050,7 +2052,7 @@ export default function NuevoPredioWizard() {
                                         <Button
                                           variant="outline"
                                           size="sm"
-                                          className="w-full mt-2 gap-2"
+                                          className="w-full mt-2"
                                           onClick={() => cargarWizardPalmas(
                                             key,
                                             { sublote_id: Number(sub.id), linea_id: Number(ln.id) },
@@ -2143,18 +2145,21 @@ export default function NuevoPredioWizard() {
                               {linSub.length > 0 && (
                                 <div className="space-y-2">
                                   <Label htmlFor="nuevopredi-linea-selecciona">Línea (selecciona)</Label>
-                                  <select id="nuevopredi-linea-selecciona"
-                                    className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                  <Select
                                     value={cantPalmasForm[`linea_${sub.id}`] ?? ''}
-                                    onChange={e => setCantPalmasForm(prev => ({ ...prev, [`linea_${sub.id}`]: e.target.value }))}
+                                    onValueChange={valor => setCantPalmasForm(prev => ({ ...prev, [`linea_${sub.id}`]: valor }))}
                                   >
-                                    <option value="">Selecciona una línea</option>
-                                    {lineasDisponibles.map(linea => (
-                                      <option key={linea.id} value={linea.id}>
-                                        Línea {linea.numero}
-                                      </option>
-                                    ))}
-                                  </select>
+                                    <SelectTrigger id="nuevopredi-linea-selecciona">
+                                      <SelectValue placeholder="Selecciona una línea" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {lineasDisponibles.map(linea => (
+                                        <SelectItem key={linea.id} value={String(linea.id)}>
+                                          Línea {linea.numero}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
                                 </div>
                               )}
                               <div className="flex gap-2">
@@ -2299,9 +2304,9 @@ export default function NuevoPredioWizard() {
                   );
                 })}
               {sublotes.length === 0 && (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Leaf className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                  <p>Primero debes crear sublotes</p>
+                <div className="space-y-1 py-12 text-center">
+                  <h3 className="text-base font-semibold text-foreground">Faltan los sublotes</h3>
+                  <p className="text-sm text-muted-foreground">Vuelve al paso anterior y agrega al menos uno.</p>
                 </div>
               )}
               </CardContent>
@@ -2311,7 +2316,7 @@ export default function NuevoPredioWizard() {
           {/* ── Navegación ─────────────────────────────────────────── */}
           <div className="barra-acciones flex items-center justify-between">
             <Button variant="outline" onClick={() => setEtapa(e => Math.max(1, e - 1))}
-              disabled={etapa === 1} className="gap-2">
+              disabled={etapa === 1} >
               <ArrowLeft className="h-4 w-4" /> Anterior
             </Button>
             <div className="flex gap-2">
@@ -2321,13 +2326,13 @@ export default function NuevoPredioWizard() {
               {editId && (
                 <>
                   <Button onClick={() => guardarTodo(false)} disabled={guardando}
-                    variant="outline" className="gap-2">
+                    variant="outline" >
                     {guardando
                       ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando...</>
                       : <><Save className="h-4 w-4" />Guardar cambios</>}
                   </Button>
                   <Button onClick={() => guardarTodo(true)} disabled={guardando}
-                    className="gap-2 bg-success hover:bg-success/90">
+                    className="bg-success hover:bg-success/90">
                     {guardando
                       ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando...</>
                       : <><Check className="h-4 w-4" />Finalizar</>}
@@ -2336,7 +2341,7 @@ export default function NuevoPredioWizard() {
               )}
               {etapa < ETAPAS.length ? (
                 <Button onClick={siguienteEtapa}
-                  disabled={!puedeSiguiente || avanzando} className="gap-2">
+                  disabled={!puedeSiguiente || avanzando} >
                   {avanzando
                     ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando...</>
                     : <>Siguiente <ArrowRight className="h-4 w-4" /></>}
@@ -2344,7 +2349,7 @@ export default function NuevoPredioWizard() {
               ) : (
                 // En modo creación: el botón final crea la plantación.
                 !editId && (
-                  <Button onClick={() => guardarTodo(false)} disabled={guardando} className="gap-2">
+                  <Button onClick={() => guardarTodo(false)} disabled={guardando} >
                     {guardando
                       ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando...</>
                       : <><Save className="h-4 w-4" />Guardar Plantación</>}
@@ -2358,7 +2363,7 @@ export default function NuevoPredioWizard() {
         {/* ── Columna derecha: panel resumen ─────────────────────── */}
         <div className="lg:col-span-1">
           <div className="sticky top-8">
-            <Card className="border-border">
+            <Card>
               <CardHeader className="border-b border-border">
                 <CardTitle>Resumen</CardTitle>
               </CardHeader>

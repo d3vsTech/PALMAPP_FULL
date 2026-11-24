@@ -111,9 +111,9 @@ const FILAS_EJEMPLO = [
 const VENCIMIENTO_BADGE: Record<string, string> = {
   VENCIDA: 'bg-destructive/10 text-destructive border-destructive/30',
   URGENTE:
-    'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/30',
+    'bg-warning-soft text-warning border-warning/20',
   PROXIMA:
-    'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/30',
+    'bg-warning-soft text-warning border-warning/20',
   CON_TIEMPO: 'bg-success/10 text-success border-success/30',
   AL_DIA: 'bg-muted text-muted-foreground border-border',
 };
@@ -251,7 +251,7 @@ export default function CargaHistoricoVacacionesArchivo() {
           variant="ghost"
           size="sm"
           onClick={() => navigate('/liquidaciones?tab=vacaciones')}
-          className="gap-2"
+          
         >
           <ArrowLeft className="h-4 w-4" />
           Volver a Liquidaciones
@@ -348,7 +348,7 @@ export default function CargaHistoricoVacacionesArchivo() {
         {/* Sin calendario de un año el sistema no puede derivar ni comparar
             días: conviene decirlo antes de que el usuario vea los errores. */}
         {(analisis?.parametros.anios_sin_calendario.length ?? 0) > 0 && (
-          <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/30 dark:bg-amber-950/30 dark:text-amber-400">
+          <p className="flex items-start gap-2 rounded-lg border border-warning/20 bg-warning-soft p-3 text-sm text-warning">
             <Info className="mt-0.5 h-4 w-4 shrink-0" />
             No hay calendario de festivos de{' '}
             {analisis!.parametros.anios_sin_calendario.join(', ')}. Las filas que traigan fecha
@@ -375,7 +375,7 @@ export default function CargaHistoricoVacacionesArchivo() {
               </div>
               <div className="rounded-lg border border-border p-3">
                 <p className="text-xs text-muted-foreground">Reemplazan</p>
-                <p className="text-2xl font-bold text-amber-600">{resumen.a_sobrescribir}</p>
+                <p className="text-2xl font-bold text-warning">{resumen.a_sobrescribir}</p>
               </div>
               <div className="rounded-lg border border-border p-3">
                 <p className="text-xs text-muted-foreground">Con error</p>
@@ -410,7 +410,7 @@ export default function CargaHistoricoVacacionesArchivo() {
             ))}
 
             {hayYaCargados && (
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/30 dark:bg-amber-950/30">
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-warning/20 bg-warning-soft p-4">
                 <Checkbox
                   checked={sobrescribir}
                   onCheckedChange={(v) => cambiarSobrescribir(v === true)}
@@ -461,7 +461,7 @@ export default function CargaHistoricoVacacionesArchivo() {
                 <Button
                   onClick={() => void cargar()}
                   disabled={!listoParaCargar || !puedeCargar}
-                  className="gap-2"
+                  
                 >
                   {cargando ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -478,7 +478,7 @@ export default function CargaHistoricoVacacionesArchivo() {
 
       {/* Las mismas reglas que trae la hoja de instrucciones de la plantilla,
           aquí donde se leen antes de subir el archivo. */}
-      <Card className="border-border">
+      <Card>
         <CardHeader className="border-b">
           <CardTitle className="text-base">Cómo llenar el archivo</CardTitle>
         </CardHeader>
@@ -556,7 +556,7 @@ export default function CargaHistoricoVacacionesArchivo() {
               variant="outline"
               size="sm"
               onClick={() => navigate('/liquidaciones/vacaciones/carga-historico/manual')}
-              className="gap-2"
+              
             >
               Registrar una vacación
               <ArrowRight className="h-4 w-4" />
@@ -744,7 +744,7 @@ function PeriodosImputados({ saldo }: { saldo: SaldoFila | null }) {
         </div>
       ))}
       {sinSaldo > 0 && (
-        <p className="text-xs text-amber-600">{fmtDias(sinSaldo)} d sin saldo causado</p>
+        <p className="text-xs text-warning">{fmtDias(sinSaldo)} d sin saldo causado</p>
       )}
     </div>
   );
@@ -828,7 +828,7 @@ function PanelSaldos({
                         {c.advertencias.map((a, i) => (
                           <li
                             key={`${a.code}-${i}`}
-                            className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400"
+                            className="flex items-start gap-2 text-xs text-warning"
                           >
                             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                             <span>

@@ -260,7 +260,7 @@ export function TablaColaboradores({
                           onSeleccionar(c.id);
                           setCambiando(false);
                         }}
-                        className="gap-1.5"
+                        
                       >
                         {cargandoId === c.id ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -294,7 +294,7 @@ export function TablaColaboradores({
                 variant="outline"
                 disabled={pagina <= 1 || cargando}
                 onClick={() => setPagina((p) => Math.max(1, p - 1))}
-                className="gap-1"
+                
               >
                 <ChevronLeft className="h-4 w-4" />
                 Anterior
@@ -308,7 +308,7 @@ export function TablaColaboradores({
                 variant="outline"
                 disabled={pagina >= ultimaPagina || cargando}
                 onClick={() => setPagina((p) => p + 1)}
-                className="gap-1"
+                
               >
                 Siguiente
                 <ChevronRight className="h-4 w-4" />

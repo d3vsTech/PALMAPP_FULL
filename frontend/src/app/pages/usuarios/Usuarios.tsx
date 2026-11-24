@@ -111,7 +111,11 @@ export default function Usuarios() {
       <AlertDialog open={alertDialog} onOpenChange={setAlertDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {usuarioToggle?.accion === 'desactivar' && '¿Desactivar el usuario?'}
+              {usuarioToggle?.accion === 'activar' && '¿Reactivar el usuario?'}
+              {usuarioToggle?.accion === 'eliminar' && '¿Eliminar el usuario?'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {usuarioToggle?.accion === 'desactivar' && (
                 <span>Esto marcará a <strong>{usuarioToggle.nombre}</strong> como inactivo. El usuario no podrá acceder al sistema.</span>
@@ -151,8 +155,8 @@ export default function Usuarios() {
             { label: 'Usuarios Activos', value: resumen.activos, sub: 'activos' },
             { label: 'Usuarios Inactivos', value: resumen.inactivos, sub: 'inactivos' },
           ].map(({ label, value, sub }) => (
-            <Card key={label} className="border-border hover:shadow-lg transition duration-300">
-              <CardContent className="p-6">
+            <Card key={label} className="transition-colors">
+              <CardContent>
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                   <div className="flex-1">
                     <p className="text-sm text-muted-foreground mb-2">{label}</p>
@@ -180,7 +184,7 @@ export default function Usuarios() {
             <Input type="text" placeholder="Buscar por nombre, email o rol..."
               value={busqueda} onChange={e => setBusqueda(e.target.value)} className="pl-10" />
           </div>
-          <Button onClick={() => navigate('/usuarios/nuevo')} className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
+          <Button onClick={() => navigate('/usuarios/nuevo')}>
             <Plus className="h-5 w-5" /> Nuevo Usuario
           </Button>
         </div>
@@ -190,7 +194,7 @@ export default function Usuarios() {
             <Loader2 className="w-5 h-5 animate-spin" /> Cargando usuarios...
           </div>
         ) : usuariosFiltrados.length > 0 ? (
-          <Card className="overflow-hidden border-border">
+          <Card className="overflow-hidden">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -231,7 +235,7 @@ export default function Usuarios() {
                               <Edit className="h-4 w-4" />
                             </Button>
                             <Button size="sm" variant="outline" onClick={() => navigate(`/usuarios/permisos/${u.id}`)}
-                              className="hover:bg-blue-500/10 hover:text-blue-600 hover:border-blue-500"
+                              className="hover:bg-info-soft hover:text-info hover:border-info/40"
                               title={u.is_admin ? 'Permisos (Administrador de la finca)' : 'Permisos'}>
                               <Shield className="h-4 w-4" />
                             </Button>
@@ -253,7 +257,7 @@ export default function Usuarios() {
             </CardContent>
           </Card>
         ) : (
-          <Card className="bg-gradient-to-br from-muted/20 to-muted/5 border-dashed border-2">
+          <Card className="border-2 border-dashed bg-muted/30">
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Users className="h-16 w-16 text-muted-foreground mb-4" />
               <p className="text-lg font-semibold mb-2">No se encontraron usuarios</p>
@@ -261,7 +265,7 @@ export default function Usuarios() {
                 {busqueda ? 'Intenta con otros términos de búsqueda' : 'Comienza agregando tu primer usuario'}
               </p>
               {!busqueda && (
-                <Button onClick={() => navigate('/usuarios/nuevo')} className="gap-2 bg-primary hover:bg-primary/90">
+                <Button onClick={() => navigate('/usuarios/nuevo')}>
                   <Plus className="h-4 w-4" /> Nuevo Usuario
                 </Button>
               )}

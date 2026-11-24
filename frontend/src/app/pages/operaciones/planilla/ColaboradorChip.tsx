@@ -26,7 +26,7 @@ export function ColaboradorChip({ col }: { col: ColaboradorWizard }) {
       variant="outline"
       className={`text-xs ${
         col.terceroNombre
-          ? 'bg-orange-50 text-orange-800 border-orange-300'
+          ? 'bg-warning-soft text-warning border-warning/20'
           : esFijo
             ? 'bg-muted/60 text-muted-foreground border-border'
             : ''
@@ -50,22 +50,22 @@ export function ColaboradorChip({ col }: { col: ColaboradorWizard }) {
           reabrir una planilla vieja después de capturar un retiro. Se marca
           en vez de esconderse: la tarjeta tiene que decir quién trabajó. */}
       {col.noVinculado && (
-        <span className="ml-1.5 rounded bg-destructive/15 px-1 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-destructive">
+        <span className="ml-1.5 rounded bg-destructive/15 px-1 py-[1px] text-[9px] font-semibold text-destructive">
           Sin contrato
         </span>
       )}
       {col.enVacaciones && (
-        <span className="ml-1.5 rounded bg-warning-soft px-1 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-warning">
+        <span className="ml-1.5 rounded bg-warning-soft px-1 py-[1px] text-[9px] font-semibold text-warning">
           Vacaciones
         </span>
       )}
       {!col.enVacaciones && col.novedadVigente && (
-        <span className="ml-1.5 rounded bg-warning-soft px-1 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-warning">
+        <span className="ml-1.5 rounded bg-warning-soft px-1 py-[1px] text-[9px] font-semibold text-warning">
           {col.novedadVigente.fuente === 'TERMINACION' ? 'Retirado' : 'Novedad'}
         </span>
       )}
       {col.terceroNombre && (
-        <span className="ml-1.5 rounded bg-info-soft px-1 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-info">
+        <span className="ml-1.5 rounded bg-info-soft px-1 py-[1px] text-[9px] font-semibold text-info">
           {col.terceroNombre}
         </span>
       )}

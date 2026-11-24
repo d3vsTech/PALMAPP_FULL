@@ -26,10 +26,10 @@ const NOTA_RECIBO =
   'Este documento certifica el pago relacionado y el saldo pendiente a la fecha de su emisión. ' +
   'Conserve este comprobante.';
 
-/** Pesos colombianos, con punto de miles y sin decimales. */
+/** Pesos colombianos con punto de miles. No redondea: un recibo cuadra al peso. */
 function cop(v: number | string | null | undefined): string {
   const n = typeof v === 'number' ? v : parseFloat(String(v ?? 0)) || 0;
-  return `$${Math.round(n).toLocaleString('es-CO')}`;
+  return `$${n.toLocaleString('es-CO', { maximumFractionDigits: 2 })}`;
 }
 
 function primerNombre(p: Prestamo): string {

@@ -226,8 +226,8 @@ export function EntidadesBancariasTab() {
       </Dialog>
 
       <TabLoadingGate loading={loading} message="Cargando entidades bancarias…">
-      <Card className="overflow-hidden border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b bg-muted/40">
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Entidades Bancarias</CardTitle>
@@ -239,7 +239,7 @@ export function EntidadesBancariasTab() {
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent>
           <div className="space-y-3">
             {[...entidades].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((entidad) => (
               <div

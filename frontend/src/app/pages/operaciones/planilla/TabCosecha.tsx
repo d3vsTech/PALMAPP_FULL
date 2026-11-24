@@ -69,7 +69,7 @@ export function TabCosecha({
   return (
     <>
                       <div className="flex justify-end">
-                        <Button onClick={agregarCosecha} className="gap-2" disabled={cosechaEnEdicion !== null}>
+                        <Button onClick={agregarCosecha}  disabled={cosechaEnEdicion !== null}>
                           <Plus className="h-4 w-4" />
                           Agregar cosecha
                         </Button>
@@ -104,7 +104,7 @@ export function TabCosecha({
                                             {col.nombres} {col.apellidos}
                                             {col.terceroNombre && (
                                               <span
-                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle"
+                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-warning-soft text-warning border border-warning/20 font-medium align-middle"
                                                 title={`Operario del tercero ${col.terceroNombre}`}
                                               >
                                                 Tercero · {col.terceroNombre}
@@ -194,7 +194,7 @@ export function TabCosecha({
                               <Button variant="outline" onClick={cancelarCosecha} type="button">
                                 Cancelar
                               </Button>
-                              <Button onClick={guardarCosecha} className="gap-2" type="button">
+                              <Button onClick={guardarCosecha}  type="button">
                                 <Save className="h-4 w-4" />
                                 Guardar
                               </Button>

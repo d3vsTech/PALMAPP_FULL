@@ -274,7 +274,7 @@ export default function PedidoDetalleProveedor() {
             variant="outline"
             onClick={descargarFactura}
             disabled={descargandoFactura}
-            className="gap-2"
+            
           >
             {descargandoFactura ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
             Factura PDF
@@ -443,7 +443,7 @@ export default function PedidoDetalleProveedor() {
                           </div>
                         </div>
                         {pedido.estado_pago === 'pendiente' && (
-                          <Button size="sm" onClick={() => setModalPago(true)} className="gap-2">
+                          <Button size="sm" onClick={() => setModalPago(true)} >
                             <CheckCircle className="h-4 w-4" />
                             Marcar como pagado
                           </Button>
@@ -550,7 +550,7 @@ export default function PedidoDetalleProveedor() {
                     <CardTitle>Acciones</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <Button className="w-full gap-2" onClick={abrirModalCambiarEstado}>
+                    <Button className="w-full" onClick={abrirModalCambiarEstado}>
                       <Edit className="h-4 w-4" />
                       Cambiar Estado
                     </Button>

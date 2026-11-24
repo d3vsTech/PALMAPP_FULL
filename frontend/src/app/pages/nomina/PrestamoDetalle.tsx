@@ -313,7 +313,7 @@ Descarga el PDF: ${res.data.url}`;
 
       {/* Header */}
       <div>
-        <Button variant="ghost" size="sm" asChild className="mb-4 gap-2">
+        <Button variant="ghost" size="sm" asChild className="mb-4">
           <Link to="/nomina/prestamos">
             <ArrowLeft className="h-4 w-4" />
             Volver a Préstamos
@@ -339,7 +339,7 @@ Descarga el PDF: ${res.data.url}`;
                 variant="outline"
                 onClick={() => void descargarComprobante()}
                 disabled={descargandoComprobante}
-                className="gap-2 border-primary/40 text-primary hover:border-primary hover:bg-primary/5"
+                className="border-primary/40 text-primary hover:border-primary hover:bg-primary/5"
               >
                 {descargandoComprobante
                   ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -350,7 +350,7 @@ Descarga el PDF: ${res.data.url}`;
                 variant="outline"
                 onClick={() => void compartirComprobante()}
                 disabled={compartiendo}
-                className="gap-2"
+                
               >
                 {compartiendo
                   ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -362,7 +362,7 @@ Descarga el PDF: ${res.data.url}`;
               <Button
                 variant="outline"
                 onClick={() => setConfirmarCancelar(true)}
-                className="gap-2 text-destructive hover:bg-destructive/10 hover:border-destructive/50"
+                className="text-destructive hover:bg-destructive/10 hover:border-destructive/50"
               >
                 <Trash2 className="h-4 w-4" />
                 Cancelar préstamo
@@ -374,7 +374,7 @@ Descarga el PDF: ${res.data.url}`;
 
       {/* KPIs */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="border-border">
+        <Card>
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <div>
@@ -402,7 +402,7 @@ Descarga el PDF: ${res.data.url}`;
             </div>
           </CardContent>
         </Card>
-        <Card className="border-border">
+        <Card>
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <div>
@@ -418,7 +418,7 @@ Descarga el PDF: ${res.data.url}`;
             </div>
           </CardContent>
         </Card>
-        <Card className="border-border">
+        <Card>
           <CardContent className="p-5">
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-1">Avance</p>
@@ -438,13 +438,13 @@ Descarga el PDF: ${res.data.url}`;
       </div>
 
       {/* Formulario editable — concepto y observaciones siempre editables */}
-      <Card className="border-border">
+      <Card>
         <CardHeader>
           <CardTitle>Editar información</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {prestamo.cuotas_pagadas > 0 && (
-            <div className="rounded-lg border border-amber-400/40 bg-amber-50/60 dark:bg-amber-950/20 p-3 text-sm">
+            <div className="rounded-lg border border-warning/20 bg-warning-soft p-3 text-sm">
               Este préstamo ya tiene <strong>{prestamo.cuotas_pagadas} cuota(s) aplicada(s)</strong>.
               Solo puedes editar concepto y observaciones. Cambiar el valor total o el número de cuotas
               requiere cancelar el préstamo y crear uno nuevo.
@@ -560,7 +560,6 @@ Descarga el PDF: ${res.data.url}`;
             <Button
               onClick={guardarEdicion}
               disabled={guardando || !editConcepto.trim()}
-              className="gap-2 bg-primary hover:bg-primary/90"
             >
               {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Guardar cambios
@@ -578,7 +577,7 @@ Descarga el PDF: ${res.data.url}`;
       />
 
       {/* Calendario de cuotas */}
-      <Card className="overflow-hidden border-border">
+      <Card className="overflow-hidden">
         <CardHeader>
           <CardTitle>Calendario de cuotas</CardTitle>
           <p className="text-sm text-muted-foreground">
@@ -626,7 +625,7 @@ Descarga el PDF: ${res.data.url}`;
                             className={`text-xs ${
                               aplicada
                                 ? 'bg-success/10 text-success border-success/20'
-                                : 'bg-amber-500/10 text-amber-700 border-amber-300'
+                                : 'bg-warning-soft text-warning border-warning/20'
                             }`}
                           >
                             {aplicada ? (

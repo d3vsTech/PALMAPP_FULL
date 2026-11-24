@@ -91,20 +91,20 @@ export default function VacacionesTab() {
 
       {/* ── Solicitudes por resolver (PR-N4) ──────────────────────────────── */}
       {solicitudes.length > 0 && (
-        <div className="rounded-xl border border-orange-200 bg-orange-50/60 p-4 dark:border-orange-900 dark:bg-orange-950/20">
+        <div className="rounded-xl border border-warning/20 bg-warning-soft p-4">
           <div className="flex items-start gap-3">
-            <Inbox className="mt-0.5 h-5 w-5 shrink-0 text-orange-700 dark:text-orange-400" />
+            <Inbox className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
             <div className="min-w-0 flex-1 space-y-2">
-              <p className="font-semibold text-orange-800 dark:text-orange-300">
+              <p className="font-semibold text-warning">
                 {solicitudes.length} solicitud{solicitudes.length !== 1 ? 'es' : ''} de vacaciones por resolver
               </p>
-              <p className="text-sm text-orange-700 dark:text-orange-400">
+              <p className="text-sm text-warning">
                 Se pidieron desde Novedades. Liquidarlas es aprobarlas; mientras no se resuelvan,
                 la nómina del período paga esos días como trabajados.
               </p>
               <div className="space-y-1">
                 {solicitudes.map((s) => (
-                  <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-orange-200/60 bg-background/60 px-3 py-2 dark:border-orange-900/60">
+                  <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/20 bg-background/60 px-3 py-2">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-foreground">
                         {s.empleado.nombre_completo}
@@ -119,7 +119,7 @@ export default function VacacionesTab() {
                         size="sm"
                         variant="outline"
                         onClick={() => setARechazar(s)}
-                        className="gap-1.5 bg-background hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
+                        className="bg-background hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
                       >
                         <X className="h-3.5 w-3.5" />
                         Rechazar
@@ -127,7 +127,7 @@ export default function VacacionesTab() {
                       <Button
                         size="sm"
                         onClick={() => navigate(`/liquidaciones/vacaciones/nueva?solicitud=${s.id}`)}
-                        className="gap-1.5 bg-success hover:bg-success/90"
+                        className="bg-success hover:bg-success/90"
                       >
                         Liquidar
                       </Button>
@@ -174,7 +174,7 @@ export default function VacacionesTab() {
           </p>
         )}
 
-        <Card className="overflow-hidden glass-subtle border-border">
+        <Card className="glass-subtle overflow-hidden">
           <CardContent className="p-0">
             {cargando ? (
               <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
@@ -230,7 +230,7 @@ export default function VacacionesTab() {
                               <span className="text-sm text-muted-foreground">—</span>
                             ) : (
                               <div className="flex flex-col items-center">
-                                <span className="text-sm font-bold text-amber-600">
+                                <span className="text-sm font-bold text-warning">
                                   {fmtDias(f.dias_disponibles_exigibles)}
                                 </span>
                                 {f.dias_causados_periodo_actual > 0 && (

@@ -191,7 +191,7 @@ export function Paso1({ data, onChange }: { data: Partial<EmpresaTercero>; onCha
   const esNatural = data.tipoPersona === 'Natural';
 
   return (
-    <Card className="border-border">
+    <Card>
       <CardHeader className="border-b">
         <div className="flex items-center gap-3">
           <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -279,7 +279,7 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
   };
 
   return (
-    <Card className="overflow-hidden border-border">
+    <Card className="overflow-hidden">
       <CardHeader className="border-b">
         <div className="flex items-center gap-3">
           <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -291,11 +291,11 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
           </div>
         </div>
       </CardHeader>
-      <CardContent className="p-6">
+      <CardContent>
         <Accordion type="multiple" defaultValue={['cosecha']} className="space-y-3">
           <AccordionItem value="cosecha" className="border-0">
-            <Card className="overflow-hidden border-border">
-              <CardHeader className="border-b bg-gradient-to-r from-green-50/50 to-green-50/10 dark:from-green-950/20 py-3 px-4">
+            <Card className="overflow-hidden">
+              <CardHeader className="border-b bg-success-soft px-4 py-3">
                 <AccordionTrigger className="hover:no-underline py-0">
                   <div className="text-left">
                     <p className="font-semibold text-sm">Cosecha</p>
@@ -340,8 +340,8 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
           </AccordionItem>
 
           <AccordionItem value="abonada" className="border-0">
-            <Card className="overflow-hidden border-border">
-              <CardHeader className="border-b bg-gradient-to-r from-emerald-50/50 to-emerald-50/10 dark:from-emerald-950/20 py-3 px-4">
+            <Card className="overflow-hidden">
+              <CardHeader className="border-b bg-success-soft px-4 py-3">
                 <AccordionTrigger className="hover:no-underline py-0">
                   <div className="text-left">
                     <p className="font-semibold text-sm">Abonada</p>
@@ -352,7 +352,7 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
               <AccordionContent>
                 <CardContent className="p-3 space-y-2">
                   <div className="flex justify-end">
-                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={agregarRango}>
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={agregarRango}>
                       <Plus className="h-3 w-3" /> Agregar Rango
                     </Button>
                   </div>
@@ -392,7 +392,7 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
 
             return (
               <AccordionItem key={labor.laborId} value={`palma-${labor.laborId}`} className="border-0">
-                <Card className="overflow-hidden border-border">
+                <Card className="overflow-hidden">
                   <CardHeader className="border-b bg-muted/40">
                     <AccordionTrigger className="hover:no-underline py-0">
                       <div className="text-left">
@@ -499,8 +499,8 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
               no tiene ninguna, este bloque no se renderiza. */}
           {precios.finca.length > 0 && (
             <AccordionItem value="finca" className="border-0">
-              <Card className="overflow-hidden border-border">
-                <CardHeader className="border-b bg-gradient-to-r from-cyan-50/50 to-cyan-50/10 dark:from-cyan-950/20 py-3 px-4">
+              <Card className="overflow-hidden">
+                <CardHeader className="border-b bg-info-soft px-4 py-3">
                   <AccordionTrigger className="hover:no-underline py-0">
                     <div className="text-left">
                       <p className="font-semibold text-sm">Labores de Finca</p>
@@ -572,7 +572,7 @@ export function Paso3({
   };
 
   return (
-    <Card className="border-border">
+    <Card>
       <CardHeader className="border-b">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -585,7 +585,7 @@ export function Paso3({
             </div>
           </div>
           {!agregando && (
-            <Button variant="outline" className="gap-2" onClick={() => setAgregando(true)}>
+            <Button variant="outline"  onClick={() => setAgregando(true)}>
               <UserPlus className="h-4 w-4" /> Agregar Operario
             </Button>
           )}
@@ -659,7 +659,7 @@ export function Paso3({
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label className="flex items-center gap-1"><HardHat className="h-3.5 w-3.5 text-amber-600" /> ARL</Label>
+                <Label className="flex items-center gap-1"><HardHat className="h-3.5 w-3.5 text-warning" /> ARL</Label>
                 <Select
                   value={nuevo.arl ?? ''}
                   onValueChange={(v: string) => setNuevo((p: Partial<ColaboradorTercero>) => ({ ...p, arl: v }))}
@@ -674,7 +674,7 @@ export function Paso3({
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setAgregando(false)}>Cancelar</Button>
-              <Button className="bg-primary hover:bg-primary/90 gap-2" disabled={!nuevo.nombres || !nuevo.apellidos} onClick={agregar}>
+              <Button disabled={!nuevo.nombres || !nuevo.apellidos} onClick={agregar}>
                 <Plus className="h-4 w-4" /> Agregar
               </Button>
             </div>
@@ -983,8 +983,8 @@ export default function NuevoTerceroWizard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="min-w-0 space-y-6 lg:col-span-2">
           {/* Stepper */}
-          <Card className="border-border">
-            <CardContent className="p-6">
+          <Card>
+            <CardContent>
               <div className="flex items-center justify-between">
                 {STEPS.map((s, i) => (
                   <React.Fragment key={s.num}>
@@ -1031,20 +1031,20 @@ export default function NuevoTerceroWizard() {
 
           {/* Navegación */}
           <div className="barra-acciones flex items-center justify-between pt-2">
-            <Button variant="outline" className="gap-2"
+            <Button variant="outline" 
               onClick={() => paso === 1 ? navigate('/configuracion') : setPaso(p => p - 1)}
               disabled={guardando}>
               <ArrowLeft className="h-4 w-4" />
               {paso === 1 ? 'Cancelar' : 'Anterior'}
             </Button>
             {paso < 3 ? (
-              <Button className="gap-2 bg-primary hover:bg-primary/90"
+              <Button
                 disabled={!pasoValido || guardando}
                 onClick={() => setPaso(p => p + 1)}>
                 Siguiente <ArrowRight className="h-4 w-4" />
               </Button>
             ) : (
-              <Button className="gap-2 bg-primary hover:bg-primary/90"
+              <Button
                 onClick={handleGuardar}
                 disabled={guardando}>
                 <Save className="h-4 w-4" />
@@ -1056,14 +1056,14 @@ export default function NuevoTerceroWizard() {
 
         {/* Panel de resumen */}
         <div className="lg:col-span-1">
-          <Card className="sticky top-8 border-border">
+          <Card className="sticky top-8">
             <CardHeader className="border-b">
               <CardTitle className="text-base">Resumen</CardTitle>
             </CardHeader>
             <CardContent className="p-5 space-y-5">
               {/* Datos del tercero */}
               <div className="space-y-3 pb-4 border-b border-border">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Tercero</p>
+                <p className="text-[13px] font-medium text-muted-foreground">Tercero</p>
                 {datos.razonSocial ? (
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
@@ -1086,7 +1086,7 @@ export default function NuevoTerceroWizard() {
 
               {/* Precios configurados */}
               <div className="space-y-3 pb-4 border-b border-border">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Precios configurados</p>
+                <p className="text-[13px] font-medium text-muted-foreground">Precios configurados</p>
                 {totalPreciosConfigurados === 0 ? (
                   <p className="text-sm text-muted-foreground italic">Sin precios definidos</p>
                 ) : (
@@ -1117,7 +1117,7 @@ export default function NuevoTerceroWizard() {
 
               {/* Operarios */}
               <div className="space-y-3">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                <p className="text-[13px] font-medium text-muted-foreground">
                   Operarios ({operarios.length})
                 </p>
                 {operarios.length === 0 ? (

@@ -118,7 +118,7 @@ export default function VacacionesDetalle() {
   if (!comprobante || !item) {
     return (
       <div className="space-y-4">
-        <Button variant="ghost" size="sm" asChild className="gap-2">
+        <Button variant="ghost" size="sm" asChild>
           <Link to="/liquidaciones/vacaciones/historico"><ArrowLeft className="h-4 w-4" />Volver al histórico</Link>
         </Button>
         <p className="text-muted-foreground">Comprobante no encontrado.</p>
@@ -173,7 +173,7 @@ export default function VacacionesDetalle() {
   return (
     <div className="space-y-6">
       <div className="print:hidden">
-        <Button variant="ghost" size="sm" asChild className="gap-2">
+        <Button variant="ghost" size="sm" asChild>
           <Link to="/liquidaciones/vacaciones/historico"><ArrowLeft className="h-4 w-4" />Volver al histórico</Link>
         </Button>
       </div>
@@ -194,7 +194,7 @@ export default function VacacionesDetalle() {
               </Badge>
             )}
             {fueInterrumpida && interrupcion && (
-              <Badge variant="outline" className="border-amber-500/40 text-amber-700">
+              <Badge variant="outline" className="border-warning/20 text-warning">
                 Interrumpida el {formatFecha(interrupcion.fecha_reintegro)}
               </Badge>
             )}
@@ -209,7 +209,7 @@ export default function VacacionesDetalle() {
             variant="outline"
             onClick={() => void pedirPdf('imprimir')}
             disabled={descargando}
-            className="gap-2"
+            
           >
             <Printer className="h-4 w-4" />
             Imprimir
@@ -218,13 +218,13 @@ export default function VacacionesDetalle() {
             variant="outline"
             onClick={() => void pedirPdf('descargar')}
             disabled={descargando}
-            className="gap-2"
+            
           >
             {descargando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
             Descargar PDF
           </Button>
           {estado === 'APROBADA' && !esHistorico && (
-            <Button onClick={() => setPagoAbierto(true)} className="gap-2">
+            <Button onClick={() => setPagoAbierto(true)} >
               <Banknote className="h-4 w-4" />
               {/* En NOMINA el giro solo cubre lo que las nominas no pagaron. */}
               {porNomina ? 'Pagar el saldo' : 'Registrar pago'}
@@ -233,7 +233,7 @@ export default function VacacionesDetalle() {
           {/* El pago que completo una nomina cerrada no se devuelve desde
               aqui: hay que reabrir esa nomina (409 VACACION_PAGO_POR_NOMINA). */}
           {estado === 'PAGADA' && item.pago.metodo_pago !== 'NOMINA' && (
-            <Button variant="outline" onClick={() => setModoAnular('pago')} className="gap-2">
+            <Button variant="outline" onClick={() => setModoAnular('pago')} >
               <RotateCcw className="h-4 w-4" />
               Anular pago
             </Button>
@@ -242,7 +242,7 @@ export default function VacacionesDetalle() {
             <Button
               variant="outline"
               onClick={() => setInterrumpirAbierto(true)}
-              className="gap-2"
+              
             >
               <Scissors className="h-4 w-4" />
               Interrumpir disfrute
@@ -252,7 +252,7 @@ export default function VacacionesDetalle() {
             <Button
               variant="outline"
               onClick={() => setModoAnular('liquidacion')}
-              className="gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
             >
               <Ban className="h-4 w-4" />
               Anular
@@ -274,13 +274,13 @@ export default function VacacionesDetalle() {
 
       {/* ── Interrupción del disfrute (CST art. 188) ─────────────────────── */}
       {fueInterrumpida && interrupcion && (
-        <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-800/30 dark:bg-amber-950/20">
-          <p className="flex gap-2 font-medium text-amber-900 dark:text-amber-300">
+        <div className="space-y-2 rounded-xl border border-warning/20 bg-warning-soft px-4 py-3 text-sm">
+          <p className="flex gap-2 font-medium text-warning">
             <Scissors className="mt-0.5 h-4 w-4 shrink-0" />
             El disfrute terminó antes: volvió a trabajar el{' '}
             {formatFecha(interrupcion.fecha_reintegro)}
           </p>
-          <p className="text-amber-800 dark:text-amber-400">
+          <p className="text-warning">
             Vuelven {fmtDias(interrupcion.dias_devueltos)} día(s) hábil(es) al saldo
             {interrupcion.fechas_devueltas
               && ` (${formatFecha(interrupcion.fechas_devueltas.desde)} a ${formatFecha(interrupcion.fechas_devueltas.hasta)})`}
@@ -290,13 +290,13 @@ export default function VacacionesDetalle() {
             {fmtCOP(interrupcion.original.valor_total)}.
           </p>
           {interrupcion.motivo && (
-            <p className="text-amber-800 dark:text-amber-400">Motivo: {interrupcion.motivo}</p>
+            <p className="text-warning">Motivo: {interrupcion.motivo}</p>
           )}
           {/* El dinero pagado de más no se recupera solo: se descuenta en la
               nómina del reintegro (con autorización escrita) o se condona. */}
           {reintegro && reintegro.estado !== 'NO_APLICA' && (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-background/60 px-3 py-2">
-              <p className="text-amber-900 dark:text-amber-300">
+              <p className="text-warning">
                 {reintegroPendiente
                   ? `Reintegro pendiente: ${fmtCOP(reintegro.neto)} pagados por días no disfrutados `
                     + `(bruto ${fmtCOP(reintegro.bruto)}, aportes devueltos `
@@ -317,9 +317,9 @@ export default function VacacionesDetalle() {
 
       {/* ── Advertencias ─────────────────────────────────────────────────── */}
       {comprobante.advertencias.length > 0 && (
-        <div className="space-y-1 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-800/30 dark:bg-amber-950/20">
+        <div className="space-y-1 rounded-xl border border-warning/20 bg-warning-soft px-4 py-3 text-sm">
           {comprobante.advertencias.map((a, i) => (
-            <p key={`${a.code}-${i}`} className="flex gap-2 text-amber-800 dark:text-amber-400">
+            <p key={`${a.code}-${i}`} className="flex gap-2 text-warning">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               {a.mensaje ?? a.code}
             </p>
@@ -328,7 +328,7 @@ export default function VacacionesDetalle() {
       )}
 
       {/* ── Colaborador ──────────────────────────────────────────────────── */}
-      <Card className="border-border">
+      <Card>
         <CardContent className="p-5">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-sm font-bold text-primary">
@@ -347,7 +347,7 @@ export default function VacacionesDetalle() {
 
       {/* ── Rango de disfrute ────────────────────────────────────────────── */}
       {cal && (
-        <Card className="border-border">
+        <Card>
           <div className="flex items-center gap-2 border-b border-border bg-muted/20 px-5 py-3">
             <CalendarDays className="h-4 w-4 text-primary" />
             <p className="text-sm font-semibold">Rango de disfrute</p>
@@ -384,7 +384,7 @@ export default function VacacionesDetalle() {
       )}
 
       {/* ── Valores ──────────────────────────────────────────────────────── */}
-      <Card className="overflow-hidden border-border">
+      <Card className="overflow-hidden">
         <div className="border-b border-border bg-muted/20 px-5 py-3">
           <p className="text-sm font-semibold">Detalle de la liquidación</p>
         </div>
@@ -425,15 +425,15 @@ export default function VacacionesDetalle() {
           )}
 
           {res.dias_dinero > 0 && (
-            <div className="flex items-center justify-between border-b border-amber-100 bg-amber-50/60 px-5 py-3 dark:border-amber-900/20 dark:bg-amber-950/10">
+            <div className="flex items-center justify-between border-b border-warning/20 bg-warning-soft px-5 py-3">
               <div>
-                <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Días en dinero</p>
+                <p className="text-sm font-semibold text-warning">Días en dinero</p>
                 <p className="text-xs text-muted-foreground">
                   {fmtDias(res.dias_dinero)} días × {fmtCOP(res.valor_dia)}
                   {res.acuerdo_escrito ? ' · con acuerdo escrito' : ''}
                 </p>
               </div>
-              <p className="font-bold text-amber-700 dark:text-amber-400">{fmtCOP(res.valor_dinero)}</p>
+              <p className="font-bold text-warning">{fmtCOP(res.valor_dinero)}</p>
             </div>
           )}
 
@@ -493,7 +493,7 @@ export default function VacacionesDetalle() {
 
       {/* ── Períodos consumidos ──────────────────────────────────────────── */}
       {comprobante.periodos_afectados.length > 0 && (
-        <Card className="border-border">
+        <Card>
           <div className="border-b border-border bg-muted/20 px-5 py-3">
             <p className="text-sm font-semibold">Períodos de causación consumidos</p>
           </div>
@@ -516,7 +516,7 @@ export default function VacacionesDetalle() {
 
       {/* ── Seguridad social: informativa ────────────────────────────────── */}
       {comprobante.seguridad_social && (
-        <Card className="border-border">
+        <Card>
           <div className="flex items-center gap-2 border-b border-border bg-muted/20 px-5 py-3">
             <ShieldCheck className="h-4 w-4 text-primary" />
             <p className="text-sm font-semibold">Seguridad social</p>
@@ -545,7 +545,7 @@ export default function VacacionesDetalle() {
       )}
 
       {/* ── Pago ─────────────────────────────────────────────────────────── */}
-      <Card className="border-border">
+      <Card>
         <div className="flex items-center gap-2 border-b border-border bg-muted/20 px-5 py-3">
           <Banknote className="h-4 w-4 text-primary" />
           <p className="text-sm font-semibold">Pago</p>
@@ -651,7 +651,7 @@ export default function VacacionesDetalle() {
 
       {/* ── Método legal ─────────────────────────────────────────────────── */}
       {comprobante.metodo_liquidacion && (
-        <Card className="border-border">
+        <Card>
           <CardContent className="space-y-2 p-5">
             <p className="text-sm text-muted-foreground">{comprobante.metodo_liquidacion.texto}</p>
             {comprobante.metodo_liquidacion.normas.length > 0 && (
@@ -664,7 +664,7 @@ export default function VacacionesDetalle() {
       )}
 
       {comprobante.observacion && (
-        <Card className="border-border">
+        <Card>
           <CardContent className="p-5">
             <p className="text-xs text-muted-foreground">Observación</p>
             <p className="mt-1 text-sm text-foreground">{comprobante.observacion}</p>

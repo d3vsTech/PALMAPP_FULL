@@ -94,13 +94,13 @@ interface DeduccionLocal {
  *  resumen de trabajo. Cada tupla es [bg del header, text del título]. */
 type ColorCategoria = { bg: string; text: string };
 const COLOR_POR_LABOR: Record<string, ColorCategoria> = {
-  cosecha:       { bg: 'bg-amber-500/10',   text: 'text-amber-700' },
+  cosecha:       { bg: 'bg-warning-soft',   text: 'text-warning' },
   plateo:        { bg: 'bg-[#1E5631]/10',   text: 'text-[#1E5631]' },
   poda:          { bg: 'bg-[#1E5631]/10',   text: 'text-[#1E5631]' },
-  fertilizacion: { bg: 'bg-blue-500/10',    text: 'text-blue-700' },
-  sanidad:       { bg: 'bg-rose-500/10',    text: 'text-rose-700' },
-  otros:         { bg: 'bg-purple-500/10',  text: 'text-purple-700' },
-  finca:         { bg: 'bg-zinc-500/10',    text: 'text-zinc-700 dark:text-zinc-300' },
+  fertilizacion: { bg: 'bg-info-soft',    text: 'text-info' },
+  sanidad:       { bg: 'bg-destructive-soft',    text: 'text-destructive' },
+  otros:         { bg: 'bg-primary-soft',  text: 'text-primary' },
+  finca:         { bg: 'bg-muted',    text: 'text-foreground' },
 };
 
 const CATEGORIAS: { key: keyof Omit<ResumenTrabajo, 'total_general'>; titulo: string }[] = [
@@ -784,7 +784,7 @@ export default function LiquidarColaborador() {
           variant="ghost"
           size="sm"
           onClick={() => navigate(`/nomina/${nominaId}`)}
-          className="mb-4 gap-2"
+          className="mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver
@@ -800,11 +800,11 @@ export default function LiquidarColaborador() {
             <h1 className="text-2xl sm:text-3xl font-bold text-primary">{empleado.nombre_completo}</h1>
             <div className="flex items-center gap-2 mt-1 text-sm">
               {esOperario ? (
-                <Badge className="bg-amber-500/10 text-amber-700 border-amber-300 text-[10px] font-bold uppercase">
+                <Badge className="bg-warning-soft text-warning border-warning/20 text-[10px] font-bold uppercase">
                   Tercero{empleado.tercero ? ` · ${empleado.tercero.razon_social}` : ''}
                 </Badge>
               ) : (
-                <Badge className="bg-amber-500/10 text-amber-700 border-amber-300 text-[10px] font-bold uppercase">
+                <Badge className="bg-warning-soft text-warning border-warning/20 text-[10px] font-bold uppercase">
                   {empleado.salario_tipo}
                 </Badge>
               )}
@@ -819,7 +819,7 @@ export default function LiquidarColaborador() {
           Muestra los jornales agrupados por categoría (Cosecha, Poda, Plateo,
           Sanidad, etc.) con subtotales y total general del período. */}
       {empleado.salario_tipo === 'VARIABLE' && resumen && (
-        <Card className="overflow-hidden border-border">
+        <Card className="overflow-hidden">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-xl">
               <CalendarIcon className="h-6 w-6 text-primary" />
@@ -957,7 +957,7 @@ export default function LiquidarColaborador() {
                                   && f.racimos_verificados !== undefined
                                   && f.racimos_verificados !== f.racimos && (
                                   <span
-                                    className="text-amber-600 ml-1"
+                                    className="text-warning ml-1"
                                     title="Reconteo del viaje (lo que efectivamente paga)"
                                   >
                                     → {f.racimos_verificados}
@@ -1048,7 +1048,7 @@ export default function LiquidarColaborador() {
       )}
 
       {/* Desprendible — layout tipo mockup */}
-      <Card className="border-border">
+      <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-xl">
             <Calculator className="h-6 w-6 text-primary" />
@@ -1059,15 +1059,15 @@ export default function LiquidarColaborador() {
           {/* Grid: Nombre | Cédula | Días Trabajados */}
           <div className="grid gap-6 sm:grid-cols-3 p-4 bg-muted/30 rounded-lg">
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Nombre</p>
+              <p className="mb-1 text-[13px] font-medium text-muted-foreground">Nombre</p>
               <p className="font-semibold">{empleado.nombre_completo}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Cédula</p>
+              <p className="mb-1 text-[13px] font-medium text-muted-foreground">Cédula</p>
               <p className="font-semibold">{empleado.documento || '—'}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Días Trabajados</p>
+              <p className="mb-1 text-[13px] font-medium text-muted-foreground">Días Trabajados</p>
               {/* Dato calculado, no capturado: el backend lo deriva de las
                   planillas aprobadas, las novedades, los descansos perdidos y
                   las vacaciones (§9.1). Desde la regla de presencia del
@@ -1113,13 +1113,13 @@ export default function LiquidarColaborador() {
             const vacaciones = vacacionesRich?.total ?? 0;
             if (horasExtra === 0 && totalAusencias === 0 && vacaciones === 0) return null;
             return (
-              <div className="flex items-start gap-3 p-4 rounded-lg border border-amber-400/40 bg-amber-50/60 dark:bg-amber-950/20">
-                <TrendingDown className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="flex items-start gap-3 p-4 rounded-lg border border-warning/20 bg-warning-soft">
+                <TrendingDown className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
                 <div className="flex-1 text-sm">
-                  <p className="font-semibold text-amber-800 dark:text-amber-300">
+                  <p className="font-semibold text-warning">
                     Registros pendientes de aprobar
                   </p>
-                  <p className="text-amber-700 dark:text-amber-400 mt-1">
+                  <p className="text-warning mt-1">
                     Este colaborador tiene{' '}
                     {horasExtra > 0 && (
                       <strong>
@@ -1142,7 +1142,7 @@ export default function LiquidarColaborador() {
                     se aprueben desde la planilla correspondiente.
                   </p>
                   {vacaciones > 0 && (
-                    <p className="text-xs text-amber-700/90 dark:text-amber-400/90 mt-2">
+                    <p className="text-xs text-foreground mt-2">
                       {(vacacionesRich?.fechas?.length ?? 0) > 0 && (
                         <>Fechas: {vacacionesRich!.fechas!.join(', ')}. </>
                       )}
@@ -1152,7 +1152,7 @@ export default function LiquidarColaborador() {
                     </p>
                   )}
                   {ausenciasRich && (ausenciasRich.fechas?.length ?? 0) > 0 && (
-                    <p className="text-xs text-amber-700/90 dark:text-amber-400/90 mt-2">
+                    <p className="text-xs text-foreground mt-2">
                       Fechas: {ausenciasRich.fechas!.join(', ')}
                       {(ausenciasRich.impacto_estimado ?? 0) > 0 && (
                         <>
@@ -1174,21 +1174,21 @@ export default function LiquidarColaborador() {
               y convertirlas en incidentes hace que se pierda la señal). */}
           {preview.alertas_cosecha
             && (preview.alertas_cosecha.total_alta ?? 0) > 0 && (
-            <div className="rounded-lg border-2 border-orange-500/40 bg-orange-50/60 dark:bg-orange-950/20 p-4">
+            <div className="rounded-lg border-2 border-warning/20 bg-warning-soft p-4">
               <div className="flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 mt-0.5 text-orange-700 shrink-0" />
+                <AlertCircle className="h-5 w-5 mt-0.5 text-warning shrink-0" />
                 <div className="flex-1 space-y-2">
-                  <p className="text-sm font-semibold text-orange-900 dark:text-orange-200">
+                  <p className="text-sm font-semibold text-warning">
                     {preview.alertas_cosecha.total_gajos_pendientes_enviar} gajos sin despachar en {preview.alertas_cosecha.total_alta} cosecha{preview.alertas_cosecha.total_alta !== 1 ? 's' : ''}
                   </p>
-                  <p className="text-xs text-orange-800/80 dark:text-orange-200/80">
+                  <p className="text-xs text-foreground">
                     Esos gajos están reportados en la planilla pero no cargados a ningún camión, así que <strong>no se van a pagar en esta liquidación</strong>. Carga la fruta al camión y vuelve a liquidar para incluirlos.
                   </p>
                   <div className="space-y-1 pt-1">
                     {preview.alertas_cosecha.cosechas
                       .filter((c) => c.alerta_despacho === 'ALTA')
                       .map((c) => (
-                        <p key={c.cosecha_id} className="text-xs text-orange-900/90 dark:text-orange-100/90">
+                        <p key={c.cosecha_id} className="text-xs text-foreground">
                           • {c.fecha} · {c.lote}{c.sublote ? ` · ${c.sublote}` : ''}: se pagarán {c.gajos_asignados_a_viajes} de {c.gajos_reportados} gajos
                         </p>
                       ))}
@@ -1229,7 +1229,7 @@ export default function LiquidarColaborador() {
             </h3>
             <div className="rounded-lg border border-success/20 overflow-hidden bg-success/5">
               <div className="flex justify-between px-4 py-3 border-b border-success/10">
-                <span className="text-xs uppercase tracking-wide text-muted-foreground">Sueldo base</span>
+                <span className="text-[13px] font-medium text-muted-foreground">Sueldo base</span>
                 {/* El backend hoy manda `preview.salario_base` ya incluyendo
                     el recargo dominical/festivo dentro (contradice doc §9.2).
                     Para no duplicar en pantalla, mostramos el salario_base
@@ -1248,19 +1248,19 @@ export default function LiquidarColaborador() {
               </div>
               {(preview.total_jornales > 0 && empleado.salario_tipo !== 'FIJO') && (
                 <div className="flex justify-between px-4 py-3 border-b border-success/10">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">Jornales</span>
+                  <span className="text-[13px] font-medium text-muted-foreground">Jornales</span>
                   <span className="font-semibold">${preview.total_jornales.toLocaleString('es-CO')}</span>
                 </div>
               )}
               {preview.total_cosecha > 0 && (
                 <div className="flex justify-between px-4 py-3 border-b border-success/10">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">Cosecha</span>
+                  <span className="text-[13px] font-medium text-muted-foreground">Cosecha</span>
                   <span className="font-semibold">${preview.total_cosecha.toLocaleString('es-CO')}</span>
                 </div>
               )}
               {(preview.total_horas_extra ?? 0) > 0 && (
                 <div className="flex justify-between px-4 py-3 border-b border-success/10">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                  <span className="text-[13px] font-medium text-muted-foreground">
                     Horas extra
                     {(preview.detalle_horas_extra?.length ?? 0) > 0 && (
                       <span className="ml-2 normal-case tracking-normal text-muted-foreground/80">
@@ -1277,7 +1277,7 @@ export default function LiquidarColaborador() {
               )}
               {(preview.total_recargos ?? 0) > 0 && (
                 <div className="flex justify-between px-4 py-3 border-b border-success/10">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">Recargos</span>
+                  <span className="text-[13px] font-medium text-muted-foreground">Recargos</span>
                   <span className="font-semibold">${(preview.total_recargos ?? 0).toLocaleString('es-CO')}</span>
                 </div>
               )}
@@ -1287,7 +1287,7 @@ export default function LiquidarColaborador() {
                   se muestra la fila. */}
               {(preview.total_dominicales ?? 0) > 0 && (
                 <div className="flex justify-between px-4 py-3 border-b border-success/10">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                  <span className="text-[13px] font-medium text-muted-foreground">
                     Dominicales
                     {(preview.dias_descanso_ganados ?? 0) > 0 && (
                       <span className="ml-2 normal-case tracking-normal text-muted-foreground/80">
@@ -1302,7 +1302,7 @@ export default function LiquidarColaborador() {
               )}
               {(preview.total_festivos ?? 0) > 0 && (
                 <div className="flex justify-between px-4 py-3 border-b border-success/10">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">Festivos</span>
+                  <span className="text-[13px] font-medium text-muted-foreground">Festivos</span>
                   <span className="font-semibold">
                     ${(preview.total_festivos ?? 0).toLocaleString('es-CO')}
                   </span>
@@ -1310,7 +1310,7 @@ export default function LiquidarColaborador() {
               )}
               {((preview.total_recargo_dominical ?? 0) + (preview.total_recargo_festivo ?? 0)) > 0 && (
                 <div className="flex justify-between px-4 py-3 border-b border-success/10">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                  <span className="text-[13px] font-medium text-muted-foreground">
                     Recargo dominical / festivo
                     {preview.porcentaje_recargo_dominical != null && (
                       <span className="ml-2 normal-case tracking-normal text-muted-foreground/80">
@@ -1334,7 +1334,7 @@ export default function LiquidarColaborador() {
                 motivos: motivosRemunerados(preview.detalle_ausencias),
               }).map((linea, iLinea) => (
                 <div key={linea.clave} className="flex justify-between px-4 py-3 border-b border-success/10">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                  <span className="text-[13px] font-medium text-muted-foreground">
                     {linea.etiqueta}
                     {linea.detalle && (
                       <span className="ml-2 normal-case tracking-normal text-muted-foreground/80">
@@ -1358,7 +1358,7 @@ export default function LiquidarColaborador() {
                       );
                       return (
                         <span
-                          className="ml-2 inline-flex items-center gap-1 rounded-full bg-blue-500/10 border border-blue-500/30 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-300 normal-case tracking-normal"
+                          className="ml-2 inline-flex items-center gap-1 rounded-full bg-info-soft border border-info/20 px-2 py-0.5 text-[10px] font-medium text-info normal-case tracking-normal"
                           title={`Se agruparon ${totalTramos} tramos contiguos en ${agrupadas.length} evento(s) EPS. La regla 100%/66.67% se aplicó desde el inicio real del evento (§9.6).`}
                         >
                           {agrupadas.length} evento{agrupadas.length !== 1 ? 's' : ''} agrupado{agrupadas.length !== 1 ? 's' : ''}
@@ -1375,7 +1375,7 @@ export default function LiquidarColaborador() {
                   Liquidaciones y solo aparecen en el bloque informativo. */}
               {(preview.total_vacaciones ?? 0) > 0 && (
                 <div className="flex justify-between px-4 py-3 border-b border-success/10">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                  <span className="text-[13px] font-medium text-muted-foreground">
                     Vacaciones
                     {(preview.dias_vacaciones_pagados ?? 0) > 0 && (
                       <span className="ml-2 normal-case tracking-normal text-muted-foreground/80">
@@ -1392,7 +1392,7 @@ export default function LiquidarColaborador() {
               )}
               {(preview.total_vacaciones_compensadas ?? 0) > 0 && (
                 <div className="flex justify-between px-4 py-3 border-b border-success/10">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                  <span className="text-[13px] font-medium text-muted-foreground">
                     Vacaciones compensadas en dinero
                   </span>
                   <span className="font-semibold">
@@ -1401,14 +1401,14 @@ export default function LiquidarColaborador() {
                 </div>
               )}
               <div className="flex justify-between px-4 py-3 border-b border-success/10 bg-success/10">
-                <span className="text-xs uppercase tracking-wide font-bold text-success">Total bruto</span>
+                <span className="text-xs font-semibold text-success">Total bruto</span>
                 <span className="font-bold text-lg text-success">
                   ${preview.total_devengado.toLocaleString('es-CO')}
                 </span>
               </div>
               {!esOperario && (
                 <div className="flex justify-between px-4 py-3">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                  <span className="text-[13px] font-medium text-muted-foreground">
                     Subsidio transporte
                     {/* PR-N6 — el auxilio ya no sale solo de los días
                         trabajados: los días de novedad que lo conservan
@@ -1483,7 +1483,7 @@ export default function LiquidarColaborador() {
                 {/* Legales automáticas */}
                 {(preview.conceptos_legales ?? []).map((c) => (
                   <div key={c.concepto_id} className="flex justify-between px-4 py-3 border-b border-destructive/10">
-                    <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                    <span className="text-[13px] font-medium text-muted-foreground">
                       {c.nombre}
                     </span>
                     <span className="font-semibold text-destructive">
@@ -1512,7 +1512,7 @@ export default function LiquidarColaborador() {
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
                         <span
-                          className="text-xs uppercase tracking-wide text-muted-foreground"
+                          className="text-[13px] font-medium text-muted-foreground"
                           title={p
                             ? `${p.cuotas_pagadas}/${p.num_cuotas} cuotas pagadas`
                               + `${(p.cuotas_atrasadas ?? 0) > 0 ? ` · ${p.cuotas_atrasadas} atrasada(s)` : ''}`
@@ -1567,7 +1567,7 @@ export default function LiquidarColaborador() {
                                   {cuota.atrasada && (
                                     <Badge
                                       variant="outline"
-                                      className="h-4 border-amber-500/50 px-1.5 text-[9px] font-semibold uppercase text-amber-700"
+                                      className="h-4 border-warning/20 px-1.5 text-[9px] font-semibold uppercase text-warning"
                                       title={periodo ? `De la ${periodo}, sin descontar.` : 'Sin descontar.'}
                                     >
                                       Atrasada
@@ -1628,7 +1628,7 @@ export default function LiquidarColaborador() {
                   return (
                     <div key={concepto.id} className="border-b border-destructive/10 last:border-0">
                       <div className="flex justify-between items-center px-4 py-3">
-                        <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                        <span className="text-[13px] font-medium text-muted-foreground">
                           {nombreConceptoUI(concepto)}
                         </span>
                         <div className="flex items-center gap-3">
@@ -1638,7 +1638,7 @@ export default function LiquidarColaborador() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 gap-1 text-primary hover:bg-primary/10"
+                            className="h-7 text-primary hover:bg-primary/10"
                             onClick={() =>
                               setDeducciones((prev) => [
                                 ...prev,
@@ -1706,7 +1706,7 @@ export default function LiquidarColaborador() {
                       size="sm"
                       variant="outline"
                       onClick={agregarDeduccion}
-                      className="h-7 gap-1"
+                      className="h-7"
                     >
                       <Plus className="h-3.5 w-3.5" />
                       Nueva deducción
@@ -1723,7 +1723,7 @@ export default function LiquidarColaborador() {
                     .map(({ d, idx }) => (
                       <div key={idx} className="grid grid-cols-12 gap-2 items-end mt-3 p-3 bg-background rounded-md border border-border">
                         <div className="col-span-4">
-                          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Concepto</Label>
+                          <Label className="text-xs font-medium text-muted-foreground">Concepto</Label>
                           <Select
                             value={d.concepto_id === '' ? '' : String(d.concepto_id)}
                             onValueChange={(v) => actualizarDeduccion(idx, 'concepto_id', Number(v))}
@@ -1758,7 +1758,7 @@ export default function LiquidarColaborador() {
                           </Select>
                         </div>
                         <div className="col-span-3">
-                          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground" htmlFor="liquidarco-valor">Valor</Label>
+                          <Label className="text-xs font-medium text-muted-foreground" htmlFor="liquidarco-valor">Valor</Label>
                           <Input id="liquidarco-valor"
                             type="number" step="0.001"
                             value={d.valor || ''}
@@ -1768,7 +1768,7 @@ export default function LiquidarColaborador() {
                           />
                         </div>
                         <div className="col-span-4">
-                          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground" htmlFor="liquidarco-observacion">Observación</Label>
+                          <Label className="text-xs font-medium text-muted-foreground" htmlFor="liquidarco-observacion">Observación</Label>
                           <Input id="liquidarco-observacion"
                             value={d.observacion}
                             onChange={(e) => actualizarDeduccion(idx, 'observacion', e.target.value)}
@@ -1802,8 +1802,8 @@ export default function LiquidarColaborador() {
               </h3>
               <div className="rounded-lg border border-success/20 overflow-hidden bg-success/5">
                 <div className="flex justify-between items-center px-4 py-3 border-b border-success/10">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">Bonificaciones</span>
-                  <Button size="sm" variant="ghost" onClick={agregarBonificacion} className="h-7 gap-1 text-primary hover:bg-primary/10">
+                  <span className="text-[13px] font-medium text-muted-foreground">Bonificaciones</span>
+                  <Button size="sm" variant="ghost" onClick={agregarBonificacion} className="h-7 text-primary hover:bg-primary/10">
                     <Plus className="h-3.5 w-3.5" />
                     Agregar
                   </Button>
@@ -1856,7 +1856,7 @@ export default function LiquidarColaborador() {
             <div className="rounded-lg bg-primary/10 border border-primary/30 p-6 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <p className="text-xs uppercase tracking-wider font-bold text-success">+ INGRESOS</p>
+                  <p className="text-xs font-semibold text-success">+ INGRESOS</p>
                   <div className="text-sm">
                     <p className="text-muted-foreground">Total Bruto</p>
                     <p className="font-bold text-success text-base">
@@ -1880,7 +1880,7 @@ export default function LiquidarColaborador() {
                 </div>
 
                 <div className="space-y-2">
-                  <p className="text-xs uppercase tracking-wider font-bold text-destructive">- DEDUCCIONES</p>
+                  <p className="text-xs font-semibold text-destructive">- DEDUCCIONES</p>
                   <div className="text-sm">
                     <p className="text-muted-foreground">Total Deducciones</p>
                     <p className="font-bold text-destructive text-base">
@@ -1924,7 +1924,7 @@ export default function LiquidarColaborador() {
               onClick={liquidar}
               disabled={enviando || hayBloqueos}
               title={hayBloqueos ? 'Hay novedades sin aprobar que cruzan el período' : undefined}
-              className="h-12 text-base gap-2 bg-success hover:bg-success/90 text-white"
+              className="h-12 text-base bg-success hover:bg-success/90 text-white"
             >
               {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
               {esReliquidacion ? 'Guardar cambios' : 'Confirmar y Guardar Liquidación'}

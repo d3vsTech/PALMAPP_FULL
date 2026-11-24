@@ -112,7 +112,7 @@ export function LaborActividadesPanel({ laborId, open }: Props) {
     <div className="px-4 pb-4 pt-2 bg-muted/10 border-t border-border/50 space-y-3">
       {ConfirmDeleteDialog}
 
-      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+      <p className="text-[13px] font-medium text-muted-foreground">
         Trabajos disponibles
       </p>
 

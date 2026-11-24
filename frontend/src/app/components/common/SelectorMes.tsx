@@ -24,7 +24,7 @@ export function aniosDisponibles(elegido: number): number[] {
 export function SelectorAnio({ valor, onChange }: { valor: number; onChange: (anio: number) => void }) {
   return (
     <Select value={String(valor)} onValueChange={(a) => onChange(Number(a))}>
-      <SelectTrigger className="h-9 w-28"><SelectValue /></SelectTrigger>
+      <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
       <SelectContent>
         {aniosDisponibles(valor).map((a) => (
           <SelectItem key={a} value={String(a)}>{a}</SelectItem>
@@ -45,7 +45,7 @@ export function SelectorMes({ valor, onChange }: { valor: string; onChange: (mes
   return (
     <div className="selectores-cortos flex items-center gap-2">
       <Select value={mes} onValueChange={(m) => onChange(`${anio}-${m}`)}>
-        <SelectTrigger className="h-9 w-36"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
         <SelectContent>
           {MESES.map((nombre, i) => (
             <SelectItem key={nombre} value={String(i + 1).padStart(2, '0')}>{nombre}</SelectItem>

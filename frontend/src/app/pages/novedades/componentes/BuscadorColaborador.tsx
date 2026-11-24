@@ -142,7 +142,7 @@ export function BuscadorColaborador({ fecha, seleccionadoId, nombreInicial, onSe
         )}
 
         {abierto && (
-          <div className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-border bg-background shadow-lg">
+          <div className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-border bg-background shadow-md">
             {error ? (
               <p className="px-4 py-3 text-sm text-destructive">{error}</p>
             ) : visibles.length === 0 && !cargando ? (
@@ -164,7 +164,7 @@ export function BuscadorColaborador({ fecha, seleccionadoId, nombreInicial, onSe
                     {c.documento} · {c.modalidad_pago === 'FIJO' ? 'Fijo' : 'Producción'}
                   </span>
                   {c.novedad_vigente && (
-                    <span className="mt-1 flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400">
+                    <span className="mt-1 flex items-center gap-1 text-xs text-warning">
                       <AlertTriangle className="h-3 w-3 shrink-0" />
                       Ya tiene {c.novedad_vigente.tipo.nombre} esos días
                     </span>
@@ -177,7 +177,7 @@ export function BuscadorColaborador({ fecha, seleccionadoId, nombreInicial, onSe
       </div>
 
       {elegido?.novedad_vigente && (
-        <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+        <p className="flex items-start gap-1.5 text-xs text-warning">
           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
           <span>
             Ya tiene {elegido.novedad_vigente.tipo.nombre} del{' '}

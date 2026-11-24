@@ -291,7 +291,7 @@ export function SeccionInsightsIA() {
               size="sm"
               onClick={generar}
               disabled={generandoInforme || esperandoTurno}
-              className="shrink-0 gap-1.5"
+              className="shrink-0"
               aria-label="Regenerar el análisis"
               title="Regenerar el análisis"
             >
@@ -314,7 +314,7 @@ export function SeccionInsightsIA() {
 
       {/* Estados: buscando / generando / error / sin_datos / listo */}
       {(estadoUi === 'buscando' || estadoUi === 'generando') && (
-        <Card className="border-border">
+        <Card>
           <CardContent className="p-6 space-y-3">
             <div className="flex items-center gap-3">
               <Loader2 className="h-5 w-5 animate-spin text-primary" />
@@ -359,7 +359,7 @@ export function SeccionInsightsIA() {
               onClick={generar}
               disabled={retryAfter != null && retryAfter > 0}
               size="sm"
-              className="gap-1.5"
+              
             >
               <RefreshCw className="h-3.5 w-3.5" />
               {retryAfter && retryAfter > 0 ? `Espera ${retryAfter}s` : 'Reintentar'}
@@ -369,8 +369,8 @@ export function SeccionInsightsIA() {
       )}
 
       {estadoUi === 'listo' && insight && sinHallazgos && (
-        <Card className="border-border">
-          <CardContent className="p-6">
+        <Card>
+          <CardContent>
             <div className="flex items-start gap-3">
               <Info className="mt-0.5 h-5 w-5 flex-shrink-0 text-muted-foreground" />
               <div>
@@ -461,7 +461,7 @@ export function SeccionInsightsIA() {
 
           {vista === 'alertas' ? (
             alertasFiltradas.length === 0 ? (
-              <Card className="border-border">
+              <Card>
                 <CardContent className="p-6 text-center">
                   <CheckCircle2 className="h-8 w-8 text-success mx-auto mb-2" />
                   <p className="font-medium text-foreground">Todo bien en tu finca</p>

@@ -377,8 +377,8 @@ export function LaboresTab() {
               </div>
             )}
 
-            <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 p-3">
-              <p className="text-sm text-blue-900 dark:text-blue-100">
+            <div className="rounded-lg bg-info-soft border border-info/20 p-3">
+              <p className="text-sm text-info">
                 <strong>Nota:</strong> Los precios de las labores se configuran en la sección "Nómina y Liquidaciones &gt; Precios Labores".
               </p>
             </div>
@@ -398,8 +398,8 @@ export function LaboresTab() {
         {/* LABORES PALMA — 6 fijas del sistema. Ya no se crean labores
             custom desde aquí: los trabajos extra se registran como
             sub-actividades dentro de Sanidad u Otros. */}
-        <Card className="overflow-hidden border-border">
-          <CardHeader className="border-b bg-gradient-to-r from-primary/10 to-primary/5">
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b bg-primary-soft">
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle>Labores Palma</CardTitle>
@@ -417,7 +417,7 @@ export function LaboresTab() {
               )}
             </div>
           </CardHeader>
-          <CardContent className="p-6">
+          <CardContent>
             {laboresPalma.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">
                 No hay labores de palma configuradas.
@@ -511,8 +511,8 @@ export function LaboresTab() {
         </Card>
 
         {/* LABORES FINCA — custom (siempre JORNAL_FIJO) */}
-        <Card className="overflow-hidden border-border">
-          <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b bg-muted/40">
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle>Labores Finca</CardTitle>
@@ -526,7 +526,7 @@ export function LaboresTab() {
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="p-6">
+          <CardContent>
             {laboresFinca.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <h3 className="mb-2 text-lg font-semibold">No hay labores personalizadas</h3>

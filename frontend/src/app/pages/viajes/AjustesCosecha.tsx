@@ -15,12 +15,19 @@ import { useNavigate, useLocation } from 'react-router';
 import { Button } from '../../components/ui/button';
 import PageHeader from '../../components/common/PageHeader';
 import { Card, CardContent } from '../../components/ui/card';
+import { Badge } from '../../components/ui/badge';
+import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
+import { Textarea } from '../../components/ui/textarea';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../../components/ui/select';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '../../components/ui/dialog';
 import {
   ArrowLeft, Ghost, ArrowLeftRight, PauseCircle,
-  Truck, ChevronDown, Loader2, Sparkles,
+  Truck, Loader2, Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -173,100 +180,103 @@ export default function AjustesCosecha() {
 
       {/* Tabla */}
       {cargando ? (
-        <Card className="border-border">
-          <CardContent className="p-10 flex items-center justify-center gap-2 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            Cargando cosechas con pendientes...
+        <Card>
+          <CardContent className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
+            Cargando cosechas con pendientes…
           </CardContent>
         </Card>
       ) : items.length === 0 ? (
-        <Card className="border-border">
-          <CardContent className="p-10 text-center">
-            <div className="mx-auto h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
-              <Sparkles className="h-6 w-6 text-primary" />
-            </div>
-            <h3 className="text-lg font-semibold text-foreground">Todo en orden</h3>
-            <p className="text-sm text-muted-foreground mt-1">
+        <Card className="items-center py-12 text-center">
+          <div className="max-w-sm space-y-1 px-6">
+            <span className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-lg bg-primary-soft text-primary">
+              <Sparkles className="h-5 w-5" strokeWidth={2} />
+            </span>
+            <h3 className="text-base font-semibold text-foreground">Todo en orden</h3>
+            <p className="text-sm text-muted-foreground">
               No hay cosechas con gajos pendientes que requieran ajuste.
             </p>
-            <Button onClick={volverAlOrigen} className="mt-4">
-              {volverLabel}
-            </Button>
-          </CardContent>
+          </div>
+          <Button onClick={volverAlOrigen}>{volverLabel}</Button>
         </Card>
       ) : (
-        <Card className="overflow-hidden border-border">
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/50">
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Lote · Sublote</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Fecha</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Reportados</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Reconteo</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">En viajes</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pendientes</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Peso perdido</th>
-                    <th className="text-center px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Acciones</th>
+        <Card className="gap-0 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/60 text-[13px] text-muted-foreground">
+                <tr>
+                  <th className="px-5 py-2.5 text-left font-semibold">Lote · sublote</th>
+                  <th className="px-4 py-2.5 text-left font-semibold">Fecha</th>
+                  <th className="px-4 py-2.5 text-right font-semibold">Reportados</th>
+                  <th className="px-4 py-2.5 text-right font-semibold">Reconteo</th>
+                  <th className="px-4 py-2.5 text-right font-semibold">En viajes</th>
+                  <th className="px-4 py-2.5 text-right font-semibold">Pendientes</th>
+                  <th className="whitespace-nowrap px-4 py-2.5 text-right font-semibold">Peso perdido</th>
+                  <th className="px-3 py-2.5 text-right font-semibold"><span className="sr-only">Acciones</span></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {items.map((cosecha) => (
+                  <tr key={cosecha.id} className="transition-colors hover:bg-muted/40">
+                    <td className="px-5 py-3">
+                      <p className="whitespace-nowrap font-semibold text-foreground">
+                        {cosecha.lote?.nombre ?? 'Sin lote'}
+                        {cosecha.sublote?.nombre ? ` · ${cosecha.sublote.nombre}` : ''}
+                      </p>
+                      <Badge variant="warning" className="mt-1">
+                        {cosecha.viajes_transcurridos} viajes sin resolver
+                      </Badge>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+                      {formatFechaCorta(cosecha.operacion.fecha)}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">{cosecha.gajos_reportados.toLocaleString('es-CO')}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {cosecha.gajos_reconteo != null ? cosecha.gajos_reconteo.toLocaleString('es-CO') : '–'}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">{cosecha.gajos_en_viajes.toLocaleString('es-CO')}</td>
+                    <td className="px-4 py-3 text-right font-semibold tabular-nums text-warning">
+                      {cosecha.gajos_pendientes.toLocaleString('es-CO')}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums text-destructive">
+                      {formatKg(cosecha.peso_estimado_perdido)}
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex items-center justify-end gap-0.5">
+                        <Button
+                          variant="ghost" size="icon"
+                          onClick={() => abrirModal(cosecha, 'CLAVIJO')}
+                          title="Marcar como clavija"
+                          aria-label="Marcar como clavija"
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <Ghost className="h-4 w-4" strokeWidth={2} />
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon"
+                          onClick={() => abrirModal(cosecha, 'REASIGNADO')}
+                          title="Reasignar a otro viaje"
+                          aria-label="Reasignar a otro viaje"
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <ArrowLeftRight className="h-4 w-4" strokeWidth={2} />
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon"
+                          onClick={() => abrirModal(cosecha, 'MANTENIDO')}
+                          title="Mantener pendientes"
+                          aria-label="Mantener pendientes"
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <PauseCircle className="h-4 w-4" strokeWidth={2} />
+                        </Button>
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {items.map((cosecha, i) => (
-                    <tr
-                      key={cosecha.id}
-                      className={`border-b border-border last:border-0 hover:bg-muted/30 transition-colors ${i % 2 === 0 ? '' : 'bg-muted/10'}`}
-                    >
-                      <td className="px-5 py-4">
-                        <div className="font-semibold text-foreground">
-                          {cosecha.lote?.nombre ?? 'Sin lote'}
-                          {cosecha.sublote?.nombre ? ` · ${cosecha.sublote.nombre}` : ''}
-                        </div>
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-600 border border-orange-200 mt-1 inline-block">
-                          {cosecha.viajes_transcurridos} viajes sin resolver
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 text-muted-foreground">
-                        {formatFechaCorta(cosecha.operacion.fecha)}
-                      </td>
-                      <td className="px-4 py-4 text-right font-medium">{cosecha.gajos_reportados}</td>
-                      <td className="px-4 py-4 text-right font-medium">{cosecha.gajos_reconteo ?? '–'}</td>
-                      <td className="px-4 py-4 text-right font-medium">{cosecha.gajos_en_viajes}</td>
-                      <td className="px-4 py-4 text-right font-bold text-orange-500">{cosecha.gajos_pendientes}</td>
-                      <td className="px-4 py-4 text-right font-bold text-destructive">
-                        {formatKg(cosecha.peso_estimado_perdido)}
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={() => abrirModal(cosecha, 'CLAVIJO')}
-                            title="Marcar como clavija"
-                            className="h-8 w-8 rounded-lg bg-sky-100 hover:bg-sky-200 flex items-center justify-center transition-colors"
-                          >
-                            <Ghost className="h-4 w-4 text-sky-500" />
-                          </button>
-                          <button
-                            onClick={() => abrirModal(cosecha, 'REASIGNADO')}
-                            title="Reasignar a otro viaje"
-                            className="h-8 w-8 rounded-lg bg-primary/10 hover:bg-primary/20 flex items-center justify-center transition-colors"
-                          >
-                            <ArrowLeftRight className="h-4 w-4 text-primary" />
-                          </button>
-                          <button
-                            onClick={() => abrirModal(cosecha, 'MANTENIDO')}
-                            title="Mantener pendientes"
-                            className="h-8 w-8 rounded-lg bg-orange-100 hover:bg-orange-200 flex items-center justify-center transition-colors"
-                          >
-                            <PauseCircle className="h-4 w-4 text-orange-500" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
       )}
 
@@ -290,11 +300,11 @@ export default function AjustesCosecha() {
             {/* Campo extra: Viaje destino (reasignar) */}
             {opcion === 'REASIGNADO' && (
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-foreground">Viaje destino</label>
+                <Label>Viaje de destino</Label>
                 {cargandoViajes ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Cargando viajes disponibles...
+                  <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
+                    Cargando viajes disponibles…
                   </div>
                 ) : viajesDisponibles.length === 0 ? (
                   <p className="text-sm text-muted-foreground py-2">
@@ -302,30 +312,29 @@ export default function AjustesCosecha() {
                   </p>
                 ) : (
                   <>
-                    <div className="relative">
-                      <select
-                        aria-label="Viaje destino"
-                        value={viajeDestino}
-                        onChange={(e) => setViajeDestino(e.target.value)}
-                        disabled={enviando}
-                        className="w-full appearance-none rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors pr-10"
-                      >
-                        <option value="">Selecciona el viaje</option>
+                    <Select
+                      value={viajeDestino}
+                      onValueChange={setViajeDestino}
+                      disabled={enviando}
+                    >
+                      <SelectTrigger aria-label="Viaje de destino">
+                        <SelectValue placeholder="Selecciona el viaje" />
+                      </SelectTrigger>
+                      <SelectContent>
                         {viajesDisponibles.map((v) => (
-                          <option key={v.id} value={String(v.id)}>
+                          <SelectItem key={v.id} value={String(v.id)}>
                             {v.remision} · {v.placa_vehiculo} · {formatFechaCorta(v.fecha_viaje)}
-                          </option>
+                          </SelectItem>
                         ))}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                    </div>
+                      </SelectContent>
+                    </Select>
                     {viajeSeleccionado && (
-                      <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent text-white text-sm font-semibold">
-                        <Truck className="h-4 w-4 shrink-0" />
-                        <span>{viajeSeleccionado.remision}</span>
-                        <span className="opacity-70">·</span>
+                      <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2 text-sm text-foreground">
+                        <Truck className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2} />
+                        <span className="font-semibold">{viajeSeleccionado.remision}</span>
+                        <span className="text-muted-foreground">·</span>
                         <span>{viajeSeleccionado.placa_vehiculo}</span>
-                        <span className="opacity-70">·</span>
+                        <span className="text-muted-foreground">·</span>
                         <span>{formatFechaCorta(viajeSeleccionado.fecha_viaje)}</span>
                       </div>
                     )}
@@ -337,58 +346,58 @@ export default function AjustesCosecha() {
             {/* Campo extra: Silenciar por N viajes (mantener) */}
             {opcion === 'MANTENIDO' && (
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-foreground" htmlFor="ajustescos-silenciar-por-n-viajes">Silenciar por N viajes</label>
-                <input id="ajustescos-silenciar-por-n-viajes"
+                <Label htmlFor="ajustescos-silenciar-por-n-viajes">Silenciar por cuántos viajes</Label>
+                <Input id="ajustescos-silenciar-por-n-viajes"
                   type="number" step="0.001"
                   min={1}
                   max={20}
                   value={silenciarViajes}
                   onChange={(e) => setSilenciarViajes(Math.max(1, parseFloat(e.target.value) || 1))}
                   disabled={enviando}
-                  className="w-24 rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
+                  className="w-24"
                 />
               </div>
             )}
 
             {/* Motivo */}
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-foreground" htmlFor="ajustescos-motivo-del-ajuste">Motivo del ajuste</label>
-              <textarea id="ajustescos-motivo-del-ajuste"
+              <Label htmlFor="ajustescos-motivo-del-ajuste">Motivo del ajuste</Label>
+              <Textarea id="ajustescos-motivo-del-ajuste"
                 value={motivo}
                 onChange={(e) => setMotivo(e.target.value)}
                 placeholder="Explica por qué tomas esta decisión. Queda registrado en el historial."
                 rows={3}
                 maxLength={500}
                 disabled={enviando}
-                className="w-full rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
+                className="resize-none"
               />
             </div>
 
             {/* Caja informativa */}
             {opcion === 'CLAVIJO' && (
-              <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 space-y-1.5">
-                <span className="inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-600 border border-sky-300">Clavija</span>
-                <p className="text-sm text-foreground font-medium">Los gajos nunca existieron (clavijas). Se baja el reconteo al total real asignado.</p>
+              <div className="space-y-1.5 rounded-lg border border-info/20 bg-info-soft p-4">
+                <Badge variant="info">Clavija</Badge>
+                <p className="text-sm text-foreground">Los gajos nunca existieron (clavijas). Se baja el reconteo al total real asignado.</p>
               </div>
             )}
             {opcion === 'REASIGNADO' && (
-              <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-1.5">
-                <span className="inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">Reasignado a otro viaje</span>
-                <p className="text-sm text-foreground font-medium">Los gajos sí existían; se agregan como split parcial al viaje seleccionado.</p>
+              <div className="space-y-1.5 rounded-lg border border-primary/20 bg-primary-soft p-4">
+                <Badge>Reasignado a otro viaje</Badge>
+                <p className="text-sm text-foreground">Los gajos sí existían; se agregan como split parcial al viaje seleccionado.</p>
               </div>
             )}
             {opcion === 'MANTENIDO' && (
-              <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 space-y-1.5">
-                <span className="inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-600 border border-orange-300">Mantenido pendiente</span>
-                <p className="text-sm text-foreground font-medium">Silencia la alerta {silenciarViajes} viajes más; no modifica cantidades.</p>
+              <div className="space-y-1.5 rounded-lg border border-warning/20 bg-warning-soft p-4">
+                <Badge variant="warning">Mantenido pendiente</Badge>
+                <p className="text-sm text-foreground">Silencia la alerta {silenciarViajes} viajes más; no modifica cantidades.</p>
               </div>
             )}
 
             {/* Botones */}
-            <div className="flex justify-end gap-3 pt-1">
+            <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
               <Button variant="outline" onClick={cerrarDialog} disabled={enviando}>Cancelar</Button>
               <Button onClick={guardarAjuste} disabled={enviando}>
-                {enviando && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                {enviando && <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />}
                 Guardar ajuste
               </Button>
             </div>

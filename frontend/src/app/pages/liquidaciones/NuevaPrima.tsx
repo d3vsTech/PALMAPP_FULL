@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
+import { Textarea } from '../../components/ui/textarea';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
@@ -159,7 +160,7 @@ export default function NuevaPrima() {
   return (
     <div className="space-y-6">
       <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones?tab=prima')} className="gap-2">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones?tab=prima')} >
           <ArrowLeft className="h-4 w-4" />
           Volver a Liquidaciones
         </Button>
@@ -252,19 +253,19 @@ export default function NuevaPrima() {
 
           <div className="space-y-2">
             <Label htmlFor="notas">Notas</Label>
-            <textarea
+            <Textarea
               id="notas"
               rows={3}
               placeholder="Observaciones adicionales del período..."
               value={formData.notas}
               onChange={(e) => handleChange('notas', e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="resize-none"
             />
           </div>
 
           {/* Fechas límite del semestre elegido (legal + operativa, §2.2) */}
           {fechaLimite && (
-            <div className="p-4 rounded-xl border border-orange-200 bg-orange-50 text-sm text-orange-800">
+            <div className="p-4 rounded-xl border border-warning/20 bg-warning-soft text-sm text-warning">
               Fecha límite de pago: legal el{' '}
               <strong>{formatFecha(fechaLimite.fecha_limite_legal, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
               {!fechaLimite.es_dia_habil && (
@@ -293,7 +294,7 @@ export default function NuevaPrima() {
         <Button variant="outline" size="lg" onClick={() => navigate('/liquidaciones?tab=prima')} disabled={guardando}>
           Cancelar
         </Button>
-        <Button size="lg" onClick={() => guardar()} disabled={guardando} className="gap-2">
+        <Button size="lg" onClick={() => guardar()} disabled={guardando} >
           {guardando ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />}
           Crear Período
         </Button>

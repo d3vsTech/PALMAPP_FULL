@@ -223,7 +223,7 @@ export default function AgenteIA() {
         <>
           {partes.map((parte, i) =>
             parte.toLowerCase() === terminoBusqueda.toLowerCase() ? (
-              <mark key={i} className={`${esResultadoActual ? 'bg-accent text-white' : 'bg-yellow-200 dark:bg-yellow-800'} rounded px-0.5`}>
+              <mark key={i} className={`${esResultadoActual ? 'bg-accent text-white' : 'bg-warning-soft'} rounded px-0.5`}>
                 {parte}
               </mark>
             ) : (
@@ -592,7 +592,7 @@ export default function AgenteIA() {
                 </Button>
 
                 {mostrarMenuArchivos && (
-                  <div className="absolute bottom-full left-0 mb-2 bg-card border border-border rounded-xl shadow-lg p-2 min-w-[220px] z-10">
+                  <div className="absolute bottom-full left-0 mb-2 bg-card border border-border rounded-xl p-2 shadow-md min-w-[220px] z-10">
                     <button
                       onClick={() => handleFileSelect('imagen')}
                       className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted rounded-lg transition-colors text-left"

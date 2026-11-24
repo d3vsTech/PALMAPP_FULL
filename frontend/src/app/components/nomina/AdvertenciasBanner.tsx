@@ -67,9 +67,9 @@ const ESTILO: Record<SeveridadAdvertencia, { caja: string; texto: string; icono:
     icono: 'text-destructive',
   },
   informativa: {
-    caja: 'border border-amber-500/40 bg-amber-50/60 dark:bg-amber-950/20',
-    texto: 'text-amber-900 dark:text-amber-100/90',
-    icono: 'text-amber-700',
+    caja: 'border border-warning/20 bg-warning-soft',
+    texto: 'text-warning',
+    icono: 'text-warning',
   },
 };
 

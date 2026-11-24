@@ -256,7 +256,7 @@ export default function LiquidarTerceros() {
           variant="ghost"
           size="sm"
           onClick={() => navigate(`/nomina/${nominaId}`)}
-          className="mb-4 gap-2"
+          className="mb-4"
         >
           <ArrowLeft className="h-4 w-4" />Volver
         </Button>
@@ -277,9 +277,9 @@ export default function LiquidarTerceros() {
       </div>
 
       {/* Alerta informativa */}
-      <div className="flex items-start gap-3 rounded-lg border border-amber-400/40 bg-amber-50/60 dark:bg-amber-950/20 p-4">
-        <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-        <p className="text-sm text-amber-800 dark:text-amber-400">
+      <div className="flex items-start gap-3 rounded-lg border border-warning/20 bg-warning-soft p-4">
+        <AlertCircle className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />
+        <p className="text-sm text-warning">
           El pago se realiza a la <strong>empresa prestadora de servicios</strong>, no al colaborador individual.
           Puedes ajustar días, tarifa o agregar un ajuste antes de registrar el pago. Los cambios se guardan al salir de cada campo.
         </p>
@@ -287,14 +287,14 @@ export default function LiquidarTerceros() {
 
       {/* Lista de actas */}
       {cargando ? (
-        <Card className="border-border">
+        <Card>
           <CardContent className="py-12 flex items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
             Cargando actas...
           </CardContent>
         </Card>
       ) : actas.length === 0 ? (
-        <Card className="bg-gradient-to-br from-muted/20 to-muted/5 border-dashed border-2">
+        <Card className="border-2 border-dashed bg-muted/30">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Building2 className="h-16 w-16 text-muted-foreground mb-4" />
             <p className="text-lg font-semibold mb-2">No hay actas de terceros aún</p>
@@ -318,16 +318,16 @@ export default function LiquidarTerceros() {
           const subtotalAcatual = toNumber(acta.total_a_transferir);
 
           return (
-            <Card key={acta.id} className="border-border overflow-hidden">
-              <div className={`flex items-center justify-between px-5 py-4 border-b border-border ${estaPagada ? 'bg-[#1E5631]/5' : 'bg-amber-50/50 dark:bg-amber-950/20'}`}>
+            <Card key={acta.id} className="overflow-hidden">
+              <div className={`flex items-center justify-between px-5 py-4 border-b border-border ${estaPagada ? 'bg-[#1E5631]/5' : 'bg-warning-soft'}`}>
                 <div className="flex items-center gap-3">
-                  <div className={`h-9 w-9 rounded-lg flex items-center justify-center font-bold ${estaPagada ? 'bg-[#1E5631]/10 text-[#1E5631]' : 'bg-amber-500/10 text-amber-700'}`}>
+                  <div className={`h-9 w-9 rounded-lg flex items-center justify-center font-bold ${estaPagada ? 'bg-[#1E5631]/10 text-[#1E5631]' : 'bg-warning-soft text-warning'}`}>
                     {razonSocial.charAt(0)}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="font-semibold">{razonSocial}</p>
-                      <Badge className={`text-xs ${estaPagada ? 'bg-[#1E5631]/10 text-[#1E5631] border-[#1E5631]/20' : 'bg-amber-500/10 text-amber-700 border-amber-300'}`}>
+                      <Badge className={`text-xs ${estaPagada ? 'bg-[#1E5631]/10 text-[#1E5631] border-[#1E5631]/20' : 'bg-warning-soft text-warning border-warning/20'}`}>
                         {estaPagada ? 'Pagado' : 'Pendiente'}
                       </Badge>
                     </div>
@@ -348,7 +348,7 @@ export default function LiquidarTerceros() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="gap-1.5"
+                    
                     onClick={() => descargarPdf(acta.tercero_id, razonSocial)}
                   >
                     <Download className="h-3.5 w-3.5" />
@@ -358,7 +358,7 @@ export default function LiquidarTerceros() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="gap-1.5"
+                      
                       onClick={() => reliquidarActa(acta.tercero_id)}
                     >
                       Recalcular
@@ -367,7 +367,7 @@ export default function LiquidarTerceros() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="gap-1.5"
+                    
                     onClick={() =>
                       navigate(`/nomina/${nominaId}/tercero/${acta.tercero_id}/liquidar`)
                     }
@@ -377,13 +377,12 @@ export default function LiquidarTerceros() {
                   {!estaPagada ? (
                     <Button
                       size="sm"
-                      className="bg-primary hover:bg-primary/90"
                       onClick={() => abrirModalPago(acta.tercero_id)}
                     >
                       Registrar Pago
                     </Button>
                   ) : (
-                    <Button variant="outline" size="sm" className="gap-1.5 text-success border-success/30">
+                    <Button variant="outline" size="sm" className="text-success border-success/30">
                       <Check className="h-3.5 w-3.5" />
                       Pagado
                     </Button>
@@ -426,7 +425,7 @@ export default function LiquidarTerceros() {
                           >
                             <td className="p-3 pl-5">
                               <div className="flex items-center gap-2.5">
-                                <div className="h-8 w-8 rounded-full bg-amber-500/10 text-amber-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                                <div className="h-8 w-8 rounded-full bg-warning-soft text-warning flex items-center justify-center text-xs font-bold flex-shrink-0">
                                   {iniciales}
                                 </div>
                                 <div>
@@ -473,7 +472,7 @@ export default function LiquidarTerceros() {
 
       {/* Resumen final */}
       {actas.length > 0 && (
-        <Card className={`border-border overflow-hidden ${todasPagadas ? 'border-success/30' : ''}`}>
+        <Card className={`overflow-hidden ${todasPagadas ? 'border-success/30' : ''}`}>
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <div>
@@ -601,9 +600,9 @@ export default function LiquidarTerceros() {
                 />
               </div>
 
-              <div className="rounded-lg border border-amber-400/40 bg-amber-50/60 p-3 flex gap-2">
-                <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-700">
+              <div className="rounded-lg border border-warning/20 bg-warning-soft p-3 flex gap-2">
+                <AlertCircle className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-warning">
                   Esta acción registra el pago como completado. Asegúrate de haber realizado la
                   transferencia antes de confirmar.
                 </p>
@@ -624,7 +623,6 @@ export default function LiquidarTerceros() {
                   registrandoPago ||
                   (pagandoForm.metodo_pago === 'TRANSFERENCIA' && !pagandoForm.referencia_pago)
                 }
-                className="bg-primary hover:bg-primary/90 gap-2"
               >
                 {registrandoPago ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

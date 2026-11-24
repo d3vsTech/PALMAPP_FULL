@@ -60,7 +60,7 @@ export default function UsuarioDetalle() {
   );
 
   const getRolColor = (isAdmin: boolean) =>
-    isAdmin ? 'bg-primary/10 text-primary border-primary/20' : 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20';
+    isAdmin ? 'bg-primary/10 text-primary border-primary/20' : 'bg-info-soft text-info border-info/20';
 
   return (
     <div className="space-y-6">
@@ -80,13 +80,13 @@ export default function UsuarioDetalle() {
             <p className="text-lead">Información completa del usuario</p>
           </div>
         </div>
-        <Button onClick={() => navigate(`/usuarios/editar/${id}`)} className="gap-2 bg-primary hover:bg-primary/90">
+        <Button onClick={() => navigate(`/usuarios/editar/${id}`)}>
           <Edit className="h-4 w-4" /> Editar
         </Button>
       </div>
 
-      <Card className="border-border">
-        <CardContent className="p-6">
+      <Card>
+        <CardContent>
           <div className="flex items-start gap-6">
             <div className={`h-24 w-24 rounded-full flex items-center justify-center text-2xl font-bold flex-shrink-0 ${usuario.estado ? 'bg-primary/10 text-primary border-2 border-primary/20' : 'bg-muted text-muted-foreground border-2 border-border'}`}>
               {getIniciales(usuario.name)}
@@ -116,7 +116,7 @@ export default function UsuarioDetalle() {
       </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="border-border">
+        <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               <Mail className="h-5 w-5 text-primary" />
@@ -133,7 +133,7 @@ export default function UsuarioDetalle() {
           </CardContent>
         </Card>
 
-        <Card className="border-border">
+        <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               <Shield className="h-5 w-5 text-primary" />
@@ -160,7 +160,7 @@ export default function UsuarioDetalle() {
         </Card>
 
         {(usuario.asignado_at || fincaNombre) && (
-          <Card className="border-border lg:col-span-2">
+          <Card className="lg:col-span-2">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
                 <Building2 className="h-5 w-5 text-primary" />
@@ -190,8 +190,8 @@ export default function UsuarioDetalle() {
       <div className="space-y-4">
         <h2>Acciones Rápidas</h2>
         <div className="grid gap-4 md:grid-cols-2">
-          <Card className="border-border hover:border-primary/50 transition-colors cursor-pointer" onClick={() => navigate(`/usuarios/permisos/${id}`)}>
-            <CardContent className="p-6">
+          <Card className="hover:border-primary/50 transition-colors cursor-pointer" onClick={() => navigate(`/usuarios/permisos/${id}`)}>
+            <CardContent>
               <div className="flex items-center gap-4">
                 <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
                   <Shield className="h-6 w-6 text-primary" />
@@ -203,8 +203,8 @@ export default function UsuarioDetalle() {
               </div>
             </CardContent>
           </Card>
-          <Card className="border-border hover:border-primary/50 transition-colors cursor-pointer" onClick={() => navigate(`/usuarios/editar/${id}`)}>
-            <CardContent className="p-6">
+          <Card className="hover:border-primary/50 transition-colors cursor-pointer" onClick={() => navigate(`/usuarios/editar/${id}`)}>
+            <CardContent>
               <div className="flex items-center gap-4">
                 <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
                   <Edit className="h-6 w-6 text-primary" />

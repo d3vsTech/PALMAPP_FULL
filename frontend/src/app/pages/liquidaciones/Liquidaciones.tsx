@@ -111,7 +111,7 @@ function LiquidacionesContent() {
             <Button
               variant="outline"
               onClick={() => navigate('/liquidaciones/vacaciones/historico')}
-              className="w-full gap-2 rounded-full sm:w-auto"
+              className="w-full rounded-full sm:w-auto"
             >
               <History className="h-4 w-4" />
               Histórico de vacaciones
@@ -123,7 +123,7 @@ function LiquidacionesContent() {
             <Button
               variant="outline"
               onClick={() => navigate(importar.ruta)}
-              className="w-full gap-2 rounded-full sm:w-auto"
+              className="w-full rounded-full sm:w-auto"
             >
               <Upload className="h-4 w-4" />
               {importar.label}
@@ -134,7 +134,7 @@ function LiquidacionesContent() {
 
       {/* Pestañas del módulo */}
       <Tabs value={activeTab} onValueChange={cambiarTab} className="space-y-6">
-        <Card className="border-border">
+        <Card>
           <CardContent className="p-3">
             <TabsList className="grid h-auto w-full grid-cols-2 gap-2 bg-transparent p-0 sm:grid-cols-3 lg:grid-cols-5">
               <TabsTrigger

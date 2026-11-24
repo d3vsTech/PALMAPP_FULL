@@ -41,7 +41,7 @@ export default function KPICard({
     <Card hover className="p-6">
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
-          <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">
+          <p className="mb-2 text-sm font-medium text-muted-foreground">
             {title}
           </p>
           <p className="text-3xl sm:text-4xl font-bold text-foreground">

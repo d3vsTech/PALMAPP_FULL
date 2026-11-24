@@ -284,7 +284,7 @@ export function SemillasTab() {
       </Dialog>
 
       <TabLoadingGate loading={loading} message="Cargando semillas…">
-      <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
+      <Card className="bg-card">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>

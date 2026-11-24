@@ -32,7 +32,7 @@ export default function ResumenLiquidacion({
           onClick={onVolver}
           variant="outline"
           size="lg"
-          className="gap-2"
+          
         >
           <ArrowLeft className="h-5 w-5" />
           Volver a Editar
@@ -40,7 +40,7 @@ export default function ResumenLiquidacion({
         <div className="flex gap-3">
           <Button
             onClick={onAceptar}
-            className="gap-2 bg-green-600 hover:bg-green-700"
+            className="bg-success hover:bg-success"
             size="lg"
           >
             <Check className="h-5 w-5" />
@@ -49,7 +49,7 @@ export default function ResumenLiquidacion({
           <Button
             onClick={onImprimir}
             variant="outline"
-            className="gap-2"
+            
             size="lg"
           >
             <Printer className="h-5 w-5" />
@@ -58,7 +58,7 @@ export default function ResumenLiquidacion({
           <Button
             onClick={onCompartirWhatsApp}
             variant="outline"
-            className="gap-2 text-green-600 border-green-600 hover:bg-green-50"
+            className="text-success border-success/40 hover:bg-success-soft"
             size="lg"
           >
             <MessageCircle className="h-5 w-5" />
@@ -67,7 +67,7 @@ export default function ResumenLiquidacion({
           <Button
             onClick={onDescargarPDF}
             variant="outline"
-            className="gap-2"
+            
             size="lg"
           >
             <Download className="h-5 w-5" />

@@ -67,7 +67,7 @@ export function TabPlateo({
   return (
     <>
                       <div className="flex justify-end">
-                        <Button onClick={agregarPlateo} className="gap-2" disabled={plateoEnEdicion !== null}>
+                        <Button onClick={agregarPlateo}  disabled={plateoEnEdicion !== null}>
                           <Plus className="h-4 w-4" />
                           Agregar plateo
                         </Button>
@@ -94,7 +94,7 @@ export function TabPlateo({
                                       const col = colaboradores.find(c => c.id === colId);
                                       return col ? (
                                         <Badge key={colId} variant="secondary" className="pl-2.5 pr-1 py-1 gap-1">
-                                          <span>{col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}</span>
+                                          <span>{col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-warning-soft text-warning border border-warning/20 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}</span>
                                           <button
                                             type="button"
                                             onClick={() => setPlateoEnEdicion({ ...plateoEnEdicion, colaboradores: plateoEnEdicion.colaboradores.filter(id => id !== colId) })}
@@ -168,7 +168,7 @@ export function TabPlateo({
                               <Button variant="outline" onClick={cancelarPlateo} type="button">
                                 Cancelar
                               </Button>
-                              <Button onClick={guardarPlateo} className="gap-2" type="button">
+                              <Button onClick={guardarPlateo}  type="button">
                                 <Save className="h-4 w-4" />
                                 Guardar
                               </Button>

@@ -170,12 +170,12 @@ export function SeguridadSocialTab() {
   const renderSeccion = (seccion: SeccionConfig) => {
     const lista = items[seccion.key] ?? [];
     return (
-      <Card key={seccion.key} className="overflow-hidden border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+      <Card key={seccion.key} className="overflow-hidden">
+        <CardHeader className="border-b bg-muted/40">
           <CardTitle>{seccion.titulo}</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">{seccion.descripcion}</p>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent>
           {/* Lista de entidades */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
             {[...lista].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((entidad) => (
@@ -208,7 +208,7 @@ export function SeguridadSocialTab() {
                 }
               }}
             />
-            <Button onClick={() => agregarEntidad(seccion)} className="gap-2">
+            <Button onClick={() => agregarEntidad(seccion)} >
               <Plus className="h-4 w-4" />
               Agregar
             </Button>

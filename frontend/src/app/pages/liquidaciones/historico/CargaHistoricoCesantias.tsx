@@ -217,7 +217,7 @@ export default function CargaHistoricoCesantias() {
           variant="ghost"
           size="sm"
           onClick={() => navigate('/liquidaciones?tab=cesantias')}
-          className="gap-2"
+          
         >
           <ArrowLeft className="h-4 w-4" />
           Volver a Liquidaciones
@@ -314,7 +314,7 @@ export default function CargaHistoricoCesantias() {
         {analisis && <CabecerasIgnoradas cabeceras={analisis.archivo.cabeceras_ignoradas} />}
 
         {analisis?.periodos.cesantias && !cargado && (
-          <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/30 dark:bg-amber-950/30 dark:text-amber-400">
+          <p className="flex items-start gap-2 rounded-lg border border-warning/20 bg-warning-soft p-3 text-sm text-warning">
             <Info className="mt-0.5 h-4 w-4 shrink-0" />
             El año {analisis.anio} ya tiene un histórico cargado con{' '}
             {analisis.periodos.cesantias.total_colaboradores} colaboradores. Lo que suba ahora
@@ -337,7 +337,7 @@ export default function CargaHistoricoCesantias() {
               </div>
               <div className="rounded-lg border border-border p-3">
                 <p className="text-xs text-muted-foreground">Reemplazan</p>
-                <p className="text-2xl font-bold text-amber-600">{resumen.a_sobrescribir}</p>
+                <p className="text-2xl font-bold text-warning">{resumen.a_sobrescribir}</p>
               </div>
               <div className="rounded-lg border border-border p-3">
                 <p className="text-xs text-muted-foreground">Con error</p>
@@ -371,7 +371,7 @@ export default function CargaHistoricoCesantias() {
             ))}
 
             {hayYaCargados && (
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/30 dark:bg-amber-950/30">
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-warning/20 bg-warning-soft p-4">
                 <Checkbox
                   checked={sobrescribir}
                   onCheckedChange={(v) => cambiarSobrescribir(v === true)}
@@ -425,7 +425,7 @@ export default function CargaHistoricoCesantias() {
                 <Button
                   onClick={() => void cargar()}
                   disabled={!listoParaCargar || !puedeCargar}
-                  className="gap-2"
+                  
                 >
                   {cargando ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -443,7 +443,7 @@ export default function CargaHistoricoCesantias() {
 
       {/* Las mismas reglas que trae la hoja de instrucciones de la plantilla,
           aquí donde se leen antes de subir el archivo. */}
-      <Card className="border-border">
+      <Card>
         <CardHeader className="border-b">
           <CardTitle className="text-base">Cómo llenar el archivo</CardTitle>
         </CardHeader>
@@ -511,7 +511,7 @@ export default function CargaHistoricoCesantias() {
           </div>
 
           <p className="flex items-start gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
             Las fechas se leen como día/mes. <strong>10/02/2024 es el 10 de febrero</strong>, no el
             2 de octubre. Revíselas en la tabla antes de cargar.
           </p>

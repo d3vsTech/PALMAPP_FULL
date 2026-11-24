@@ -16,6 +16,7 @@ import { Card, CardContent } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 import { Label } from '../../../components/ui/label';
+import { Textarea } from '../../../components/ui/textarea';
 import { Checkbox } from '../../../components/ui/checkbox';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -107,7 +108,7 @@ function DesprendiblePreview({ fila, tipo }: { fila: PreviewFilaLiquidacion; tip
         : esIntereses ? 'Saldo de cesantías' : '';
 
   return (
-    <Card className={`border-border overflow-hidden ${bloqueada ? 'border-destructive/50' : ''}`}>
+    <Card className={`overflow-hidden ${bloqueada ? 'border-destructive/50' : ''}`}>
       {/* Desprendible header */}
       <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-background">
         <div className="h-9 w-9 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center justify-center text-xs font-bold shrink-0">
@@ -154,7 +155,7 @@ function DesprendiblePreview({ fila, tipo }: { fila: PreviewFilaLiquidacion; tip
           <div className="flex items-center gap-2 px-5 pt-4 pb-2">
             <TrendingUp className="h-4 w-4 text-primary" />
             <span className="text-sm font-semibold text-primary">Base de Cálculo</span>
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground ml-auto">
+            <span className="ml-auto text-xs font-medium text-muted-foreground">
               {metodoLabel}
             </span>
           </div>
@@ -162,21 +163,21 @@ function DesprendiblePreview({ fila, tipo }: { fila: PreviewFilaLiquidacion; tip
             <>
               <div className="px-5 pb-1 space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Salario Básico</span>
+                  <span className="text-[13px] font-medium text-muted-foreground">Salario Básico</span>
                   <span className="text-sm font-medium">{fmtCOP(fila.base.salario_basico)}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Auxilio de Transporte</span>
+                  <span className="text-[13px] font-medium text-muted-foreground">Auxilio de Transporte</span>
                   <span className="text-sm font-medium">{fila.base.auxilio_transporte > 0 ? fmtCOP(fila.base.auxilio_transporte) : <span className="text-muted-foreground">$0</span>}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Promedio Variables</span>
+                  <span className="text-[13px] font-medium text-muted-foreground">Promedio Variables</span>
                   <span className="text-sm font-medium">{fila.base.promedio_variables > 0 ? fmtCOP(fila.base.promedio_variables) : <span className="text-muted-foreground">$0</span>}</span>
                 </div>
               </div>
               <div className="mx-5 my-3 border-t border-primary/20" />
               <div className="flex justify-between items-center px-5 pb-4">
-                <span className="text-xs uppercase tracking-wide font-bold text-primary">Base Prestacional</span>
+                <span className="text-xs font-semibold text-primary">Base Prestacional</span>
                 <span className="text-sm font-bold text-primary">{fmtCOP(fila.base.base_prestacional)}</span>
               </div>
             </>
@@ -184,23 +185,23 @@ function DesprendiblePreview({ fila, tipo }: { fila: PreviewFilaLiquidacion; tip
             <>
               <div className="px-5 pb-1 space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Saldo Cesantías</span>
+                  <span className="text-[13px] font-medium text-muted-foreground">Saldo Cesantías</span>
                   <span className="text-sm font-medium">{fmtCOP(fila.origen?.saldo_cesantias ?? fila.base.base_prestacional)}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Tasa de Interés</span>
+                  <span className="text-[13px] font-medium text-muted-foreground">Tasa de Interés</span>
                   <span className="text-sm font-medium">
                     {fila.resultado.tasa_aplicada ?? 12}% anual <span className="text-muted-foreground text-xs">(Ley 52/75)</span>
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Días Base</span>
+                  <span className="text-[13px] font-medium text-muted-foreground">Días Base</span>
                   <span className="text-sm font-medium">{fila.resultado.dias}</span>
                 </div>
               </div>
               <div className="mx-5 my-3 border-t border-primary/20" />
               <div className="flex justify-between items-center px-5 pb-4">
-                <span className="text-xs uppercase tracking-wide font-bold text-primary">Fórmula</span>
+                <span className="text-xs font-semibold text-primary">Fórmula</span>
                 <span className="text-xs text-primary">{fila.resultado.formula_aplicada}</span>
               </div>
             </>
@@ -211,18 +212,18 @@ function DesprendiblePreview({ fila, tipo }: { fila: PreviewFilaLiquidacion; tip
         {conBaseSalarial && (
           <div className="px-5 pt-4 pb-2 space-y-2">
             <div className="flex justify-between items-center">
-              <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Días</span>
+              <span className="text-[13px] font-medium text-muted-foreground">Días</span>
               <span className="text-sm font-medium">{fila.resultado.dias}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Fórmula</span>
+              <span className="text-[13px] font-medium text-muted-foreground">Fórmula</span>
               <span className="text-xs text-muted-foreground">{fila.resultado.formula_aplicada}</span>
             </div>
           </div>
         )}
         <div className={`mx-5 border-t-2 border-primary/20 ${conBaseSalarial ? '' : 'mt-4'}`} />
         <div className="flex justify-between items-center px-5 py-4">
-          <span className="text-sm uppercase tracking-wide font-bold">{txt.totalCardLabel}</span>
+          <span className="text-sm font-semibold">{txt.totalCardLabel}</span>
           <span className="text-xl font-bold text-primary">{fmtCOP(fila.resultado.valor_final)}</span>
         </div>
 
@@ -230,12 +231,12 @@ function DesprendiblePreview({ fila, tipo }: { fila: PreviewFilaLiquidacion; tip
             el promedio se proyecta sobre lo ya liquidado. El valor es
             provisional, así que se avisa aparte de las advertencias. */}
         {diasProyectados > 0 && (
-          <div className="mx-5 mb-4 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3">
-            <p className="text-xs font-semibold text-orange-800 flex items-center gap-1.5">
+          <div className="mx-5 mb-4 rounded-lg border border-warning/20 bg-warning-soft px-4 py-3">
+            <p className="text-xs font-semibold text-warning flex items-center gap-1.5">
               <Clock className="h-3.5 w-3.5 shrink-0" />
               Valor provisional: {diasProyectados} día(s) proyectados
             </p>
-            <p className="text-xs text-orange-800 mt-1">
+            <p className="text-xs text-warning mt-1">
               Los últimos {diasProyectados} día(s) del semestre todavía no tienen nómina cerrada. Se calculan con el promedio de lo ya liquidado para poder pagar a tiempo. Al cerrar esa nómina puedes reabrir el período y recalcular para dejar el valor definitivo.
             </p>
           </div>
@@ -253,7 +254,7 @@ function DesprendiblePreview({ fila, tipo }: { fila: PreviewFilaLiquidacion; tip
             {fila.advertencias
               .filter((a) => a.code !== 'PRIMA_TRAMO_PROYECTADO')
               .map((a, i) => (
-                <p key={i} className="text-xs text-orange-700 flex items-center gap-1.5">
+                <p key={i} className="text-xs text-warning flex items-center gap-1.5">
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                   {a.mensaje ?? a.code}
                 </p>
@@ -498,7 +499,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
   if (!periodo) {
     return (
       <div className="space-y-4">
-        <Button variant="ghost" size="sm" asChild className="gap-2">
+        <Button variant="ghost" size="sm" asChild>
           <Link to={txt.rutaTab}><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
         </Button>
         <p className="text-muted-foreground">Período no encontrado.</p>
@@ -519,7 +520,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
   // ── Wizard BORRADOR ───────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      <Button variant="ghost" size="sm" asChild className="gap-2">
+      <Button variant="ghost" size="sm" asChild>
         <Link to={txt.rutaTab}><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
       </Button>
 
@@ -531,15 +532,15 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
         </p>
       </div>
 
-      <Card className="border-border">
-        <CardContent className="p-6">
+      <Card>
+        <CardContent>
           <StepBar actual={paso} />
         </CardContent>
       </Card>
 
       {/* ── PASO 1: Info del período ── */}
       {paso === 1 && (
-        <Card className="border-border">
+        <Card>
           <CardContent className="p-6 space-y-6">
             <div className="flex items-center gap-3 mb-2">
               <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -590,12 +591,12 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
                 </div>
               )}
             </div>
-            <div className="p-4 rounded-xl border border-orange-200 bg-orange-50 text-sm text-orange-800">
+            <div className="p-4 rounded-xl border border-warning/20 bg-warning-soft text-sm text-warning">
               Fecha límite: legal el <strong>{formatFecha(periodo.fecha_limite_legal, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>, operativa el <strong>{formatFecha(periodo.fecha_limite_operativa, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>. {txt.avisoLimite}
             </div>
             {periodo.advertencias_globales.map((a, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
-                <AlertTriangle className="h-4 w-4 shrink-0 text-orange-500" />
+              <div key={i} className="flex items-center gap-3 rounded-xl border border-warning/20 bg-warning-soft px-4 py-3 text-sm text-warning">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
                 <span>{a.mensaje ?? a.code}</span>
               </div>
             ))}
@@ -605,7 +606,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
 
       {/* ── PASO 2: Seleccionar colaboradores ── */}
       {paso === 2 && (
-        <Card className="overflow-hidden border-border">
+        <Card className="overflow-hidden">
           <CardContent className="p-6 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-3">
@@ -617,7 +618,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
                   <p className="text-sm text-muted-foreground">Agrega los colaboradores a este período de {txt.nombre}</p>
                 </div>
               </div>
-              <Button variant="outline" size="sm" onClick={toggleTodos} disabled={elegibles.length === 0} className="gap-2">
+              <Button variant="outline" size="sm" onClick={toggleTodos} disabled={elegibles.length === 0}>
                 <Users className="h-4 w-4" />
                 {elegibles.length > 0 && marcados.length === elegibles.length ? 'Quitar Todos' : 'Agregar Todos'}
               </Button>
@@ -668,24 +669,24 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
                   <thead>
                     <tr className="border-b border-border bg-muted/30">
                       <th className="w-12 p-4">
-                        <Checkbox checked={elegibles.length > 0 && marcados.length === elegibles.length} onCheckedChange={toggleTodos} />
+                        <Checkbox checked={elegibles.length> 0 && marcados.length === elegibles.length} onCheckedChange={toggleTodos} />
                       </th>
-                      <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Nombre</th>
-                      <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cargo</th>
+                      <th className="p-4 text-left text-[13px] font-semibold text-muted-foreground">Nombre</th>
+                      <th className="p-4 text-left text-[13px] font-semibold text-muted-foreground">Cargo</th>
                       {esIntereses ? (
                         <>
-                          <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Saldo Cesantías</th>
-                          <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Días Base</th>
-                          <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Intereses Estimados</th>
+                          <th className="p-4 text-right text-[13px] font-semibold text-muted-foreground">Saldo Cesantías</th>
+                          <th className="p-4 text-right text-[13px] font-semibold text-muted-foreground">Días Base</th>
+                          <th className="p-4 text-right text-[13px] font-semibold text-muted-foreground">Intereses Estimados</th>
                         </>
                       ) : (
                         <>
                           {esCesantias && (
-                            <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Fondo</th>
+                            <th className="p-4 text-left text-[13px] font-semibold text-muted-foreground">Fondo</th>
                           )}
-                          <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Salario / Promedio</th>
+                          <th className="p-4 text-right text-[13px] font-semibold text-muted-foreground">Salario / Promedio</th>
                           {esPrima && (
-                            <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Días</th>
+                            <th className="p-4 text-right text-[13px] font-semibold text-muted-foreground">Días</th>
                           )}
                         </>
                       )}
@@ -741,7 +742,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
                                 <td className="p-4 text-right">
                                   <span className="font-semibold text-sm">{col.dias_computados ?? '—'}</span>
                                   {(col.dias_proyectados ?? 0) > 0 && (
-                                    <p className="text-[10px] text-orange-600 uppercase">
+                                    <p className="text-[10px] text-warning uppercase">
                                       {col.dias_proyectados} proyectados
                                     </p>
                                   )}
@@ -760,7 +761,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
             {/* Excluidos con motivo (§3.1) */}
             {excluidos.length > 0 && (
               <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-1.5">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                <p className="text-[13px] font-medium text-muted-foreground">
                   {excluidos.length} colaborador{excluidos.length !== 1 ? 'es' : ''} no elegible{excluidos.length !== 1 ? 's' : ''}
                 </p>
                 {excluidos.map((ex) => (
@@ -822,12 +823,12 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
 
       {/* Navegación */}
       <div className="barra-acciones flex justify-between">
-        <Button variant="outline" onClick={paso === 1 ? () => navigate(txt.rutaTab) : retroceder} disabled={avanzando || confirmando} className="gap-2">
+        <Button variant="outline" onClick={paso === 1 ? () => navigate(txt.rutaTab) : retroceder} disabled={avanzando || confirmando} >
           <ArrowLeft className="h-4 w-4" />
           {paso === 1 ? 'Cancelar' : 'Anterior'}
         </Button>
         {paso < 3 ? (
-          <Button onClick={avanzar} disabled={avanzando} className="gap-2">
+          <Button onClick={avanzar} disabled={avanzando}>
             {avanzando && <Loader2 className="h-4 w-4 animate-spin" />}
             Siguiente
             <ArrowRight className="h-4 w-4" />
@@ -836,7 +837,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
           <Button
             onClick={() => confirmar(false)}
             disabled={confirmando || cargandoPreview || !preview || (preview.bloqueantes.length > 0)}
-            className="gap-2 bg-success hover:bg-success/90"
+            className="bg-success hover:bg-success/90"
             title={preview && preview.bloqueantes.length > 0 ? 'Hay colaboradores con datos bloqueantes: quítalos o corrige sus datos' : undefined}
           >
             {confirmando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
@@ -862,13 +863,13 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
           </AlertDialogHeader>
           <div className="space-y-2">
             <Label htmlFor="motivoForzado">Motivo <span className="text-destructive">*</span></Label>
-            <textarea
+            <Textarea
               id="motivoForzado"
               rows={3}
               value={motivoForzado}
               onChange={(e) => setMotivoForzado(e.target.value)}
               placeholder="Ej: enero a marzo se liquidó en el sistema anterior"
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="resize-none"
             />
           </div>
           <AlertDialogFooter>

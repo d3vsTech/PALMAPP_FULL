@@ -128,7 +128,7 @@ export function PanelDevengadosManuales({
           size="sm"
           disabled={yaHaySalarioPendiente}
           onClick={() => onAgregar('SALARIO_PENDIENTE')}
-          className="gap-1.5"
+          
         >
           <Plus className="h-3.5 w-3.5" />
           Salario pendiente
@@ -138,7 +138,7 @@ export function PanelDevengadosManuales({
           variant="outline"
           size="sm"
           onClick={() => onAgregar('OTRO_DEVENGADO')}
-          className="gap-1.5"
+          
         >
           <Plus className="h-3.5 w-3.5" />
           Otro devengado
@@ -230,7 +230,7 @@ export function PanelDeducciones({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">Otras deducciones</h3>
-          <Button type="button" variant="outline" size="sm" onClick={onAgregarOtra} className="gap-1.5">
+          <Button type="button" variant="outline" size="sm" onClick={onAgregarOtra}>
             <Plus className="h-3.5 w-3.5" />
             Agregar
           </Button>

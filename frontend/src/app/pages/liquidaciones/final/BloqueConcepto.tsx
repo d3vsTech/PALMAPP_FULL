@@ -68,7 +68,7 @@ export function BloqueConcepto({
             <span className="h-2 w-2 rounded-full bg-primary" />
             {titulo}
             {concepto?.es_manual && (
-              <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+              <Badge variant="outline" className="bg-warning-soft text-warning border-warning/20">
                 Ajustado
               </Badge>
             )}
@@ -89,7 +89,7 @@ export function BloqueConcepto({
         concepto?.advertencias?.map((a, i) => (
           <p
             key={`${a.code}-${i}`}
-            className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400"
+            className="flex items-start gap-2 text-xs text-warning"
           >
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             {a.mensaje}
@@ -103,7 +103,7 @@ export function BloqueConcepto({
             variant="ghost"
             size="sm"
             onClick={() => setAbierto((v) => !v)}
-            className="h-8 gap-1.5 px-2 text-xs"
+            className="h-8 px-2 text-xs"
           >
             <Pencil className="h-3.5 w-3.5" />
             Ajustar a mano
@@ -160,7 +160,7 @@ export function BloqueConcepto({
                   variant="ghost"
                   size="sm"
                   onClick={onLimpiar}
-                  className="h-8 gap-1.5 px-2 text-xs"
+                  className="h-8 px-2 text-xs"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
                   Volver al valor calculado

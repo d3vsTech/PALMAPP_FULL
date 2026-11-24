@@ -1243,7 +1243,7 @@ export default function NuevaNominaWizard() {
             }
             navigate('/nomina');
           }}
-          className="mb-4 gap-2"
+          className="mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver
@@ -1314,7 +1314,7 @@ export default function NuevaNominaWizard() {
         })}
       </div>
 
-      <Card className="overflow-hidden border-border">
+      <Card className="overflow-hidden">
         <CardContent className="p-8">
           {/* Paso 1: Información del período */}
           {pasoActual === 1 && (
@@ -1510,7 +1510,7 @@ export default function NuevaNominaWizard() {
                       ({colaboradoresAgregados.length})
                     </span>
                   </p>
-                  <Card className="overflow-hidden border-border">
+                  <Card className="overflow-hidden">
                     <CardContent className="p-0">
                       <div className="overflow-x-auto">
                         <table className="w-full">
@@ -1554,7 +1554,7 @@ export default function NuevaNominaWizard() {
                                     <div className="flex items-center gap-3">
                                       <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${
                                         c.tipo === 'OP'
-                                          ? 'bg-amber-500/10 text-amber-700 border-amber-500/30'
+                                          ? 'bg-warning-soft text-warning border-warning/20'
                                           : 'bg-primary/10 text-primary border-primary/20'
                                       }`}>
                                         <span className="text-sm font-bold">{iniciales}</span>
@@ -1569,7 +1569,7 @@ export default function NuevaNominaWizard() {
                                   </td>
                                   <td className="p-4">
                                     {c.tipo === 'OP' ? (
-                                      <Badge className="text-xs bg-amber-500/10 text-amber-700 border-amber-300">
+                                      <Badge className="text-xs bg-warning-soft text-warning border-warning/20">
                                         {c.tercero ?? 'Tercero'}
                                       </Badge>
                                     ) : (
@@ -1583,7 +1583,7 @@ export default function NuevaNominaWizard() {
                                     <Badge className={`text-xs ${
                                       liquidado
                                         ? 'bg-success/10 text-success border-success/20'
-                                        : 'bg-amber-500/10 text-amber-600 border-amber-200'
+                                        : 'bg-warning-soft text-warning border-warning/20'
                                     }`}>
                                       {c.estado}
                                     </Badge>
@@ -1623,14 +1623,14 @@ export default function NuevaNominaWizard() {
                   nómina cruzada. Sin esto, el usuario busca a Juan, no lo
                   encuentra y no sabe por qué. */}
               {excluidos.length > 0 && (
-                <div className="rounded-lg border border-amber-500/30 bg-amber-50/60 dark:bg-amber-950/20 p-3">
+                <div className="rounded-lg border border-warning/20 bg-warning-soft p-3">
                   <div className="flex items-start gap-2">
-                    <AlertCircle className="h-4 w-4 mt-0.5 text-amber-700 shrink-0" />
+                    <AlertCircle className="h-4 w-4 mt-0.5 text-warning shrink-0" />
                     <div className="flex-1 space-y-1">
-                      <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                      <p className="text-sm font-semibold text-warning">
                         {excluidos.length} colaborador{excluidos.length !== 1 ? 'es' : ''} no aparece{excluidos.length !== 1 ? 'n' : ''} en la lista
                       </p>
-                      <p className="text-xs text-amber-800/80 dark:text-amber-200/80">
+                      <p className="text-xs text-foreground">
                         {excluidos.map((e) => e.nombre_completo).join(', ')}
                         {' — '}ya está{excluidos.length !== 1 ? 'n' : ''} en otra nómina cuyos días se cruzan con este período.
                       </p>
@@ -1648,7 +1648,7 @@ export default function NuevaNominaWizard() {
                     Nómina
                   </Badge>
                 </div>
-                <Card className="overflow-hidden border-border">
+                <Card className="overflow-hidden">
                   <CardContent className="p-0">
                     {cargandoEmpleados ? (
                       <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
@@ -1733,7 +1733,7 @@ export default function NuevaNominaWizard() {
                                                 marca el usuario no distingue a un
                                                 retirado de alguien que sigue activo. */}
                                             {empleado.fecha_retiro && (
-                                              <p className="text-xs text-amber-700 dark:text-amber-400">
+                                              <p className="text-xs text-warning">
                                                 Retirado el {empleado.fecha_retiro}
                                               </p>
                                             )}
@@ -1829,7 +1829,7 @@ export default function NuevaNominaWizard() {
               <div>
                 <div className="flex items-center gap-2 mb-3 flex-wrap">
                   <h3 className="text-base font-bold">Empresas Terceras</h3>
-                  <Badge className="text-xs bg-amber-500/10 text-amber-700 border-amber-300">
+                  <Badge className="text-xs bg-warning-soft text-warning border-warning/20">
                     Prestación de Servicios
                   </Badge>
                   {operariosSeleccionados.length > 0 && (
@@ -1863,7 +1863,7 @@ export default function NuevaNominaWizard() {
                   )}
                 </div>
 
-                <Card className="overflow-hidden border-border">
+                <Card className="overflow-hidden">
                   <CardContent className="p-0">
                     {grupos.length === 0 ? (
                       <div className="text-center py-8 text-sm text-muted-foreground">
@@ -1908,9 +1908,9 @@ export default function NuevaNominaWizard() {
                               return (
                                 <tr
                                   key={`empresa-${g.terceroId}`}
-                                  className={`border-b border-border last:border-0 hover:bg-amber-50/40 dark:hover:bg-amber-950/10 transition-colors cursor-pointer ${
+                                  className={`border-b border-border last:border-0 hover:bg-warning-soft dark:hover:bg-warning-soft transition-colors cursor-pointer ${
                                     idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'
-                                  } ${todosSeleccionados ? 'bg-amber-50/60 dark:bg-amber-950/20' : ''}`}
+                                  } ${todosSeleccionados ? 'bg-warning-soft' : ''}`}
                                   {...comoBoton(toggleEmpresa)}
                                 >
                                   <td className="p-4" onClick={(e) => e.stopPropagation()}>
@@ -1943,7 +1943,7 @@ export default function NuevaNominaWizard() {
                                     </span>
                                   </td>
                                   <td className="p-4 text-right">
-                                    <span className="text-sm font-bold text-amber-700">
+                                    <span className="text-sm font-bold text-warning">
                                       {valorTotal > 0 ? formatCOP(valorTotal) : '—'}
                                     </span>
                                   </td>
@@ -1987,7 +1987,7 @@ export default function NuevaNominaWizard() {
                     promediosEditadosSnapshot.current = { ...promediosEditados };
                     setMostrarAjustePromedios(true);
                   }}
-                  className="gap-2 border-primary/50 text-primary hover:bg-primary/5"
+                  className="border-primary/50 text-primary hover:bg-primary/5"
                 >
                   <Settings2 className="h-4 w-4" />
                   Ajustar Promedios
@@ -1995,7 +1995,7 @@ export default function NuevaNominaWizard() {
               </div>
 
               {cargandoBundle ? (
-                <Card className="border-border">
+                <Card>
                   <CardContent className="py-12 flex items-center justify-center gap-2 text-muted-foreground">
                     <Loader2 className="h-5 w-5 animate-spin" />
                     Calculando comparación de cosecha...
@@ -2113,7 +2113,7 @@ export default function NuevaNominaWizard() {
                   : estadoDif === 'critico'
                     ? 'bg-destructive/10 text-destructive'
                     : estadoDif === 'atencion'
-                      ? 'bg-amber-500/10 text-amber-700'
+                      ? 'bg-warning-soft text-warning'
                       : 'bg-muted text-muted-foreground';
                 const labelEstado = estadoDif === 'vacio'
                   ? 'Sin cosechas en el período'
@@ -2130,14 +2130,14 @@ export default function NuevaNominaWizard() {
                         liquida DE MENOS. Se resuelve cargando la fruta al
                         viaje y volviendo a liquidar. */}
                     {(bundleCosecha?.cosechas_con_gajos_pendientes ?? 0) > 0 && (
-                      <div className="rounded-lg border-2 border-orange-500/40 bg-orange-50/60 dark:bg-orange-950/20 p-4 mb-4">
+                      <div className="rounded-lg border-2 border-warning/20 bg-warning-soft p-4 mb-4">
                         <div className="flex items-start gap-3">
-                          <AlertCircle className="h-5 w-5 mt-0.5 text-orange-700 shrink-0" />
+                          <AlertCircle className="h-5 w-5 mt-0.5 text-warning shrink-0" />
                           <div className="flex-1 space-y-1">
-                            <p className="text-sm font-semibold text-orange-900 dark:text-orange-200">
+                            <p className="text-sm font-semibold text-warning">
                               {bundleCosecha?.total_gajos_pendientes_enviar} gajos sin despachar en {bundleCosecha?.cosechas_con_gajos_pendientes} cosecha{(bundleCosecha?.cosechas_con_gajos_pendientes ?? 0) !== 1 ? 's' : ''}
                             </p>
-                            <p className="text-xs text-orange-800/80 dark:text-orange-200/80">
+                            <p className="text-xs text-foreground">
                               Esa fruta se cortó en este período pero no está cargada a ningún camión, así que no entra en la liquidación. Cárgala a un viaje y vuelve a liquidar, o continúa si ya sabes que no va a despacharse.
                             </p>
                           </div>
@@ -2158,7 +2158,7 @@ export default function NuevaNominaWizard() {
                                 state: { from: 'nomina', nominaId, paso: 3 },
                               });
                             }}
-                            className="shrink-0 bg-orange-600 hover:bg-orange-700 text-white"
+                            className="shrink-0 bg-warning hover:bg-warning text-white"
                           >
                             Revisar
                           </Button>
@@ -2181,7 +2181,7 @@ export default function NuevaNominaWizard() {
                           El desglose (si aplica) va debajo de Extractora. */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 divide-x divide-border">
                         <div className="px-6 py-5 space-y-2">
-                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Colaboradores</p>
+                          <p className="text-[13px] font-medium text-muted-foreground">Colaboradores</p>
                           <div className="flex items-end gap-1.5">
                             <p className="text-2xl sm:text-3xl font-bold text-foreground leading-none">
                               {totalColabs > 0 ? totalColabs.toLocaleString('es-CO') : '—'}
@@ -2202,7 +2202,7 @@ export default function NuevaNominaWizard() {
                           </div>
                         </div>
                         <div className="px-6 py-5 space-y-2">
-                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Extractora</p>
+                          <p className="text-[13px] font-medium text-muted-foreground">Extractora</p>
                           <div className="flex items-end gap-1.5">
                             <p className="text-2xl sm:text-3xl font-bold text-foreground leading-none">
                               {totalExtr > 0 ? totalExtr.toLocaleString('es-CO') : '—'}
@@ -2230,7 +2230,7 @@ export default function NuevaNominaWizard() {
                             </div>
                           ) : (
                             <div className="flex items-center gap-1.5 pt-1 border-t border-border/50">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                              <span className="w-1.5 h-1.5 rounded-full bg-warning" />
                               <p className="text-xs text-muted-foreground">
                                 {cosechasFuera > 0
                                   ? `Ajustada · ${cosechasFuera} cosecha${cosechasFuera !== 1 ? 's' : ''} conciliada${cosechasFuera !== 1 ? 's' : ''} entre períodos`
@@ -2239,17 +2239,17 @@ export default function NuevaNominaWizard() {
                             </div>
                           )}
                         </div>
-                        <div className={`px-6 py-5 space-y-2 ${estadoDif === 'ok' ? 'bg-success/5' : estadoDif === 'critico' ? 'bg-destructive/5' : estadoDif === 'atencion' ? 'bg-amber-500/5' : 'bg-muted/10'}`}>
-                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Diferencia real</p>
+                        <div className={`px-6 py-5 space-y-2 ${estadoDif === 'ok' ? 'bg-success/5' : estadoDif === 'critico' ? 'bg-destructive/5' : estadoDif === 'atencion' ? 'bg-warning-soft' : 'bg-muted/10'}`}>
+                          <p className="text-[13px] font-medium text-muted-foreground">Diferencia real</p>
                           <div className="flex items-end gap-1.5">
-                            <p className={`text-3xl font-bold leading-none ${estadoDif === 'ok' ? 'text-success' : estadoDif === 'critico' ? 'text-destructive' : estadoDif === 'atencion' ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                            <p className={`text-3xl font-bold leading-none ${estadoDif === 'ok' ? 'text-success' : estadoDif === 'critico' ? 'text-destructive' : estadoDif === 'atencion' ? 'text-warning' : 'text-muted-foreground'}`}>
                               {estadoDif === 'vacio' ? '—' : Math.abs(diff).toLocaleString('es-CO')}
                             </p>
                             <p className="text-sm text-muted-foreground mb-0.5">kg</p>
                           </div>
                           <div className="flex items-center gap-1.5 pt-1 border-t border-border/50">
-                            <span className={`w-1.5 h-1.5 rounded-full ${estadoDif === 'ok' ? 'bg-success' : estadoDif === 'critico' ? 'bg-destructive' : estadoDif === 'atencion' ? 'bg-amber-500' : 'bg-muted-foreground'}`} />
-                            <p className={`text-xs font-medium ${estadoDif === 'ok' ? 'text-success' : estadoDif === 'critico' ? 'text-destructive' : estadoDif === 'atencion' ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${estadoDif === 'ok' ? 'bg-success' : estadoDif === 'critico' ? 'bg-destructive' : estadoDif === 'atencion' ? 'bg-warning' : 'bg-muted-foreground'}`} />
+                            <p className={`text-xs font-medium ${estadoDif === 'ok' ? 'text-success' : estadoDif === 'critico' ? 'text-destructive' : estadoDif === 'atencion' ? 'text-warning' : 'text-muted-foreground'}`}>
                               {estadoDif === 'vacio'
                                 ? 'No hay datos para comparar'
                                 : `${(pctDiff * 100).toFixed(1)}% · ${estadoDif === 'ok' ? 'Normal' : estadoDif === 'critico' ? 'Significativa' : 'Revisar'}`}
@@ -2263,7 +2263,7 @@ export default function NuevaNominaWizard() {
                     <div className="space-y-4">
                       <h3 className="text-base font-semibold text-foreground">Detalle por Colaborador</h3>
                       {detalle.length === 0 ? (
-                        <Card className="bg-gradient-to-br from-muted/20 to-muted/5 border-dashed border-2">
+                        <Card className="border-2 border-dashed bg-muted/30">
                           <CardContent className="flex flex-col items-center justify-center py-12">
                             <Users className="h-12 w-12 text-muted-foreground mb-3" />
                             <p className="text-sm text-muted-foreground">
@@ -2278,7 +2278,7 @@ export default function NuevaNominaWizard() {
                           const iniciales = ((partes[0]?.[0] ?? '') + (partes[1]?.[0] ?? '')).toUpperCase() || '?';
                           const esTercero = d.tipo === 'OPERARIO';
                           return (
-                            <Card key={`${d.tipo}-${d.colaborador_id}`} className="border-border overflow-hidden">
+                            <Card key={`${d.tipo}-${d.colaborador_id}`} className="overflow-hidden">
                               <button
                                 type="button"
                                 className="w-full text-left"
@@ -2286,14 +2286,14 @@ export default function NuevaNominaWizard() {
                               >
                                 <div className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors">
                                   <div className="flex items-center gap-3">
-                                    <div className={`h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 ${esTercero ? 'bg-amber-500/10 text-amber-700' : 'bg-primary/10 text-primary'}`}>
+                                    <div className={`h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 ${esTercero ? 'bg-warning-soft text-warning' : 'bg-primary/10 text-primary'}`}>
                                       <span className="text-sm font-bold">{iniciales}</span>
                                     </div>
                                     <div>
                                       <div className="flex items-center gap-2">
                                         <p className="font-semibold text-foreground">{d.nombre_completo}</p>
                                         {esTercero && (
-                                          <Badge className="text-[10px] bg-amber-500/10 text-amber-700 border-amber-300">
+                                          <Badge className="text-[10px] bg-warning-soft text-warning border-warning/20">
                                             Tercero
                                           </Badge>
                                         )}
@@ -2334,7 +2334,7 @@ export default function NuevaNominaWizard() {
                                     const colorDiff = diff === 0
                                       ? 'text-success'
                                       : diff > 0
-                                        ? 'text-amber-600'
+                                        ? 'text-warning'
                                         : 'text-primary';
                                     return (
                                       <div className="flex items-center gap-4">
@@ -2426,7 +2426,7 @@ export default function NuevaNominaWizard() {
                                             return (
                                               <tr
                                                 key={idx}
-                                                className={`border-b border-border/40 last:border-0 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'} ${c.alerta_despacho === 'ALTA' ? 'bg-orange-50/40 dark:bg-orange-950/10' : ''}`}
+                                                className={`border-b border-border/40 last:border-0 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'} ${c.alerta_despacho === 'ALTA' ? 'bg-warning-soft' : ''}`}
                                                 title={c.despachado_fuera_del_periodo
                                                   ? `El viaje salió el ${c.fecha_viaje ?? 'día siguiente'} (otra quincena), pero la fila SÍ concilia contra su báscula acá. ${describirReglaFueraDelPeriodo(c.regla_fuera_del_periodo) ?? ''}`.trim()
                                                   : undefined}
@@ -2459,7 +2459,7 @@ export default function NuevaNominaWizard() {
                                                         salió en otra quincena, pero la fila SÍ concilia
                                                         contra su báscula acá. Ya no atenúa la fila. */}
                                                     {c.despachado_fuera_del_periodo && c.fecha_viaje && (
-                                                      <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wide bg-muted/60 text-muted-foreground border border-border rounded-md px-1.5 py-0.5">
+                                                      <span className="inline-flex items-center rounded-md border border-border bg-muted/60 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
                                                         despachado {c.fecha_viaje.slice(8, 10)}/{c.fecha_viaje.slice(5, 7)}
                                                       </span>
                                                     )}
@@ -2467,7 +2467,7 @@ export default function NuevaNominaWizard() {
                                                 </td>
                                                 <td className="p-2 text-right">{c.gajos_trabajados}</td>
                                                 <td className="p-2 text-right">{c.gajos_verificados}</td>
-                                                <td className={`p-2 text-right font-semibold ${c.diferencia_gajos === 0 ? 'text-muted-foreground' : c.diferencia_gajos > 0 ? 'text-amber-600' : 'text-primary'}`}>
+                                                <td className={`p-2 text-right font-semibold ${c.diferencia_gajos === 0 ? 'text-muted-foreground' : c.diferencia_gajos > 0 ? 'text-warning' : 'text-primary'}`}>
                                                   {Math.abs(c.diferencia_gajos)}
                                                 </td>
                                                 {(d.cosechas ?? []).some((x) => x.gajos_persona != null) && (
@@ -2502,7 +2502,7 @@ export default function NuevaNominaWizard() {
                                                         const estimado = org != null && !org.medido;
                                                         return (
                                                           <span
-                                                            className={`inline-flex items-center gap-1 ${estimado ? 'text-amber-700' : 'text-muted-foreground'}`}
+                                                            className={`inline-flex items-center gap-1 ${estimado ? 'text-warning' : 'text-muted-foreground'}`}
                                                             title={org?.detalle}
                                                           >
                                                             {estimado && <span aria-hidden="true">≈</span>}
@@ -2529,7 +2529,7 @@ export default function NuevaNominaWizard() {
                                                                     : (o ?? '');
                                                         return (
                                                           <span
-                                                            className={`inline-flex items-center gap-1 ${esBaseline ? 'text-amber-700' : ''}`}
+                                                            className={`inline-flex items-center gap-1 ${esBaseline ? 'text-warning' : ''}`}
                                                             title={tooltip}
                                                           >
                                                             {esBascula && <span aria-hidden="true">⚖</span>}
@@ -2557,7 +2557,7 @@ export default function NuevaNominaWizard() {
                                                     : Math.abs(difKg) < 1
                                                       ? 'text-muted-foreground'
                                                       : difKg > 0
-                                                        ? 'text-amber-600'
+                                                        ? 'text-warning'
                                                         : 'text-primary'
                                                 }`}>
                                                   {/* §4.6 (2026-09-05) — `diferencia_kg` ya nunca llega
@@ -2572,7 +2572,7 @@ export default function NuevaNominaWizard() {
                                                   <td className="p-2 text-right">
                                                     {gajosPend > 0 ? (
                                                       <span
-                                                        className={`inline-flex items-center gap-1 font-semibold ${c.alerta_despacho === 'ALTA' ? 'text-orange-700' : 'text-muted-foreground'}`}
+                                                        className={`inline-flex items-center gap-1 font-semibold ${c.alerta_despacho === 'ALTA' ? 'text-warning' : 'text-muted-foreground'}`}
                                                         title={tooltipAjuste}
                                                       >
                                                         {c.alerta_despacho === 'ALTA' && <AlertCircle className="h-3 w-3" />}
@@ -2615,7 +2615,7 @@ export default function NuevaNominaWizard() {
                                                 <td className="p-2 font-bold uppercase text-primary" colSpan={4}>Totales</td>
                                                 <td className="p-2 text-right font-bold">{totGT.toLocaleString('es-CO')}</td>
                                                 <td className="p-2 text-right font-bold">{totGV.toLocaleString('es-CO')}</td>
-                                                <td className={`p-2 text-right font-bold ${totDifG === 0 ? 'text-muted-foreground' : totDifG > 0 ? 'text-amber-600' : 'text-primary'}`}>
+                                                <td className={`p-2 text-right font-bold ${totDifG === 0 ? 'text-muted-foreground' : totDifG > 0 ? 'text-warning' : 'text-primary'}`}>
                                                   {Math.abs(totDifG)}
                                                 </td>
                                                 {mostrarGajosPersona && (
@@ -2631,7 +2631,7 @@ export default function NuevaNominaWizard() {
                                                 )}
                                                 <td className="p-2 text-right font-bold">{totKgT.toLocaleString('es-CO', { maximumFractionDigits: 4 })} kg</td>
                                                 <td className="p-2 text-right font-bold">{totKgE.toLocaleString('es-CO', { maximumFractionDigits: 4 })} kg</td>
-                                                <td className={`p-2 text-right font-bold ${Math.abs(totDifKg) < 1 ? 'text-success' : totDifKg > 0 ? 'text-amber-600' : 'text-primary'}`}>
+                                                <td className={`p-2 text-right font-bold ${Math.abs(totDifKg) < 1 ? 'text-success' : totDifKg > 0 ? 'text-warning' : 'text-primary'}`}>
                                                   {Math.abs(totDifKg).toLocaleString('es-CO', { maximumFractionDigits: 4 })} kg
                                                 </td>
                                               </tr>
@@ -2694,19 +2694,19 @@ export default function NuevaNominaWizard() {
                     nómina que se está creando en este wizard (que ya vive en
                     BORRADOR desde el paso 1). */}
                 {nominasMismoPeriodo.length > 0 && (
-                  <Card className="border-2 border-amber-500/40 bg-amber-50/60 dark:bg-amber-950/20">
+                  <Card className="border-2 border-warning/20 bg-warning-soft">
                     <CardContent className="p-4">
                       <div className="flex items-start gap-3">
-                        <AlertCircle className="h-5 w-5 mt-0.5 text-amber-700 shrink-0" />
+                        <AlertCircle className="h-5 w-5 mt-0.5 text-warning shrink-0" />
                         <div className="flex-1">
-                          <p className="text-sm font-semibold text-amber-900 dark:text-amber-200 mb-1">
+                          <p className="text-sm font-semibold text-warning mb-1">
                             Quincena partida — existe{nominasMismoPeriodo.length !== 1 ? 'n' : ''}{' '}
                             {nominasMismoPeriodo.length} nómina{nominasMismoPeriodo.length !== 1 ? 's' : ''} más para este período
                           </p>
-                          <p className="text-xs text-amber-800/80 dark:text-amber-200/80 mb-2">
+                          <p className="text-xs text-foreground mb-2">
                             Esta nómina no es la única del mes/quincena. Cada nómina cubre a un grupo distinto de colaboradores; ningún día se pagará dos veces (Postgres lo bloquea).
                           </p>
-                          <ul className="text-xs text-amber-900/90 dark:text-amber-100/90 space-y-0.5">
+                          <ul className="text-xs text-foreground space-y-0.5">
                             {nominasMismoPeriodo.map((n) => (
                               <li key={n.id}>
                                 <strong>{n.etiqueta ?? 'Sin etiqueta'}</strong>{' '}
@@ -2723,8 +2723,8 @@ export default function NuevaNominaWizard() {
                     </CardContent>
                   </Card>
                 )}
-                <Card className="border-border">
-                  <CardContent className="p-6">
+                <Card>
+                  <CardContent>
                     <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                       <FileText className="h-5 w-5 text-primary" />
                       Información del Período
@@ -2828,15 +2828,15 @@ export default function NuevaNominaWizard() {
                     return (
                       <div
                         key={`op-${c.nominaEmpleadoId}`}
-                        className="flex items-center gap-3 p-3 rounded-lg bg-amber-500/5"
+                        className="flex items-center gap-3 p-3 rounded-lg bg-warning-soft"
                       >
-                        <div className="h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 bg-amber-500/10 text-amber-700">
+                        <div className="h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 bg-warning-soft text-warning">
                           <span className="text-sm font-medium">{iniciales}</span>
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-medium">{c.nombre}</p>
-                            <Badge className="bg-amber-500/10 text-amber-700 border-amber-300 text-[10px]">
+                            <Badge className="bg-warning-soft text-warning border-warning/20 text-[10px]">
                               Tercero
                             </Badge>
                           </div>
@@ -2867,8 +2867,8 @@ export default function NuevaNominaWizard() {
 
                   return (
                     <>
-                      <Card className="border-border">
-                        <CardContent className="p-6">
+                      <Card>
+                        <CardContent>
                           <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                             <Users className="h-5 w-5 text-primary" />
                             Colaboradores Incluidos ({soloEmpleados.length})
@@ -2885,10 +2885,10 @@ export default function NuevaNominaWizard() {
                         </CardContent>
                       </Card>
 
-                      <Card className="border-border">
-                        <CardContent className="p-6">
+                      <Card>
+                        <CardContent>
                           <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-                            <Users className="h-5 w-5 text-amber-700" />
+                            <Users className="h-5 w-5 text-warning" />
                             Terceros Incluidos ({soloTerceros.length})
                           </h3>
                           {soloTerceros.length === 0 ? (
@@ -2907,7 +2907,7 @@ export default function NuevaNominaWizard() {
                 })()}
 
                 <Card className="border-primary bg-primary/5">
-                  <CardContent className="p-6">
+                  <CardContent>
                     <p className="text-sm text-muted-foreground mb-1">
                       {esEdicion
                         ? 'Al confirmar, se guardarán los cambios y podrás continuar con la liquidación desde el detalle de la nómina.'
@@ -2927,7 +2927,7 @@ export default function NuevaNominaWizard() {
           variant="outline"
           onClick={handleAtras}
           disabled={pasoActual === 1 || procesando}
-          className="gap-2"
+          
           title="Volver al paso anterior"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -2938,14 +2938,14 @@ export default function NuevaNominaWizard() {
           <Button
             onClick={handleSiguiente}
             disabled={!puedeAvanzar() || procesando}
-            className="gap-2"
+            
           >
             {procesando ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Siguiente
             <ArrowRight className="h-4 w-4" />
           </Button>
         ) : (
-          <Button onClick={handleFinalizar} className="gap-2">
+          <Button onClick={handleFinalizar}>
             <Check className="h-4 w-4" />
             Ir a la nómina
           </Button>
@@ -3060,7 +3060,7 @@ export default function NuevaNominaWizard() {
             const pctModal = totalColabs > 0 ? Math.abs(diff) / totalColabs : 0;
             const estado: 'ok' | 'critico' | 'atencion' =
               pctModal < 0.02 ? 'ok' : pctModal > 0.05 ? 'critico' : 'atencion';
-            const colorTexto = estado === 'ok' ? 'text-success' : estado === 'critico' ? 'text-destructive' : 'text-amber-700';
+            const colorTexto = estado === 'ok' ? 'text-success' : estado === 'critico' ? 'text-destructive' : 'text-warning';
 
             return (
               <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -3071,7 +3071,7 @@ export default function NuevaNominaWizard() {
                     ajustada por la conciliación cruzada entre períodos. */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 divide-x divide-border">
                   <div className="px-6 py-4">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+                    <p className="mb-1 text-[13px] font-medium text-muted-foreground">
                       Colaboradores
                     </p>
                     <p className="text-2xl font-bold">
@@ -3079,15 +3079,15 @@ export default function NuevaNominaWizard() {
                     </p>
                   </div>
                   <div className="px-6 py-4">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+                    <p className="mb-1 text-[13px] font-medium text-muted-foreground">
                       Extractora
                     </p>
                     <p className="text-2xl font-bold">
                       {totalExtr > 0 ? totalExtr.toLocaleString('es-CO') : '—'} <span className="text-sm text-muted-foreground font-normal">kg</span>
                     </p>
                   </div>
-                  <div className={`px-6 py-4 ${estado === 'ok' ? 'bg-success/5' : estado === 'critico' ? 'bg-destructive/5' : 'bg-amber-500/5'}`}>
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+                  <div className={`px-6 py-4 ${estado === 'ok' ? 'bg-success/5' : estado === 'critico' ? 'bg-destructive/5' : 'bg-warning-soft'}`}>
+                    <p className="mb-1 text-[13px] font-medium text-muted-foreground">
                       Diferencia real
                     </p>
                     <p className={`text-2xl font-bold ${colorTexto}`}>
@@ -3170,7 +3170,7 @@ export default function NuevaNominaWizard() {
                         <td className="p-3 pl-5 text-xs">
                           <span className="block text-foreground">{fechaFmt}</span>
                           <span
-                            className={`block text-[10px] leading-tight ${!esManual && origen && !origen.medido ? 'text-amber-700' : 'text-muted-foreground'}`}
+                            className={`block text-[10px] leading-tight ${!esManual && origen && !origen.medido ? 'text-warning' : 'text-muted-foreground'}`}
                             title={esManual ? 'Promedio puesto a mano para esta nómina' : origen?.detalle}
                           >
                             {etiquetaFuente}
@@ -3222,8 +3222,8 @@ export default function NuevaNominaWizard() {
               .filter((p) => esPromedioEstimado(p));
             if (estimados.length === 0) return null;
             return (
-              <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
-                <p className="text-xs text-amber-800 dark:text-amber-300">
+              <div className="rounded-lg border border-warning/20 bg-warning-soft p-3">
+                <p className="text-xs text-warning">
                   <strong>
                     {estimados.map((p) => p.lote_nombre).join(', ')}
                   </strong>
@@ -3251,7 +3251,7 @@ export default function NuevaNominaWizard() {
             <Button
               onClick={pedirConfirmacionGuardarPromedios}
               disabled={ajustandoPromedio || !hayCambiosPromedios}
-              className="gap-2"
+              
             >
               {ajustandoPromedio ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               Guardar Cambios
@@ -3294,7 +3294,7 @@ export default function NuevaNominaWizard() {
                 if (ok) setPasoActual(2);
               }}
               disabled={procesando}
-              className="gap-2"
+              
             >
               {procesando && <Loader2 className="h-4 w-4 animate-spin" />}
               Crear nómina adicional
@@ -3325,7 +3325,7 @@ export default function NuevaNominaWizard() {
                     return (
                       <li
                         key={c.lote_id}
-                        className={`rounded-lg border p-3 ${sube ? 'border-amber-500/30 bg-amber-50/40 dark:bg-amber-950/20' : 'border-destructive/30 bg-destructive/5'}`}
+                        className={`rounded-lg border p-3 ${sube ? 'border-warning/20 bg-warning-soft' : 'border-destructive/30 bg-destructive/5'}`}
                       >
                         <p className="text-sm font-semibold text-foreground">
                           {c.lote_nombre}
@@ -3338,7 +3338,7 @@ export default function NuevaNominaWizard() {
                           Impacta a <strong>{c.colaboradores_impactados} colaborador{c.colaboradores_impactados !== 1 ? 'es' : ''}</strong>
                           {' '}({c.gajos_totales.toLocaleString('es-CO')} gajos):
                           {' '}
-                          <strong className={sube ? 'text-amber-700' : 'text-destructive'}>
+                          <strong className={sube ? 'text-warning' : 'text-destructive'}>
                             {sube ? 'sube' : 'baja'} {Math.abs(Math.round(deltaKg)).toLocaleString('es-CO')} kg
                           </strong>
                           {' '}en el pago total de cosecha del lote.

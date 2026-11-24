@@ -125,7 +125,7 @@ export function SoportePrestamoCard({ prestamoId, documento, onCambio }: Props) 
   };
 
   return (
-    <Card className="border-border">
+    <Card>
       <CardHeader>
         <CardTitle>Soporte del préstamo</CardTitle>
       </CardHeader>
@@ -160,12 +160,12 @@ export function SoportePrestamoCard({ prestamoId, documento, onCambio }: Props) 
             </div>
             <div className="flex flex-wrap gap-2">
               {documento.previsualizable && (
-                <Button size="sm" variant="outline" onClick={() => void bajar(true)} className="gap-2">
+                <Button size="sm" variant="outline" onClick={() => void bajar(true)} >
                   <Eye className="h-3.5 w-3.5" />
                   Ver
                 </Button>
               )}
-              <Button size="sm" variant="outline" onClick={() => void bajar(false)} className="gap-2">
+              <Button size="sm" variant="outline" onClick={() => void bajar(false)} >
                 <Download className="h-3.5 w-3.5" />
                 Descargar
               </Button>
@@ -199,14 +199,14 @@ export function SoportePrestamoCard({ prestamoId, documento, onCambio }: Props) 
               variant="outline"
               onClick={() => setConfirmarBorrar(true)}
               disabled={trabajando}
-              className="gap-2 text-destructive hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
+              className="text-destructive hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
             >
               <Trash2 className="h-4 w-4" />
               Eliminar
             </Button>
           )}
           {documento && (
-            <Button variant="outline" onClick={guardarNota} disabled={trabajando} className="gap-2">
+            <Button variant="outline" onClick={guardarNota} disabled={trabajando}>
               {trabajando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Guardar observación
             </Button>
@@ -214,7 +214,7 @@ export function SoportePrestamoCard({ prestamoId, documento, onCambio }: Props) 
           <Button
             onClick={() => archivoRef.current?.click()}
             disabled={trabajando}
-            className="gap-2"
+            
           >
             {trabajando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             {documento ? 'Reemplazar archivo' : 'Subir soporte'}

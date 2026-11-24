@@ -186,7 +186,7 @@ export default function DesprendiblePago() {
           variant="ghost"
           size="sm"
           onClick={() => navigate(`/nomina/${nominaId}`)}
-          className="mb-4 gap-2"
+          className="mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver
@@ -199,7 +199,7 @@ export default function DesprendiblePago() {
       </div>
 
       {/* DESPRENDIBLE - SE IMPRIME */}
-      <Card className="border border-border shadow-lg max-w-4xl mx-auto">
+      <Card className="mx-auto max-w-4xl">
         <CardContent className="p-8">
           {/* Header del desprendible: grid 3 col con panel finca + título */}
           <div className="mb-8">
@@ -449,7 +449,7 @@ export default function DesprendiblePago() {
 
       {/* Acciones duplicadas abajo - NO SE IMPRIME */}
       <div className="print:hidden grid grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto">
-        <Button onClick={handleAceptar} size="lg" className="gap-2 bg-success hover:bg-success/90">
+        <Button onClick={handleAceptar} size="lg" className="bg-success hover:bg-success/90">
           <Check className="h-5 w-5" />
           Aceptar
         </Button>
@@ -458,7 +458,7 @@ export default function DesprendiblePago() {
           disabled={descargando}
           variant="outline"
           size="lg"
-          className="gap-2"
+          
         >
           <Printer className="h-5 w-5" />
           Imprimir
@@ -468,7 +468,7 @@ export default function DesprendiblePago() {
           disabled={generandoWa}
           variant="outline"
           size="lg"
-          className="gap-2 text-primary border-primary hover:bg-primary/5"
+          className="text-primary border-primary hover:bg-primary/5"
         >
           {generandoWa ? <Loader2 className="h-5 w-5 animate-spin" /> : <MessageCircle className="h-5 w-5" />}
           WhatsApp
@@ -478,7 +478,7 @@ export default function DesprendiblePago() {
           disabled={descargando}
           variant="outline"
           size="lg"
-          className="gap-2"
+          
         >
           {descargando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
           PDF

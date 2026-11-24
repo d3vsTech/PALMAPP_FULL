@@ -594,7 +594,7 @@ export default function NuevoConceptoNomina() {
 
         {/* El botón va al pie del formulario, alineado a su mismo ancho. */}
         <div className="barra-acciones flex justify-end">
-          <Button onClick={handleSave} size="lg" className="gap-2" disabled={guardando}>
+          <Button onClick={handleSave} size="lg"  disabled={guardando}>
             <Save className="h-5 w-5" />
             {guardando ? 'Guardando…' : 'Guardar'}
           </Button>

@@ -14,6 +14,7 @@ import { Card, CardContent } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
 import { Label } from '../../../components/ui/label';
+import { Textarea } from '../../../components/ui/textarea';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -187,7 +188,7 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
 
   return (
     <div className="space-y-6 print:space-y-3">
-      <Button variant="ghost" size="sm" asChild className="gap-2 print:hidden">
+      <Button variant="ghost" size="sm" asChild className="print:hidden">
         <Link to={txt.rutaTab}><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
       </Button>
 
@@ -213,7 +214,7 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
               {txt.badgeCompleto}
             </Badge>
           ) : periodo.estado_pago === 'PARCIAL' ? (
-            <Badge className="bg-orange-100 text-orange-700 border border-orange-200 text-sm px-3 py-1">
+            <Badge className="bg-warning-soft text-warning border border-warning/20 text-sm px-3 py-1">
               Giro parcial
             </Badge>
           ) : (
@@ -226,7 +227,7 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
       </div>
 
       {/* Ficha del período */}
-      <Card className="border-border">
+      <Card>
         <CardContent className="p-5">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
             <div>
@@ -272,7 +273,7 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
           variant="outline"
           onClick={() => void pedirPdfPeriodo('imprimir')}
           disabled={descargandoPeriodo}
-          className="gap-2"
+          
         >
           <Printer className="h-4 w-4" />
           Imprimir
@@ -281,7 +282,7 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
           variant="outline"
           onClick={() => void pedirPdfPeriodo('descargar')}
           disabled={descargandoPeriodo}
-          className="gap-2"
+          
         >
           {descargandoPeriodo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
           Descargar Soporte PDF
@@ -291,13 +292,13 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
           onClick={() => setReabrirOpen(true)}
           disabled={reabrirDeshabilitado}
           title={reabrirDeshabilitado ? 'No se puede reabrir con giros registrados: anúlalos primero' : undefined}
-          className="gap-2"
+          
         >
           <RotateCcw className="h-4 w-4" />
           Reabrir
         </Button>
         {pendientes.length > 0 && (
-          <Button onClick={() => setObjetivoPago({ fila: null, pendientes: pendientes.length })} className="gap-2">
+          <Button onClick={() => setObjetivoPago({ fila: null, pendientes: pendientes.length })} >
             <Banknote className="h-4 w-4" />
             {txt.girarTodos}
           </Button>
@@ -323,8 +324,8 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
       {periodo.advertencias_globales.length > 0 && (
         <div className="space-y-2">
           {periodo.advertencias_globales.map((a, i) => (
-            <div key={i} className="flex items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
-              <AlertTriangle className="h-4 w-4 shrink-0 text-orange-500" />
+            <div key={i} className="flex items-center gap-3 rounded-xl border border-warning/20 bg-warning-soft px-4 py-3 text-sm text-warning">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
               <span>{a.mensaje ?? a.code}</span>
             </div>
           ))}
@@ -400,13 +401,13 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
           </AlertDialogHeader>
           <div className="space-y-2">
             <Label htmlFor="motivoReabrir">Motivo <span className="text-destructive">*</span></Label>
-            <textarea
+            <Textarea
               id="motivoReabrir"
               rows={3}
               value={motivoReabrir}
               onChange={(e) => setMotivoReabrir(e.target.value)}
               placeholder="Ej: faltó una nómina por cerrar"
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="resize-none"
             />
           </div>
           <AlertDialogFooter>

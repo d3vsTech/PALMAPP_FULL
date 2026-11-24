@@ -11,7 +11,7 @@ import {
 } from '../../components/ui/select';
 import PageHeader from '../../components/common/PageHeader';
 import {
-  Truck, Save, X,
+  Save, X,
 } from 'lucide-react';
 import {
   viajesApi,
@@ -370,18 +370,11 @@ export default function NuevoEditarViaje() {
 
       {/* Formulario */}
       <form onSubmit={guardarViaje}>
-        <div className="max-w-5xl mx-auto">
-          <Card className="gap-4">
-            <CardHeader className="pb-0">
-              <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-soft text-primary">
-                  <Truck className="h-5 w-5" strokeWidth={2} />
-                </span>
-                <div>
-                  <CardTitle>Información del viaje</CardTitle>
-                  <CardDescription>Datos básicos del viaje. Los campos con * son obligatorios.</CardDescription>
-                </div>
-              </div>
+        <div className="mx-auto max-w-5xl space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Información general</CardTitle>
+              <CardDescription>Datos básicos del viaje. Los campos con * son obligatorios.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Primera fila: Fecha · Prefijo · Número de Remisión.
@@ -606,27 +599,22 @@ export default function NuevoEditarViaje() {
               </div>
             </CardContent>
           </Card>
-        </div>
 
-        {/* Botones de acción */}
-        <div className="barra-acciones flex justify-end gap-3 mt-6">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate('/viajes')}
-            className="gap-2"
-          >
-            <X className="h-4 w-4" />
-            Cancelar
-          </Button>
-          <Button
-            type="submit"
-            disabled={guardando}
-            className="gap-2 bg-primary hover:bg-primary/90"
-          >
-            <Save className="h-4 w-4" />
-            {guardando ? 'Guardando...' : esEdicion ? 'Guardar Cambios' : 'Crear Viaje'}
-          </Button>
+          {/* Botones de acción */}
+          <div className="barra-acciones flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => navigate('/viajes')}
+            >
+              <X className="h-4 w-4" strokeWidth={2} />
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={guardando}>
+              <Save className="h-4 w-4" strokeWidth={2} />
+              {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear viaje'}
+            </Button>
+          </div>
         </div>
       </form>
     </div>

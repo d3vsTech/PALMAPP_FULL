@@ -34,11 +34,11 @@ import { SeccionInsightsIA } from '../../components/insights/SeccionInsightsIA';
  * cinco son los que el endpoint del panel acepta.
  */
 const PERIODOS: { valor: PeriodoDashboard; etiqueta: string }[] = [
-  { valor: 'semanal', etiqueta: 'Semana' },
-  { valor: 'quincenal', etiqueta: 'Quincena' },
-  { valor: 'mensual', etiqueta: 'Mes' },
-  { valor: 'anual', etiqueta: 'Año' },
-  { valor: 'personalizado', etiqueta: 'Fechas' },
+  { valor: 'semanal', etiqueta: 'Semanal' },
+  { valor: 'quincenal', etiqueta: 'Quincenal' },
+  { valor: 'mensual', etiqueta: 'Mensual' },
+  { valor: 'anual', etiqueta: 'Anual' },
+  { valor: 'personalizado', etiqueta: 'Personalizado' },
 ];
 
 /** Buenos días hasta las 12, buenas tardes hasta las 19, buenas noches después. */
@@ -156,7 +156,7 @@ export default function Dashboard() {
                 <Input
                   type="date"
                   aria-label="Fecha de inicio"
-                  className="h-9 w-[138px]"
+                  className="w-[138px]"
                   value={fechaInicio}
                   onChange={(e) => setFechaInicio(e.target.value)}
                 />
@@ -164,7 +164,7 @@ export default function Dashboard() {
                 <Input
                   type="date"
                   aria-label="Fecha de fin"
-                  className="h-9 w-[138px]"
+                  className="w-[138px]"
                   value={fechaFin}
                   onChange={(e) => setFechaFin(e.target.value)}
                 />

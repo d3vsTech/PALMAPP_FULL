@@ -152,7 +152,7 @@ function TablaTramos({
           <span>·</span>
           <span>{formatMoney(t.valor_dia_pagado)}/día</span>
           {t.piso_smlv && (
-            <span className="rounded bg-amber-100 px-1 font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+            <span className="rounded bg-warning-soft px-1 font-medium text-warning">
               piso SMLV
             </span>
           )}
@@ -182,7 +182,7 @@ export function DetalleAusencias({ items, formatMoney, variant = 'default', titu
 
       <div className={container}>
         <div
-          className={`grid ${gridCols} ${headerText} uppercase tracking-wide text-muted-foreground ${
+          className={`grid ${gridCols} ${headerText} font-medium text-muted-foreground ${
             isCompact ? 'mb-1 border-b border-border pb-1' : 'border-b bg-muted/40 px-4 py-2'
           }`}
         >
@@ -249,7 +249,7 @@ export function DetalleAusencias({ items, formatMoney, variant = 'default', titu
                     EPS, para que la regla del 100 % los dos primeros días
                     arranque en el día real y no se reinicie en cada fila. */}
                 {informativa && (
-                  <span className="block text-[10px] text-sky-700 dark:text-sky-400">
+                  <span className="block text-[10px] text-info">
                     {horario ? `${horario} · ` : ''}informativa: no descuenta día
                   </span>
                 )}

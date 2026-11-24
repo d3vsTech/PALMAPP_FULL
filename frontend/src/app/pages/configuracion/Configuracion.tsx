@@ -224,7 +224,7 @@ export default function Configuracion() {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Sidebar de navegación */}
-        <Card className="border-border lg:col-span-1 h-fit">
+        <Card className="h-fit lg:col-span-1">
           <CardContent className="p-4">
             <nav className="space-y-1">
               {CATEGORIAS.map((categoria) => {

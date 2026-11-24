@@ -1,18 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { Link, useParams, useNavigate } from 'react-router';
 
 import { formatFecha } from '../../utils/fecha';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
-import { Label } from '../../components/ui/label';
 import {
   Accordion, AccordionContent, AccordionItem, AccordionTrigger,
 } from '../../components/ui/accordion';
-import {
-  Edit, User, Briefcase, Shield, FileText,
-  Download, IdCard, Package, Building2, Loader2, Phone, Eye,
-} from 'lucide-react';
+import { Pencil, FileText, Download, Loader2, Eye } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
 import EmptyState from '../../components/common/EmptyState';
 import {
@@ -21,12 +17,23 @@ import {
   TIPO_CONTRATO_COLABORADOR_LABEL,
   type TipoContratoColaborador,
 } from '../../../api/colaboradores';
+import { cop } from '../../lib/formato';
 import { toast } from 'sonner';
 
 const TIPOS_DOC: Record<string, string> = {
   CC: 'Cédula de Ciudadanía', TI: 'Tarjeta de Identidad',
   PASAPORTE: 'Pasaporte', CE: 'Cédula de Extranjería', PPT: 'Permiso por Protección Temporal',
 };
+
+/** Fila de dato: rótulo a la izquierda, valor a la derecha desde 640. */
+function Fila({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-0.5 py-2.5 first:pt-0 last:pb-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+      <dt className="text-sm text-muted-foreground">{label}</dt>
+      <dd className="text-sm font-medium text-foreground sm:text-right">{children}</dd>
+    </div>
+  );
+}
 
 export default function ColaboradorDetail() {
   const { id } = useParams();
@@ -121,21 +128,25 @@ export default function ColaboradorDetail() {
   const nombre = [colaborador.primer_nombre, colaborador.segundo_nombre, colaborador.primer_apellido, colaborador.segundo_apellido].filter(Boolean).join(' ');
   const iniciales = ((colaborador.primer_nombre?.[0] ?? '') + (colaborador.primer_apellido?.[0] ?? '')).toUpperCase();
   const fmt = (d?: string) => formatFecha(d, { year: 'numeric', month: 'long', day: 'numeric' });
+  const modalidad = colaborador.modalidad_pago === 'FIJO' ? 'Fijo' : 'Variable';
+  const tipoCuenta = colaborador.tipo_cuenta === 'AHORROS' ? 'Ahorros'
+    : colaborador.tipo_cuenta === 'CORRIENTE' ? 'Corriente'
+    : colaborador.tipo_cuenta || '-';
 
   // Documentos agrupados por categoría
   const docsPorCategoria = (cat: string) => documentos.filter(d => d.categoria === cat);
 
   const CATEGORIAS = [
-    { key: 'DATOS_BASE', label: 'Datos Base' },
-    { key: 'CONTRATACION_LABORAL', label: 'Contratación Laboral' },
+    { key: 'DATOS_BASE', label: 'Datos base' },
+    { key: 'CONTRATACION_LABORAL', label: 'Contratación laboral' },
     { key: 'SST', label: 'SST' },
-    { key: 'PERMISOS_LICENCIAS', label: 'Permisos, Licencias e Incapacidades' },
-    { key: 'FINALIZACION_CONTRATO', label: 'Finalización de Contrato' },
+    { key: 'PERMISOS_LICENCIAS', label: 'Permisos, licencias e incapacidades' },
+    { key: 'FINALIZACION_CONTRATO', label: 'Finalización de contrato' },
     { key: 'DESPRENDIBLES', label: 'Desprendibles' },
     // El pagaré o la autorización de descuento de un préstamo (API_COLABORADORES
     // §7). Lo carga el módulo de Préstamos, pero el archivo vive aquí: sin esta
     // pestaña quedaba guardado e invisible.
-    { key: 'PRESTAMOS', label: 'Préstamos y Adelantos' },
+    { key: 'PRESTAMOS', label: 'Préstamos y adelantos' },
     { key: 'OTROS', label: 'Otros' },
   ];
 
@@ -144,254 +155,262 @@ export default function ColaboradorDetail() {
       <PageHeader
         backTo="/colaboradores"
         eyebrow={<Link to="/colaboradores" className="hover:text-foreground">Colaboradores</Link>}
-        title={
-          <span className="flex flex-wrap items-center gap-2">
-            {nombre}
-            <Badge variant={colaborador.estado ? 'success' : 'secondary'}>
-              {colaborador.estado ? 'Activo' : 'Inactivo'}
-            </Badge>
-          </span>
-        }
-        description="Ficha completa del colaborador."
+        title={nombre}
+        description={[colaborador.cargo, modalidad].filter(Boolean).join(' · ')}
         actions={
-          <Button onClick={() => navigate(`/colaboradores/editar/${id}`)}>
-            <Edit className="h-4 w-4" strokeWidth={2} />
+          <Button variant="outline" onClick={() => navigate(`/colaboradores/editar/${id}`)}>
+            <Pencil className="h-4 w-4" strokeWidth={2} />
             Editar
           </Button>
         }
       />
 
-      {/* Card principal */}
-      <Card className="overflow-hidden gap-4">
-        <CardContent className="p-6">
-          <div className="flex items-start gap-6">
+      {/* El nombre no se repite aquí: ya es el título de la página. */}
+      <Card>
+        <CardContent>
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
             {colaborador.avatar_url ? (
               <img
                 src={buildAvatarUrl(colaborador.avatar_url) ?? ''}
                 alt={nombre}
-                className={`h-24 w-24 shrink-0 rounded-full border border-border object-cover ${colaborador.estado ? '' : 'opacity-60'}`}
+                className={`h-16 w-16 shrink-0 rounded-full border border-border object-cover ${colaborador.estado ? '' : 'opacity-60'}`}
               />
             ) : (
-              <div className={`flex h-24 w-24 shrink-0 items-center justify-center rounded-full text-2xl font-bold ${colaborador.estado ? 'bg-primary-soft text-primary' : 'bg-muted text-muted-foreground'}`}>
+              <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-xl font-bold ${colaborador.estado ? 'bg-primary-soft text-primary' : 'bg-muted text-muted-foreground'}`}>
                 {iniciales}
               </div>
             )}
-            <div className="flex-1 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <dl className="grid flex-1 grid-cols-2 gap-5 lg:grid-cols-4">
               <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Nombre Completo</p>
-                <p className="font-semibold text-lg">{nombre}</p>
+                <dt className="text-[13px] font-medium text-muted-foreground">Documento</dt>
+                <dd className="font-semibold tabular-nums">{colaborador.documento}</dd>
               </div>
               <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Documento</p>
-                <p className="font-semibold text-lg">{colaborador.documento}</p>
+                <dt className="text-[13px] font-medium text-muted-foreground">Cargo</dt>
+                <dd className="font-semibold">{colaborador.cargo}</dd>
               </div>
               <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Cargo</p>
-                <p className="font-semibold text-lg">{colaborador.cargo}</p>
+                <dt className="text-[13px] font-medium text-muted-foreground">ID</dt>
+                <dd className="font-semibold tabular-nums">#{colaborador.id}</dd>
               </div>
               <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">ID</p>
-                <p className="font-semibold text-lg">#{colaborador.id}</p>
+                <dt className="text-[13px] font-medium text-muted-foreground">Estado</dt>
+                <dd>
+                  <Badge variant={colaborador.estado ? 'success' : 'secondary'}>
+                    {colaborador.estado ? 'Activo' : 'Inactivo'}
+                  </Badge>
+                </dd>
               </div>
-            </div>
+            </dl>
           </div>
         </CardContent>
       </Card>
 
       {/* Grid de info detallada */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Información Personal */}
-        <Card className="gap-4">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <User className="h-5 w-5 text-primary" />
-              <CardTitle>Información Personal</CardTitle>
-            </div>
+        {/* Información personal */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Información personal</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="space-y-1"><p className="text-sm text-muted-foreground">Teléfono</p><p className="font-medium">{colaborador.telefono || '-'}</p></div>
-            <div className="space-y-1"><p className="text-sm text-muted-foreground">Correo Electrónico</p><p className="font-medium">{colaborador.correo_electronico || '-'}</p></div>
-            <div className="space-y-1"><p className="text-sm text-muted-foreground">Dirección</p><p className="font-medium">{colaborador.direccion || '-'}</p></div>
-            {(colaborador.municipio || colaborador.departamento) && (
-              <div className="space-y-1"><p className="text-sm text-muted-foreground">Municipio / Departamento</p><p className="font-medium">{[colaborador.municipio, colaborador.departamento].filter(Boolean).join(', ')}</p></div>
-            )}
-            {colaborador.contacto_emergencia_nombre && (
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Contacto de Emergencia</p>
-                <p className="font-medium">{colaborador.contacto_emergencia_nombre}</p>
-                <p className="text-sm text-muted-foreground">{colaborador.contacto_emergencia_telefono}</p>
-              </div>
-            )}
+          <CardContent>
+            <dl className="divide-y divide-border">
+              <Fila label="Teléfono">{colaborador.telefono || '-'}</Fila>
+              <Fila label="Correo electrónico">{colaborador.correo_electronico || '-'}</Fila>
+              <Fila label="Dirección">{colaborador.direccion || '-'}</Fila>
+              {(colaborador.municipio || colaborador.departamento) && (
+                <Fila label="Municipio y departamento">
+                  {[colaborador.municipio, colaborador.departamento].filter(Boolean).join(', ')}
+                </Fila>
+              )}
+              {colaborador.contacto_emergencia_nombre && (
+                <Fila label="Contacto de emergencia">
+                  {colaborador.contacto_emergencia_nombre}
+                  {colaborador.contacto_emergencia_telefono && (
+                    <span className="block text-xs font-normal text-muted-foreground">
+                      {colaborador.contacto_emergencia_telefono}
+                    </span>
+                  )}
+                </Fila>
+              )}
+            </dl>
           </CardContent>
         </Card>
 
-        {/* Información Laboral */}
-        <Card className="gap-4">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <Briefcase className="h-5 w-5 text-primary" />
-              <CardTitle>Información Laboral</CardTitle>
-            </div>
+        {/* Información laboral */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Información laboral</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="space-y-1"><p className="text-sm text-muted-foreground">Predio Asignado</p><p className="font-medium">{colaborador.predio?.nombre || 'Sin asignar'}</p></div>
-            <div className="space-y-1"><p className="text-sm text-muted-foreground">Modalidad de Pago</p><p className="font-medium">{colaborador.modalidad_pago === 'FIJO' ? 'Fijo' : 'Variable'}</p></div>
-            <div className="space-y-1"><p className="text-sm text-muted-foreground">Fecha de Ingreso</p><p className="font-medium">{fmt(colaborador.fecha_ingreso)}</p></div>
-            {colaborador.contrato_vigente && (
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Tipo de Contrato</p>
-                <p className="font-medium">
+          <CardContent>
+            <dl className="divide-y divide-border">
+              <Fila label="Predio asignado">{colaborador.predio?.nombre || 'Sin asignar'}</Fila>
+              <Fila label="Modalidad de pago">{modalidad}</Fila>
+              <Fila label="Fecha de ingreso">{fmt(colaborador.fecha_ingreso)}</Fila>
+              {colaborador.contrato_vigente && (
+                <Fila label="Tipo de contrato">
                   {TIPO_CONTRATO_COLABORADOR_LABEL[
                     (colaborador.contrato_vigente.tipo_contrato ??
                       'INDEFINIDO') as TipoContratoColaborador
                   ]}
                   {colaborador.contrato_vigente.fecha_fin_pactada && (
-                    <span className="text-muted-foreground">
+                    <span className="font-normal text-muted-foreground">
                       {' '}hasta {fmt(colaborador.contrato_vigente.fecha_fin_pactada)}
                     </span>
                   )}
-                </p>
-              </div>
-            )}
-            {colaborador.fecha_retiro && (
-              <div className="space-y-1"><p className="text-sm text-muted-foreground">Fecha de Retiro</p><p className="font-medium">{fmt(colaborador.fecha_retiro)}</p></div>
-            )}
-            <div className="space-y-1"><p className="text-sm text-muted-foreground">Salario Base</p><p className="font-medium text-lg">${parseFloat(colaborador.salario_base ?? 0).toLocaleString('es-CO')}</p></div>
+                </Fila>
+              )}
+              {colaborador.fecha_retiro && (
+                <Fila label="Fecha de retiro">{fmt(colaborador.fecha_retiro)}</Fila>
+              )}
+              <Fila label="Salario base">
+                <span className="tabular-nums">{cop(colaborador.salario_base)}</span>
+              </Fila>
+            </dl>
           </CardContent>
         </Card>
 
-        {/* Seguridad Social */}
-        <Card className="gap-4">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-primary" />
-              <CardTitle>Seguridad Social</CardTitle>
-            </div>
+        {/* Seguridad social */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Seguridad social</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="space-y-1"><p className="text-sm text-muted-foreground">EPS</p><p className="font-medium">{colaborador.eps || '-'}</p></div>
-            <div className="space-y-1"><p className="text-sm text-muted-foreground">ARL</p><p className="font-medium">{colaborador.arl || '-'}</p></div>
-            <div className="space-y-1"><p className="text-sm text-muted-foreground">Fondo de Pensión</p><p className="font-medium">{colaborador.fondo_pension || '-'}</p></div>
-            <div className="space-y-1"><p className="text-sm text-muted-foreground">Caja de Compensación</p><p className="font-medium">{colaborador.caja_compensacion || '-'}</p></div>
+          <CardContent>
+            <dl className="divide-y divide-border">
+              <Fila label="EPS">{colaborador.eps || '-'}</Fila>
+              <Fila label="ARL">{colaborador.arl || '-'}</Fila>
+              <Fila label="Fondo de pensión">{colaborador.fondo_pension || '-'}</Fila>
+              <Fila label="Caja de compensación">{colaborador.caja_compensacion || '-'}</Fila>
+            </dl>
           </CardContent>
         </Card>
 
         {/* Identificación */}
-        <Card className="gap-4">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <IdCard className="h-5 w-5 text-primary" />
-              <CardTitle>Identificación</CardTitle>
-            </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Identificación</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="space-y-1"><p className="text-sm text-muted-foreground">Tipo de Documento</p><p className="font-medium">{TIPOS_DOC[colaborador.tipo_documento] ?? colaborador.tipo_documento}</p></div>
-            <div className="space-y-1"><p className="text-sm text-muted-foreground">Número de Documento</p><p className="font-medium">{colaborador.documento}</p></div>
-            <div className="space-y-1"><p className="text-sm text-muted-foreground">Fecha de Nacimiento</p><p className="font-medium">{fmt(colaborador.fecha_nacimiento)}</p></div>
-            {colaborador.fecha_expedicion_documento && (
-              <div className="space-y-1"><p className="text-sm text-muted-foreground">Fecha de Expedición</p><p className="font-medium">{fmt(colaborador.fecha_expedicion_documento)}</p></div>
-            )}
-            {colaborador.lugar_expedicion && (
-              <div className="space-y-1"><p className="text-sm text-muted-foreground">Lugar de Expedición</p><p className="font-medium">{colaborador.lugar_expedicion}</p></div>
-            )}
+          <CardContent>
+            <dl className="divide-y divide-border">
+              <Fila label="Tipo de documento">{TIPOS_DOC[colaborador.tipo_documento] ?? colaborador.tipo_documento}</Fila>
+              <Fila label="Número de documento">
+                <span className="tabular-nums">{colaborador.documento}</span>
+              </Fila>
+              <Fila label="Fecha de nacimiento">{fmt(colaborador.fecha_nacimiento)}</Fila>
+              {colaborador.fecha_expedicion_documento && (
+                <Fila label="Fecha de expedición">{fmt(colaborador.fecha_expedicion_documento)}</Fila>
+              )}
+              {colaborador.lugar_expedicion && (
+                <Fila label="Lugar de expedición">{colaborador.lugar_expedicion}</Fila>
+              )}
+            </dl>
           </CardContent>
         </Card>
 
         {/* Dotación */}
-        <Card className="gap-4">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <Package className="h-5 w-5 text-primary" />
-              <CardTitle>Dotación</CardTitle>
-            </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Dotación</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="space-y-1"><p className="text-sm text-muted-foreground">Talla Camisa</p><p className="font-medium">{colaborador.talla_camisa || '-'}</p></div>
-            <div className="space-y-1"><p className="text-sm text-muted-foreground">Talla Pantalón</p><p className="font-medium">{colaborador.talla_pantalon || '-'}</p></div>
-            <div className="space-y-1"><p className="text-sm text-muted-foreground">Talla Calzado</p><p className="font-medium">{colaborador.talla_calzado || '-'}</p></div>
+          <CardContent>
+            <dl className="divide-y divide-border">
+              <Fila label="Talla de camisa">{colaborador.talla_camisa || '-'}</Fila>
+              <Fila label="Talla de pantalón">{colaborador.talla_pantalon || '-'}</Fila>
+              <Fila label="Talla de calzado">{colaborador.talla_calzado || '-'}</Fila>
+            </dl>
           </CardContent>
         </Card>
 
         {/* Bancario */}
-        <Card className="gap-4">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-primary" />
-              <CardTitle>Información Bancaria</CardTitle>
-            </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Información bancaria</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="space-y-1"><p className="text-sm text-muted-foreground">Banco</p><p className="font-medium">{colaborador.entidad_bancaria || '-'}</p></div>
-            <div className="space-y-1"><p className="text-sm text-muted-foreground">Tipo de Cuenta</p><p className="font-medium">{colaborador.tipo_cuenta === 'AHORROS' ? 'Ahorros' : colaborador.tipo_cuenta === 'CORRIENTE' ? 'Corriente' : colaborador.tipo_cuenta || '-'}</p></div>
-            <div className="space-y-1"><p className="text-sm text-muted-foreground">Número de Cuenta</p><p className="font-medium">{colaborador.numero_cuenta || '-'}</p></div>
+          <CardContent>
+            <dl className="divide-y divide-border">
+              <Fila label="Banco">{colaborador.entidad_bancaria || '-'}</Fila>
+              <Fila label="Tipo de cuenta">{tipoCuenta}</Fila>
+              <Fila label="Número de cuenta">
+                <span className="tabular-nums">{colaborador.numero_cuenta || '-'}</span>
+              </Fila>
+            </dl>
           </CardContent>
         </Card>
       </div>
 
       {/* Documentos */}
-      <div className="space-y-4">
-        <h2>Documentos</h2>
-        <Card className="gap-4">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-primary" />
-              <CardTitle>Repositorio de Documentos</CardTitle>
+      <Card>
+        <CardHeader>
+          <CardTitle>Documentos</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loadingDocs ? (
+            <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Cargando documentos…
             </div>
-          </CardHeader>
-          <CardContent>
-            {loadingDocs ? (
-              <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
-                <Loader2 className="w-4 h-4 animate-spin" /> Cargando documentos...
-              </div>
-            ) : (
-              <Accordion type="multiple" className="w-full">
-                {CATEGORIAS.map(cat => {
-                  const docs = docsPorCategoria(cat.key);
-                  return (
-                    <AccordionItem key={cat.key} value={cat.key}>
-                      <AccordionTrigger className="text-sm font-semibold">
+          ) : (
+            <Accordion type="multiple" className="w-full">
+              {CATEGORIAS.map(cat => {
+                const docs = docsPorCategoria(cat.key);
+                return (
+                  <AccordionItem key={cat.key} value={cat.key}>
+                    <AccordionTrigger className="text-sm font-semibold">
+                      <span className="flex items-center gap-2">
                         {cat.label}
-                        {docs.length > 0 && (
-                          <span className="ml-2 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{docs.length}</span>
-                        )}
-                      </AccordionTrigger>
-                      <AccordionContent className="space-y-4">
-                        {docs.length === 0 ? (
-                          <div className="text-center py-8 text-muted-foreground">
-                            <FileText className="h-12 w-12 mx-auto mb-2 opacity-30" />
-                            <p>No hay documentos en esta categoría</p>
-                          </div>
-                        ) : (
-                          docs.map(doc => (
-                            <div key={doc.id} className="flex items-center justify-between p-4 border border-border rounded-lg bg-accent/20">
-                              <div className="flex items-center gap-3">
-                                <FileText className="h-8 w-8 text-primary shrink-0" />
-                                <div>
-                                  <p className="font-medium text-foreground">{doc.nombre_archivo || doc.tipo_documento}</p>
-                                  <p className="text-xs text-muted-foreground">{doc.archivo_nombre_original}</p>
-                                  {doc.fecha_documento && <p className="text-xs text-muted-foreground">{fmt(doc.fecha_documento)}</p>}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Button size="sm" variant="ghost" title="Visualizar" onClick={() => visualizarDocumento(doc)}>
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button size="sm" variant="ghost" title="Descargar" onClick={() => descargarDocumento(doc.id, doc.archivo_nombre_original)}>
-                                  <Download className="h-4 w-4" />
-                                </Button>
+                        <Badge variant="secondary">{docs.length}</Badge>
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent className="space-y-2">
+                      {docs.length === 0 ? (
+                        <p className="rounded-lg bg-muted/60 px-4 py-6 text-center text-sm text-muted-foreground">
+                          No hay documentos en esta categoría.
+                        </p>
+                      ) : (
+                        docs.map(doc => (
+                          <div
+                            key={doc.id}
+                            className="flex items-center justify-between gap-3 rounded-lg border border-border px-4 py-3 transition-colors hover:bg-muted/40"
+                          >
+                            <div className="flex min-w-0 items-center gap-3">
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                                <FileText className="h-4 w-4" strokeWidth={2} />
+                              </span>
+                              <div className="min-w-0">
+                                <p className="break-words text-sm font-medium text-foreground">{doc.nombre_archivo || doc.tipo_documento}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {[doc.archivo_nombre_original, doc.fecha_documento ? fmt(doc.fecha_documento) : null]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                </p>
                               </div>
                             </div>
-                          ))
-                        )}
-                      </AccordionContent>
-                    </AccordionItem>
-                  );
-                })}
-              </Accordion>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                            <div className="flex shrink-0 items-center gap-0.5">
+                              <Button
+                                size="icon" variant="ghost" className="text-muted-foreground"
+                                title="Visualizar" aria-label="Visualizar"
+                                onClick={() => visualizarDocumento(doc)}
+                              >
+                                <Eye className="h-4 w-4" strokeWidth={2} />
+                              </Button>
+                              <Button
+                                size="icon" variant="ghost" className="text-muted-foreground"
+                                title="Descargar" aria-label="Descargar"
+                                onClick={() => descargarDocumento(doc.id, doc.archivo_nombre_original)}
+                              >
+                                <Download className="h-4 w-4" strokeWidth={2} />
+                              </Button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </AccordionContent>
+                  </AccordionItem>
+                );
+              })}
+            </Accordion>
+          )}
+        </CardContent>
+      </Card>
 
     </div>
   );

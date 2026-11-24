@@ -12,7 +12,7 @@ import {
 } from '../tipos';
 
 const PILDORA = 'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium';
-const ROTULO = 'text-xs font-semibold uppercase tracking-wide text-muted-foreground';
+const ROTULO = 'text-[13px] font-medium text-muted-foreground';
 
 interface Props {
   borrador: BorradorNovedad;
@@ -127,7 +127,7 @@ export function PasoConfirmacion({ borrador, categorias, estadoInicial, estadoCo
         )}
       </div>
 
-      <Card className="overflow-hidden border-border">
+      <Card className="overflow-hidden">
         <div className="flex items-center gap-3 border-b border-border bg-muted/20 px-5 py-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-primary/20 bg-primary/10 text-sm font-bold text-primary">
             {iniciales(borrador.colaboradorNombre || '?')}
@@ -271,11 +271,11 @@ export function PasoConfirmacion({ borrador, categorias, estadoInicial, estadoCo
       )}
 
       {vacaciones && (
-        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/30 dark:bg-amber-950/20">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+        <div className="flex items-start gap-3 rounded-xl border border-warning/20 bg-warning-soft p-4">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <div className="text-sm">
-            <p className="font-semibold text-amber-800 dark:text-amber-300">Es una solicitud, no una liquidación</p>
-            <p className="mt-0.5 text-amber-700 dark:text-amber-400">
+            <p className="font-semibold text-warning">Es una solicitud, no una liquidación</p>
+            <p className="mt-0.5 text-warning">
               Reserva las fechas pero no consume saldo ni toca la nómina. Para aprobarla hay que
               liquidarla desde Liquidaciones.
             </p>
@@ -284,11 +284,11 @@ export function PasoConfirmacion({ borrador, categorias, estadoInicial, estadoCo
       )}
 
       {terminacion && (
-        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/30 dark:bg-amber-950/20">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+        <div className="flex items-start gap-3 rounded-xl border border-warning/20 bg-warning-soft p-4">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <div className="text-sm">
-            <p className="font-semibold text-amber-800 dark:text-amber-300">Queda el retiro registrado</p>
-            <p className="mt-0.5 text-amber-700 dark:text-amber-400">
+            <p className="font-semibold text-warning">Queda el retiro registrado</p>
+            <p className="mt-0.5 text-warning">
               La ficha de <strong>{borrador.colaboradorNombre}</strong> recibe la fecha y el motivo, y
               el contrato queda terminado. La liquidación final se hace aparte.
             </p>

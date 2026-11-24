@@ -34,7 +34,7 @@ function etiquetaPeriodo(nomina: NominaDelCargue): string {
 function Dato({ titulo, valor }: { titulo: string; valor: string }) {
   return (
     <div className="min-w-0">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{titulo}</p>
+      <p className="text-[13px] font-medium text-muted-foreground">{titulo}</p>
       <p className="truncate text-sm font-medium">{valor}</p>
     </div>
   );
@@ -68,7 +68,7 @@ function Faltantes({ faltantes }: { faltantes: FaltanteDelPeriodo[] }) {
   return (
     <div className="space-y-2 px-4 pb-3">
       {sinNovedad.length > 0 && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-200">
+        <div className="rounded-lg border border-warning/20 bg-warning-soft p-3 text-sm text-warning">
           <p className="flex items-center gap-2 font-medium">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             {sinNovedad.length} con contrato y sin pago en este período

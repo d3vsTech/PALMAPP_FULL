@@ -137,14 +137,14 @@ export default function PagoVacacionDialog({ vacacion, onCerrar, onPagada }: Pro
           )}
 
           {porNomina && vacacion && (
-            <div className="space-y-2 rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs dark:border-sky-800/30 dark:bg-sky-950/20">
-              <p className="flex items-start gap-2 text-sky-700 dark:text-sky-300">
+            <div className="space-y-2 rounded-lg border border-info/20 bg-info-soft p-3 text-xs">
+              <p className="flex items-start gap-2 text-info">
                 <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 Esta vacación se paga en nómina. El giro cubre solo el saldo que
                 las nóminas cerradas no alcanzaron a pagar.
               </p>
               {tramos.map((t) => (
-                <p key={t.nomina_empleado_id} className="flex justify-between text-sky-700 dark:text-sky-300">
+                <p key={t.nomina_empleado_id} className="flex justify-between text-info">
                   <span>
                     {t.etiqueta ?? `NOM-${t.nomina_id}`}
                     {' · '}
@@ -153,7 +153,7 @@ export default function PagoVacacionDialog({ vacacion, onCerrar, onPagada }: Pro
                   <span className="font-medium">{fmtCOP(t.total)}</span>
                 </p>
               ))}
-              <p className="flex justify-between border-t border-sky-200 pt-2 font-semibold text-sky-800 dark:border-sky-800/30 dark:text-sky-200">
+              <p className="flex justify-between border-t border-info/20 pt-2 font-semibold text-info">
                 <span>Saldo por girar</span>
                 <span>{fmtCOP(aPagar)}</span>
               </p>
@@ -193,7 +193,7 @@ export default function PagoVacacionDialog({ vacacion, onCerrar, onPagada }: Pro
 
         <DialogFooter>
           <Button variant="outline" onClick={onCerrar} disabled={guardando}>Cancelar</Button>
-          <Button onClick={guardar} disabled={guardando} className="gap-2">
+          <Button onClick={guardar} disabled={guardando}>
             {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
             {porNomina ? 'Pagar el saldo' : 'Registrar pago'}
           </Button>

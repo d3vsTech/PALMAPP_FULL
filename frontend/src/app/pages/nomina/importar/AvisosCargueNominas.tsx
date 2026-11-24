@@ -16,7 +16,7 @@ const GRAVES = ['PERIODO_CON_PERSONAL_SIN_NOMINA'];
 function Aviso({ aviso, grave }: { aviso: IncidenciaFila; grave: boolean }) {
   const Icono = grave ? AlertTriangle : Info;
   const tono = grave
-    ? 'border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200'
+    ? 'border-warning/20 bg-warning-soft text-warning'
     : 'border-border bg-muted/30 text-muted-foreground';
 
   return (

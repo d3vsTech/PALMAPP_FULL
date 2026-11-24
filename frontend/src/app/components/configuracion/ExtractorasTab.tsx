@@ -60,8 +60,8 @@ export function ExtractorasTab() {
       {ConfirmDeleteDialog}
 
       <TabLoadingGate loading={loading} message="Cargando extractoras…">
-      <Card className="overflow-hidden border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b bg-muted/40">
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Extractoras</CardTitle>
@@ -73,7 +73,7 @@ export function ExtractorasTab() {
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent>
           {extractoras.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">

@@ -394,9 +394,9 @@ export default function UsuarioPermisos() {
 
       {/* Info para usuarios ADMIN — arrancan con todos los permisos del rol */}
       {isAdmin && (
-        <Card className="border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/30">
+        <Card className="border-warning/20 bg-warning-soft">
           <CardContent className="p-4 flex items-start gap-3">
-            <Shield className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+            <Shield className="h-5 w-5 text-warning mt-0.5 flex-shrink-0" />
             <div>
               <p className="font-semibold text-sm">Usuario administrador</p>
               <p className="text-sm text-muted-foreground mt-1">
@@ -413,14 +413,14 @@ export default function UsuarioPermisos() {
         <Button
           variant="outline"
           onClick={seleccionarTodos}
-          className="gap-2"
+          
         >
           <CheckSquare className="h-4 w-4" /> Seleccionar Todos
         </Button>
         <Button
           variant="outline"
           onClick={quitarTodos}
-          className="gap-2"
+          
         >
           <Square className="h-4 w-4" /> Quitar Todos
         </Button>
@@ -434,7 +434,7 @@ export default function UsuarioPermisos() {
           const sinPermisos = !tieneSecciones && !tienePermisosPlanos;
 
           return (
-            <Card key={modulo.id} className="glass-subtle border-border">
+            <Card key={modulo.id} className="glass-subtle">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <button
@@ -494,7 +494,7 @@ export default function UsuarioPermisos() {
                 {/* Permisos en sub-secciones (Mi Plantación, Operaciones, etc.) */}
                 {tieneSecciones && modulo.secciones!.map((seccion) => (
                   <div key={seccion.titulo} className="space-y-2">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide pl-1">
+                    <p className="pl-1 text-[13px] font-medium text-muted-foreground">
                       {seccion.titulo}
                     </p>
                     <div className="space-y-2">
@@ -523,7 +523,6 @@ export default function UsuarioPermisos() {
         <Button
           onClick={handleGuardar}
           disabled={saving}
-          className="gap-2 bg-primary hover:bg-primary/90"
         >
           <Save className="h-4 w-4" /> {saving ? 'Guardando...' : 'Guardar Permisos'}
         </Button>

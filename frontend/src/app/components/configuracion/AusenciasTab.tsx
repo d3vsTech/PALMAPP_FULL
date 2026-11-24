@@ -40,19 +40,19 @@ import {
  */
 
 const COLORES_DISPONIBLES: { value: string; hex: string; label: string }[] = [
-  { value: 'bg-blue-500',   hex: '#3b82f6', label: 'Azul' },
-  { value: 'bg-green-500',  hex: '#22c55e', label: 'Verde' },
-  { value: 'bg-red-500',    hex: '#ef4444', label: 'Rojo' },
-  { value: 'bg-yellow-500', hex: '#eab308', label: 'Amarillo' },
-  { value: 'bg-purple-500', hex: '#a855f7', label: 'Morado' },
-  { value: 'bg-pink-500',   hex: '#ec4899', label: 'Rosa' },
-  { value: 'bg-orange-500', hex: '#f97316', label: 'Naranja' },
-  { value: 'bg-gray-500',   hex: '#6b7280', label: 'Gris' },
+  { value: 'bg-info',   hex: '#3b82f6', label: 'Azul' },
+  { value: 'bg-success',  hex: '#22c55e', label: 'Verde' },
+  { value: 'bg-destructive',    hex: '#ef4444', label: 'Rojo' },
+  { value: 'bg-warning', hex: '#eab308', label: 'Amarillo' },
+  { value: 'bg-primary', hex: '#a855f7', label: 'Morado' },
+  { value: 'bg-destructive',   hex: '#ec4899', label: 'Rosa' },
+  { value: 'bg-warning', hex: '#f97316', label: 'Naranja' },
+  { value: 'bg-muted',   hex: '#6b7280', label: 'Gris' },
 ];
 
 function claseDesdeHex(hex: string): string {
   const c = COLORES_DISPONIBLES.find((c) => c.hex.toLowerCase() === hex.toLowerCase());
-  return c?.value ?? 'bg-blue-500';
+  return c?.value ?? 'bg-info';
 }
 
 function hexDesdeClase(clase: string): string {
@@ -154,7 +154,7 @@ const FORM_VACIO = {
   concepto: 'remunerada' as 'remunerada' | 'no_remunerada',
   porcentaje: '100',
   formulaCalculo: '',
-  color: 'bg-blue-500',
+  color: 'bg-info',
   seguridadSocial: true,
   parafiscales: true,
   prestaciones: true,
@@ -544,8 +544,8 @@ export function AusenciasTab() {
       </Dialog>
 
       <TabLoadingGate loading={loading} message="Cargando novedades…">
-      <Card className="overflow-hidden border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b bg-muted/40">
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Tipos de Novedades</CardTitle>
@@ -557,7 +557,7 @@ export function AusenciasTab() {
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent>
           {/* Tabla con las 6 columnas del diseño. El punto de color viene de
               `motivo.color` (hex → clase Tailwind). Los checks de S.S./Paraf.
               y Prest. leen los flags persistidos en el motivo (con fallback al
