@@ -79,6 +79,7 @@ import { configuracionApi } from '../../../api/configuracion';
 import { operariosApi, tercerosApi, type OperarioSelectItem, type Tercero } from '../../../api/terceros';
 import type { ApiError } from '../../../api/client';
 import { Eyebrow, thead, th, td } from '../../components/nomina/piezas';
+import { formatFecha } from '../../utils/fecha';
 import {
   Dialog,
   DialogContent,
@@ -2098,7 +2099,7 @@ export default function NuevaNominaWizard() {
                                                   ? `El viaje salió el ${c.fecha_viaje ?? 'día siguiente'} (otra quincena), pero la fila SÍ concilia contra su báscula acá. ${describirReglaFueraDelPeriodo(c.regla_fuera_del_periodo) ?? ''}`.trim()
                                                   : undefined}
                                               >
-                                                <TableCell className="pl-5 text-muted-foreground">{c.fecha}</TableCell>
+                                                <TableCell className="pl-5 whitespace-nowrap text-muted-foreground">{formatFecha(c.fecha)}</TableCell>
                                                 <TableCell>{c.lote}</TableCell>
                                                 <TableCell className="text-muted-foreground">{c.sublote ?? '—'}</TableCell>
                                                 <TableCell className="text-muted-foreground">
@@ -2364,7 +2365,7 @@ export default function NuevaNominaWizard() {
                       {nominasMismoPeriodo.map((n) => (
                         <li key={n.id}>
                           <span className="font-medium text-foreground">{n.etiqueta ?? 'Sin etiqueta'}</span>
-                          {' · '}{n.fecha_inicio} al {n.fecha_fin}
+                          {' · '}{formatFecha(n.fecha_inicio)} al {formatFecha(n.fecha_fin)}
                           {' · '}{n.estado}
                           {n.empleados_count != null && (
                             <> · {n.empleados_count} colaborador{n.empleados_count !== 1 ? 'es' : ''}</>
@@ -2802,7 +2803,7 @@ export default function NuevaNominaWizard() {
             {nominasExistentes.map((n) => (
               <div key={n.id} className="rounded-lg bg-muted/60 p-3">
                 <p className="text-sm font-medium text-foreground">
-                  {n.etiqueta ?? 'Sin etiqueta'} · {n.fecha_inicio} al {n.fecha_fin}
+                  {n.etiqueta ?? 'Sin etiqueta'} · {formatFecha(n.fecha_inicio)} al {formatFecha(n.fecha_fin)}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Estado: {n.estado} · {n.empleados_count ?? 0} colaboradores
