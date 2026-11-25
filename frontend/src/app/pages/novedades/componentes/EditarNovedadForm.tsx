@@ -29,6 +29,7 @@ import {
 } from '../../../../api/novedades';
 import type { ApiError } from '../../../../api/client';
 import { CampoAdjunto } from './CampoAdjunto';
+import { listaDeCampos } from '../tipos';
 
 interface Props {
   detalle: AusenciaDetalle;
@@ -180,7 +181,7 @@ export function EditarNovedadForm({
       <div className="flex items-start gap-2 rounded-lg border border-info/20 bg-info-soft p-3 text-xs text-info">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <p>
-          En este estado solo se pueden cambiar: {campos.join(', ')}. Los demás campos quedan
+          En este estado solo se pueden cambiar {listaDeCampos(campos)}. Los demás campos quedan
           fijos porque ya afectaron una nómina o una aprobación.
         </p>
       </div>

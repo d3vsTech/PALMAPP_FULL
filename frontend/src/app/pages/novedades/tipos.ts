@@ -34,6 +34,42 @@ export const ICONO_TIPO: Record<TipoBaseAusencia, LucideIcon> = {
 };
 
 /** Ícono de cada pestaña del Paso 1. */
+/**
+ * Rotulo de cada categoria con la escritura del diseno. El backend las manda
+ * en mayusculas de titulo ("Permisos y Licencias") y el diseno escribe normal.
+ * Una categoria que no este aqui conserva el rotulo del backend.
+ */
+/**
+ * Nombre legible de cada campo editable. El backend los lista con su nombre
+ * tecnico (`numero_radicado`) y en pantalla eso no se entiende.
+ */
+const NOMBRE_CAMPO: Record<string, string> = {
+  fecha_inicio: 'la fecha de inicio',
+  fecha_fin: 'la fecha de fin',
+  hora_inicio: 'la hora de inicio',
+  hora_fin: 'la hora de fin',
+  entidad: 'la entidad',
+  numero_radicado: 'el número de radicado',
+  motivo: 'el motivo',
+  observacion: 'la observación',
+  documento: 'el soporte',
+};
+
+/** "la fecha de inicio, el motivo y el soporte". */
+export function listaDeCampos(campos: string[]): string {
+  const nombres = campos.map((c) => NOMBRE_CAMPO[c] ?? c.replace(/_/g, ' '));
+  if (nombres.length <= 1) return nombres[0] ?? '';
+  return `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}`;
+}
+
+export const ETIQUETA_CATEGORIA: Record<CategoriaNovedad, string> = {
+  PERMISOS_LICENCIAS: 'Permisos y licencias',
+  INCAPACIDADES: 'Incapacidades',
+  AUSENCIAS_SANCIONES: 'Ausencias y sanciones',
+  VACACIONES: 'Vacaciones',
+  TERMINACION_CONTRATO: 'Terminación de contrato',
+};
+
 export const ICONO_CATEGORIA: Record<CategoriaNovedad, LucideIcon> = {
   PERMISOS_LICENCIAS: CalendarCheck,
   INCAPACIDADES: Activity,

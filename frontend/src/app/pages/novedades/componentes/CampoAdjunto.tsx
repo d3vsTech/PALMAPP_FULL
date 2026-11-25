@@ -30,7 +30,7 @@ export function CampoAdjunto({ etiqueta, ayuda, mimes, maxKb, archivo, onCambiar
     <div className="space-y-2">
       <Label>
         {etiqueta}
-        <span className="ml-1 text-xs font-normal text-muted-foreground">(opcional)</span>
+        <span className="ml-1 font-normal text-muted-foreground">(opcional)</span>
       </Label>
       <input
         aria-label="Seleccionar archivo"
@@ -41,29 +41,29 @@ export function CampoAdjunto({ etiqueta, ayuda, mimes, maxKb, archivo, onCambiar
         onChange={(e) => onCambiar(e.target.files?.[0] ?? null)}
       />
       {archivo ? (
-        <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
-          <Paperclip className="h-4 w-4 shrink-0 text-primary" />
+        <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/60 px-4 py-2.5">
+          <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2} />
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{archivo.name}</span>
-          <span className="shrink-0 text-xs text-muted-foreground">
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
             {(archivo.size / 1024).toFixed(0)} KB
           </span>
           <button
             type="button"
             onClick={quitar}
-            className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive-soft hover:text-destructive"
             aria-label="Quitar archivo"
           >
-            <X className="h-4 w-4" />
+            <X className="h-4 w-4" strokeWidth={2} />
           </button>
         </div>
       ) : (
         <button aria-label="Adjuntar"
           type="button"
           onClick={() => input.current?.click()}
-          className="group flex w-full items-center gap-3 rounded-lg border-2 border-dashed border-border px-4 py-3 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5"
+          className="flex w-full items-center gap-3 rounded-lg border border-dashed border-border px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/40 hover:text-foreground"
         >
-          <Paperclip className="h-4 w-4 shrink-0 transition-colors group-hover:text-primary" />
-          <span className="transition-colors group-hover:text-foreground">
+          <Paperclip className="h-4 w-4 shrink-0" strokeWidth={2} />
+          <span>
             Adjuntar archivo{' '}
             <span className="text-xs">({mimes.join(', ')} · máx. {maxMb} MB)</span>
           </span>
