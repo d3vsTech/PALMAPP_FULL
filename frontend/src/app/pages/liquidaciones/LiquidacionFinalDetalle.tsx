@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import {
@@ -17,9 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '../../components/ui/dropdown-menu';
 import {
-  AlertCircle,
   AlertTriangle,
-  ArrowLeft,
   Ban,
   Banknote,
   CheckCircle,
@@ -32,9 +30,7 @@ import {
   Pencil,
   Printer,
   RotateCcw,
-  Scale,
   Trash2,
-  User,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
@@ -42,12 +38,12 @@ import {
   liquidacionFinalApi,
   type ComprobanteLiquidacionFinal,
   type ConceptoLiquidacion,
+  type EstadoLiquidacionFinal,
   ESTADO_LIQUIDACION_LABEL,
   TIPO_CONTRATO_LABEL,
 } from '../../../api/liquidacionFinal';
 import {
   descargarBlob,
-  ESTADO_BADGE,
   fmtCOP,
   fmtDias,
   fmtFecha,
@@ -60,26 +56,31 @@ import {
   PagoLiquidacionDialog,
   type ModoAnulacion,
 } from './final/DialogosLiquidacion';
+import PageHeader from '../../components/common/PageHeader';
+import SeccionCard from '../../components/liquidaciones/SeccionCard';
+import DatoLista from '../../components/liquidaciones/DatoLista';
+import ConceptosTabla, { type Concepto } from '../../components/liquidaciones/ConceptosTabla';
+import VacioCard from '../../components/liquidaciones/VacioCard';
+import { Eyebrow } from '../../components/nomina/piezas';
 
-/** Una fila de concepto. El signo lo decide el lado de la tabla, no el valor. */
-function FilaConcepto({ c, negativo = false }: { c: ConceptoLiquidacion; negativo?: boolean }) {
+const VOLVER = '/liquidaciones?tab=liquidacion-final';
+
+const ESTADO_VARIANTE: Record<EstadoLiquidacionFinal, 'secondary' | 'info' | 'success' | 'destructive'> = {
+  BORRADOR: 'secondary',
+  APROBADA: 'info',
+  PAGADA: 'success',
+  ANULADA: 'destructive',
+};
+
+/** Detalle bajo el concepto: texto, fórmula y norma, si vienen. */
+function detalleConcepto(c: ConceptoLiquidacion) {
+  if (!c.detalle_texto && !c.formula_aplicada && !c.norma) return undefined;
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-border py-2 last:border-0">
-      <div className="min-w-0">
-        <p className="text-sm text-foreground">{c.nombre}</p>
-        {c.detalle_texto && <p className="text-xs text-muted-foreground">{c.detalle_texto}</p>}
-        {c.formula_aplicada && (
-          <p className="font-mono text-xs text-muted-foreground">{c.formula_aplicada}</p>
-        )}
-        {c.norma && <p className="text-xs text-muted-foreground/70">{c.norma}</p>}
-      </div>
-      <span
-        className={`shrink-0 text-sm font-medium ${negativo ? 'text-destructive' : 'text-foreground'}`}
-      >
-        {negativo && c.valor > 0 ? '−' : ''}
-        {fmtCOP(c.valor)}
-      </span>
-    </div>
+    <>
+      {c.detalle_texto && <span className="block">{c.detalle_texto}</span>}
+      {c.formula_aplicada && <span className="block font-mono">{c.formula_aplicada}</span>}
+      {c.norma && <span className="block">{c.norma}</span>}
+    </>
   );
 }
 
@@ -149,7 +150,7 @@ export default function LiquidacionFinalDetalle() {
           ? 'Registro histórico eliminado'
           : 'Borrador eliminado',
       );
-      navigate('/liquidaciones?tab=liquidacion-final');
+      navigate(VOLVER);
     } catch (e) {
       toast.error(mensajeErrorLiquidacion(e, 'No se pudo eliminar el borrador'));
     } finally {
@@ -159,21 +160,27 @@ export default function LiquidacionFinalDetalle() {
 
   if (cargando) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
+      <Card className="flex-row items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Cargando liquidación...
+      </Card>
     );
   }
 
   if (!liq) {
     return (
-      <div className="space-y-4 py-12 text-center">
-        <FileText className="mx-auto h-10 w-10 text-muted-foreground" />
-        <p className="text-muted-foreground">No se encontró la liquidación</p>
-        <Button variant="outline" onClick={() => navigate('/liquidaciones?tab=liquidacion-final')}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Volver a Liquidaciones
-        </Button>
+      <div className="space-y-6">
+        <PageHeader title="Liquidación final de contrato" backTo={VOLVER} />
+        <VacioCard
+          icon={FileText}
+          title="No se encontró la liquidación final"
+          description="El registro no existe o ya no está disponible."
+          action={
+            <Button variant="outline" onClick={() => navigate(VOLVER)}>
+              Volver a liquidaciones finales
+            </Button>
+          }
+        />
       </div>
     );
   }
@@ -197,402 +204,332 @@ export default function LiquidacionFinalDetalle() {
   const puedeLiquidar = hasPermiso('liquidaciones.liquidar');
   const puedePagar = hasPermiso('liquidaciones.pagar');
 
+  const conMenu =
+    (esBorrador || esAprobada || esPagada || esHistorica) && (puedeLiquidar || puedePagar || puedeEliminar);
+  const totalDeducciones = liq.totales.total_deducciones;
+
+  const devengados: Concepto[] = [
+    ...liq.conceptos.devengados.map((c) => ({
+      label: c.nombre,
+      detalle: detalleConcepto(c),
+      valor: fmtCOP(c.valor),
+    })),
+    { label: 'Total devengado', valor: fmtCOP(liq.totales.total_devengado), total: true },
+  ];
+
+  const deducidos: Concepto[] = [
+    ...liq.conceptos.deducciones.map((c) => ({
+      label: c.nombre,
+      detalle: detalleConcepto(c),
+      valor: fmtCOP(c.valor),
+      negativo: c.valor > 0,
+    })),
+    { label: 'Total deducciones', valor: fmtCOP(totalDeducciones), negativo: totalDeducciones > 0, total: true },
+  ];
+
+  const estadoBadges = (
+    <span className="flex flex-wrap items-center justify-end gap-1">
+      <Badge variant={ESTADO_VARIANTE[estado]}>{ESTADO_LIQUIDACION_LABEL[estado]}</Badge>
+      {esHistorica && <Badge variant="outline">Histórico</Badge>}
+    </span>
+  );
+
+  const menu = conMenu && (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="icon" aria-label="Más acciones">
+          <MoreHorizontal strokeWidth={2} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {esPagada && puedePagar && (
+          <DropdownMenuItem onClick={() => setAnulando('pago')} className="gap-2">
+            <RotateCcw className="h-4 w-4" />
+            Anular pago
+          </DropdownMenuItem>
+        )}
+        {(esBorrador || esAprobada) && puedeLiquidar && (
+          <DropdownMenuItem
+            onClick={() => setAnulando('liquidacion')}
+            className="gap-2 text-destructive focus:text-destructive"
+          >
+            <Ban className="h-4 w-4" />
+            Anular liquidación
+          </DropdownMenuItem>
+        )}
+        {(esBorrador || esHistorica) && puedeEliminar && (
+          <DropdownMenuItem
+            onClick={() => void eliminar()}
+            disabled={eliminando}
+            className="gap-2 text-destructive focus:text-destructive"
+          >
+            <Trash2 className="h-4 w-4" />
+            {esHistorica ? 'Eliminar registro histórico' : 'Eliminar borrador'}
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   return (
     <div className="space-y-6">
-      {/* Encabezado */}
-      <div className="space-y-4 print:hidden">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones?tab=liquidacion-final')} >
-          <ArrowLeft className="h-4 w-4" />
-          Volver a Liquidaciones
-        </Button>
+      <PageHeader
+        eyebrow={`Liquidación final de contrato · ${liq.numero_comprobante}`}
+        title={liq.empleado.nombre_completo}
+        description={liq.titulo}
+        backTo={VOLVER}
+        actions={menu || undefined}
+        className="print:hidden"
+      />
 
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl sm:text-3xl font-bold text-primary">{liq.titulo}</h1>
-              <Badge variant="outline" className={ESTADO_BADGE[estado]}>
-                {ESTADO_LIQUIDACION_LABEL[estado]}
-              </Badge>
-              {esHistorica && (
-                <Badge variant="outline" className="border-border bg-muted text-foreground">
-                  Histórico
-                </Badge>
-              )}
-            </div>
-            <p className="mt-1 text-muted-foreground">
-              {liq.numero_comprobante} · {liq.empleado.nombre_completo}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {esBorrador && puedeEditar && (
-              <Button
-                variant="outline"
-                onClick={() => navigate(`/liquidaciones/liquidacion-final/${liq.id}/editar`)}
-                
-              >
-                <Pencil className="h-4 w-4" />
-                Volver a editar
-              </Button>
-            )}
-
-            {esBorrador && puedeLiquidar && (
-              <Button onClick={() => setAprobando(true)} >
-                <CheckCircle className="h-4 w-4" />
-                Aceptar
-              </Button>
-            )}
-
-            {esAprobada && puedePagar && (
-              <Button onClick={() => setPagando(true)} >
-                <Banknote className="h-4 w-4" />
-                Registrar pago
-              </Button>
-            )}
-
-            <Button
-              variant="outline"
-              disabled={descargando}
-              onClick={() => void abrirPdf(true)}
-              
-            >
-              <Printer className="h-4 w-4" />
-              Imprimir
-            </Button>
-
-            <Button
-              variant="outline"
-              disabled={descargando}
-              onClick={() => void abrirPdf(false)}
-              
-            >
-              {descargando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              PDF
-            </Button>
-
-            {liq.compartir && (
-              <Button
-                variant="outline"
-                onClick={() => window.open(liq.compartir!.whatsapp_url, '_blank', 'noopener')}
-                
-              >
-                <MessageCircle className="h-4 w-4" />
-                WhatsApp
-              </Button>
-            )}
-
-            {(esBorrador || esAprobada || esPagada || esHistorica) && (puedeLiquidar || puedePagar || puedeEliminar) && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="px-2">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {esPagada && puedePagar && (
-                    <DropdownMenuItem onClick={() => setAnulando('pago')} className="gap-2">
-                      <RotateCcw className="h-4 w-4" />
-                      Anular pago
-                    </DropdownMenuItem>
-                  )}
-                  {(esBorrador || esAprobada) && puedeLiquidar && (
-                    <DropdownMenuItem
-                      onClick={() => setAnulando('liquidacion')}
-                      className="gap-2 text-destructive focus:text-destructive"
-                    >
-                      <Ban className="h-4 w-4" />
-                      Anular liquidación
-                    </DropdownMenuItem>
-                  )}
-                  {(esBorrador || esHistorica) && puedeEliminar && (
-                    <DropdownMenuItem
-                      onClick={() => void eliminar()}
-                      disabled={eliminando}
-                      className="gap-2 text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      {esHistorica ? 'Eliminar registro histórico' : 'Eliminar borrador'}
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </div>
-        </div>
-
+      <div className="space-y-3 empty:hidden print:hidden">
         {liq.marca && (
-          <p className="flex items-center gap-2 rounded-lg bg-warning-soft p-3 text-sm font-medium text-warning">
-            <Info className="h-4 w-4" />
-            {liq.marca}
-          </p>
+          <div className="flex gap-2 rounded-lg bg-warning-soft p-3 text-sm text-foreground">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+            <p>{liq.marca}</p>
+          </div>
         )}
 
         {esAnulada && liq.anulacion && (
-          <p className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-            <Ban className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>
+          <div className="flex gap-2 rounded-lg bg-destructive-soft p-3 text-sm text-foreground">
+            <Ban className="mt-0.5 h-4 w-4 shrink-0 text-destructive" strokeWidth={2} />
+            <p>
               Anulada el {fmtFecha(liq.anulacion.anulado_at)}
               {liq.anulacion.anulado_por ? ` por ${liq.anulacion.anulado_por}` : ''}:{' '}
               {liq.anulacion.motivo}
-            </span>
-          </p>
+            </p>
+          </div>
         )}
 
         {liq.bloqueantes.map((b, i) => (
-          <p
-            key={`${b.code}-${i}`}
-            className="flex items-start gap-2 rounded-lg border border-warning/20 bg-warning-soft p-3 text-sm text-warning"
-          >
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            {b.mensaje}
-          </p>
+          <div key={`${b.code}-${i}`} className="flex gap-2 rounded-lg bg-warning-soft p-3 text-sm text-foreground">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+            <p>{b.mensaje}</p>
+          </div>
         ))}
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          {/* Colaborador y contrato */}
-          <Card>
-            <CardHeader className="border-b">
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
-                Datos del trabajador
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                <div>
-                  <p className="text-xs text-muted-foreground">Cédula</p>
-                  <p className="font-medium">{liq.empleado.documento}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Cargo</p>
-                  <p className="font-medium">{liq.empleado.cargo ?? '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Tipo de contrato</p>
-                  <p className="font-medium">
-                    {liq.contrato.tipo_contrato_etiqueta ??
-                      TIPO_CONTRATO_LABEL[liq.contrato.tipo_contrato]}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Ingreso</p>
-                  <p className="font-medium">{fmtFecha(liq.contrato.fecha_inicio)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Retiro</p>
-                  <p className="font-medium">{fmtFecha(liq.retiro.fecha_retiro)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Tiempo de servicio</p>
-                  <p className="font-medium">{liq.retiro.tiempo_servicio.texto}</p>
-                </div>
-                <div className="col-span-2 sm:col-span-3">
-                  <p className="text-xs text-muted-foreground">Causa de terminación</p>
-                  <p className="font-medium">
-                    {liq.retiro.motivo_etiqueta ?? '—'}
-                    {liq.retiro.indemniza && (
-                      <span className="ml-2 text-xs text-warning">genera indemnización</span>
-                    )}
-                  </p>
-                </div>
+          <SeccionCard title="Colaborador" description="Datos del contrato y de la terminación.">
+            <DatoLista
+              items={[
+                { label: 'Cédula', value: liq.empleado.documento },
+                { label: 'Cargo', value: liq.empleado.cargo ?? '—' },
+                {
+                  label: 'Tipo de contrato',
+                  value: liq.contrato.tipo_contrato_etiqueta ?? TIPO_CONTRATO_LABEL[liq.contrato.tipo_contrato],
+                },
+                { label: 'Fecha de ingreso', value: fmtFecha(liq.contrato.fecha_inicio) },
+                { label: 'Fecha de retiro', value: fmtFecha(liq.retiro.fecha_retiro) },
+                { label: 'Tiempo de servicio', value: liq.retiro.tiempo_servicio.texto },
+                {
+                  label: 'Causa de terminación',
+                  value: (
+                    <>
+                      {liq.retiro.motivo_etiqueta ?? '—'}
+                      {liq.retiro.indemniza && (
+                        <span className="block text-xs font-normal text-muted-foreground">Genera indemnización</span>
+                      )}
+                    </>
+                  ),
+                },
+              ]}
+            />
+
+            {liq.contrato.tipo_contrato_origen === 'MANUAL' && (
+              <div className="mt-4 flex gap-2 rounded-lg bg-warning-soft p-3 text-sm text-foreground">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+                <p>El tipo de contrato se cambió a mano en esta liquidación.</p>
               </div>
+            )}
+          </SeccionCard>
 
-              {liq.contrato.tipo_contrato_origen === 'MANUAL' && (
-                <p className="mt-4 flex items-start gap-2 text-xs text-warning">
-                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  El tipo de contrato se cambió a mano en esta liquidación.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Conceptos */}
-          <Card>
-            <CardHeader className="border-b">
-              <CardTitle>Detalle de la liquidación</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6 p-6">
+          <Card className="gap-0 overflow-hidden">
+            <div className="border-b border-border px-5 py-4 sm:px-6">
+              <h3>Detalle de la liquidación</h3>
+            </div>
+            <div className="space-y-6 px-5 py-5 sm:px-6">
               <div>
-                <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                  <CheckCircle className="h-4 w-4 text-success" />
-                  Conceptos devengados
-                </h3>
-                <div className="space-y-1">
-                  {liq.conceptos.devengados.map((c) => (
-                    <FilaConcepto key={`${c.codigo}-${c.ref_id ?? 0}`} c={c} />
-                  ))}
-                  <div className="flex items-center justify-between py-2 font-bold">
-                    <span>Total devengado</span>
-                    <span className="text-success">{fmtCOP(liq.totales.total_devengado)}</span>
-                  </div>
-                </div>
+                <Eyebrow className="mb-1">Conceptos devengados</Eyebrow>
+                <ConceptosTabla items={devengados} />
               </div>
-
               <div>
-                <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                  <AlertCircle className="h-4 w-4 text-destructive" />
-                  Conceptos deducidos
-                </h3>
+                <Eyebrow className="mb-1">Conceptos deducidos</Eyebrow>
                 {liq.conceptos.deducciones.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Sin deducciones.</p>
+                  <p className="py-2.5 text-sm text-muted-foreground">Sin deducciones.</p>
                 ) : (
-                  <div className="space-y-1">
-                    {liq.conceptos.deducciones.map((c) => (
-                      <FilaConcepto key={`${c.codigo}-${c.ref_id ?? 0}`} c={c} negativo />
-                    ))}
-                    <div className="flex items-center justify-between py-2 font-bold">
-                      <span>Total deducciones</span>
-                      <span className="text-destructive">
-                        {liq.totales.total_deducciones > 0 ? '−' : ''}
-                        {fmtCOP(liq.totales.total_deducciones)}
-                      </span>
-                    </div>
-                  </div>
+                  <ConceptosTabla items={deducidos} />
                 )}
                 <p className="mt-2 text-xs text-muted-foreground">{liq.seguridad_social.nota}</p>
               </div>
-
-              <div className="rounded-lg border border-primary/30 bg-primary/10 p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-lg font-bold">Neto a pagar</span>
-                  <span className="text-2xl sm:text-3xl font-bold text-primary">
-                    {fmtCOP(liq.totales.total_neto)}
-                  </span>
-                </div>
+            </div>
+            <div className="flex flex-col gap-1 border-t border-border px-5 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-6">
+              <div>
+                <Eyebrow>Neto a pagar</Eyebrow>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {fmtCOP(liq.totales.total_devengado)} devengado − {fmtCOP(totalDeducciones)} deducciones
+                </p>
               </div>
-            </CardContent>
+              <p className="text-3xl font-bold tabular-nums text-foreground">{fmtCOP(liq.totales.total_neto)}</p>
+            </div>
           </Card>
 
-          {/* Método de liquidación */}
-          <Card>
-            <CardHeader className="border-b">
-              <CardTitle className="flex items-center gap-2">
-                <Scale className="h-5 w-5" />
-                Cómo se liquidó
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 p-6">
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                {liq.metodo_liquidacion.texto}
-              </p>
+          <SeccionCard title="Cómo se liquidó">
+            <div className="space-y-3">
+              <p className="text-sm leading-relaxed text-muted-foreground">{liq.metodo_liquidacion.texto}</p>
               {liq.metodo_liquidacion.normas.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {liq.metodo_liquidacion.normas.map((n) => (
-                    <Badge key={n} variant="outline" className="text-xs font-normal">
+                    <Badge key={n} variant="secondary">
                       {n}
                     </Badge>
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </SeccionCard>
 
           {liq.observaciones && (
-            <Card>
-              <CardHeader className="border-b">
-                <CardTitle>Observaciones</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">{liq.observaciones}</p>
-              </CardContent>
-            </Card>
+            <SeccionCard title="Observaciones">
+              <p className="text-sm text-muted-foreground">{liq.observaciones}</p>
+            </SeccionCard>
           )}
         </div>
 
-        {/* Lateral */}
         <div className="space-y-6">
-          <Card className="lg:sticky lg:top-6">
-            <CardHeader className="border-b">
-              <CardTitle className="text-base">Resumen</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 p-6">
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Devengado</span>
-                  <span className="font-medium">{fmtCOP(liq.totales.total_devengado)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Deducciones</span>
-                  <span className="font-medium text-destructive">
-                    {liq.totales.total_deducciones > 0 ? '−' : ''}
-                    {fmtCOP(liq.totales.total_deducciones)}
-                  </span>
-                </div>
-                <div className="flex justify-between border-t border-border pt-2 font-bold">
-                  <span>Neto</span>
-                  <span className="text-primary">{fmtCOP(liq.totales.total_neto)}</span>
-                </div>
+          <SeccionCard title="Resumen" className="lg:sticky lg:top-6">
+            <div className="space-y-5">
+              <ConceptosTabla
+                items={[
+                  { label: 'Fecha de retiro', valor: fmtFecha(liq.retiro.fecha_retiro) },
+                  { label: 'Causa', valor: liq.retiro.motivo_etiqueta ?? '—' },
+                  { label: 'Total devengado', valor: fmtCOP(liq.totales.total_devengado) },
+                  { label: 'Total deducciones', valor: fmtCOP(totalDeducciones), negativo: totalDeducciones > 0 },
+                  { label: 'Neto a pagar', valor: fmtCOP(liq.totales.total_neto), total: true },
+                ]}
+              />
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-muted-foreground">Estado</span>
+                {estadoBadges}
               </div>
 
               {liq.vacaciones.saldo_dias > 0 && (
-                <div className="border-t border-border pt-3 text-sm">
-                  <p className="text-xs text-muted-foreground">Vacaciones compensadas</p>
-                  <p className="font-medium">{fmtDias(liq.vacaciones.saldo_dias)} días</p>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">Vacaciones compensadas</span>
+                  <span className="font-medium tabular-nums text-foreground">
+                    {fmtDias(liq.vacaciones.saldo_dias)} días
+                  </span>
                 </div>
               )}
 
               {liq.pago.fecha_pago && (
-                <div className="space-y-1 border-t border-border pt-3 text-sm">
-                  <p className="text-xs text-muted-foreground">Pago</p>
-                  <p className="font-medium">{fmtFecha(liq.pago.fecha_pago)}</p>
+                <div className="space-y-0.5 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">Pago</span>
+                    <span className="font-medium text-foreground">{fmtFecha(liq.pago.fecha_pago)}</span>
+                  </div>
                   {liq.pago.metodo_pago && (
-                    <p className="text-xs text-muted-foreground">{liq.pago.metodo_pago}</p>
+                    <p className="text-right text-xs text-muted-foreground">{liq.pago.metodo_pago}</p>
                   )}
                   {liq.pago.referencia_pago && (
-                    <p className="text-xs text-muted-foreground">Ref. {liq.pago.referencia_pago}</p>
+                    <p className="text-right text-xs text-muted-foreground">Ref. {liq.pago.referencia_pago}</p>
                   )}
                 </div>
               )}
 
+              <div className="space-y-2 border-t border-border pt-4 print:hidden">
+                {esBorrador && puedeLiquidar && (
+                  <Button onClick={() => setAprobando(true)} className="w-full">
+                    <CheckCircle strokeWidth={2} />
+                    Aceptar
+                  </Button>
+                )}
+                {esAprobada && puedePagar && (
+                  <Button onClick={() => setPagando(true)} className="w-full">
+                    <Banknote strokeWidth={2} />
+                    Registrar pago
+                  </Button>
+                )}
+                {esBorrador && puedeEditar && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => navigate(`/liquidaciones/liquidacion-final/${liq.id}/editar`)}
+                  >
+                    <Pencil strokeWidth={2} />
+                    Volver a editar
+                  </Button>
+                )}
+                <div className={`grid gap-2 ${liq.compartir ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                  <Button
+                    variant="outline"
+                    disabled={descargando}
+                    onClick={() => void abrirPdf(false)}
+                    aria-label="Descargar PDF"
+                  >
+                    {descargando ? <Loader2 className="animate-spin" /> : <Download strokeWidth={2} />}
+                    <span className="hidden sm:inline lg:hidden xl:inline">PDF</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={descargando}
+                    onClick={() => void abrirPdf(true)}
+                    aria-label="Imprimir"
+                  >
+                    <Printer strokeWidth={2} />
+                    <span className="hidden sm:inline lg:hidden xl:inline">Imprimir</span>
+                  </Button>
+                  {liq.compartir && (
+                    <Button
+                      variant="outline"
+                      onClick={() => window.open(liq.compartir!.whatsapp_url, '_blank', 'noopener')}
+                      aria-label="Compartir por WhatsApp"
+                    >
+                      <MessageCircle strokeWidth={2} />
+                      <span className="hidden sm:inline lg:hidden xl:inline">WhatsApp</span>
+                    </Button>
+                  )}
+                </div>
+              </div>
+
               {liq.compartir && (
-                <p className="border-t border-border pt-3 text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   El enlace que se envía por WhatsApp abre sin contraseña y vence el{' '}
                   {fmtFecha(liq.compartir.expires_at)}.
                 </p>
               )}
 
-              <div className="space-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
-                {liq.auditoria.creado_por && <p>Creada por {liq.auditoria.creado_por}</p>}
-                {liq.auditoria.aprobado_por && (
-                  <p>
-                    Aprobada por {liq.auditoria.aprobado_por} el{' '}
-                    {fmtFecha(liq.auditoria.aprobado_at)}
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+              {(liq.auditoria.creado_por || liq.auditoria.aprobado_por) && (
+                <div className="space-y-1 border-t border-border pt-4 text-xs text-muted-foreground">
+                  {liq.auditoria.creado_por && <p>Creada por {liq.auditoria.creado_por}</p>}
+                  {liq.auditoria.aprobado_por && (
+                    <p>
+                      Aprobada por {liq.auditoria.aprobado_por} el {fmtFecha(liq.auditoria.aprobado_at)}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </SeccionCard>
 
           {liq.advertencias.length > 0 && (
-            <Card>
-              <CardHeader className="border-b">
-                <CardTitle className="text-base">Avisos</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 p-6">
+            <SeccionCard title="Avisos">
+              <ul className="space-y-2">
                 {liq.advertencias.map((a, i) => (
-                  <p
-                    key={`${a.code}-${i}`}
-                    className="flex items-start gap-2 text-xs text-muted-foreground"
-                  >
-                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <li key={`${a.code}-${i}`} className="flex gap-2 text-sm text-foreground">
+                    <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2} />
                     {a.mensaje}
-                  </p>
+                  </li>
                 ))}
-              </CardContent>
-            </Card>
+              </ul>
+            </SeccionCard>
           )}
 
           {liq.retencion.aplica && (
-            <Card>
-              <CardHeader className="border-b">
-                <CardTitle className="text-base">Retención en la fuente</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground">{liq.retencion.nota}</p>
-              </CardContent>
-            </Card>
+            <SeccionCard title="Retención en la fuente">
+              <p className="text-sm text-muted-foreground">{liq.retencion.nota}</p>
+            </SeccionCard>
           )}
         </div>
       </div>

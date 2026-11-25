@@ -11,10 +11,9 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { comoBoton } from '../../../hooks/comoBoton';
-import { useParams, Link, useNavigate } from 'react-router';
-import { Card, CardContent } from '../../../components/ui/card';
+import { useParams, useNavigate } from 'react-router';
+import { Card } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
-import { Input } from '../../../components/ui/input';
 import { Label } from '../../../components/ui/label';
 import { Textarea } from '../../../components/ui/textarea';
 import { Checkbox } from '../../../components/ui/checkbox';
@@ -23,8 +22,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../../components/ui/alert-dialog';
 import {
-  ArrowLeft, ArrowRight, Check, Users, Calendar, X,
-  PiggyBank, Percent, Gift, CheckCircle, TrendingUp, Loader2, AlertTriangle, Clock,
+  ArrowLeft, ArrowRight, Check, Users, X, Info, Loader2, AlertTriangle, Clock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -41,228 +39,138 @@ import {
 import type { ApiError } from '../../../../api/client';
 import { formatFecha } from '../../../utils/fecha';
 import { comparePersonaByFirstName, sortByFirstName } from '../../../utils/personas';
-import { fmtCOP, getIniciales, TEXTOS_PERIODO, type TipoPeriodoDetalle } from './textos';
+import PageHeader from '../../../components/common/PageHeader';
+import SeccionCard from '../../../components/liquidaciones/SeccionCard';
+import DatoLista, { type Dato } from '../../../components/liquidaciones/DatoLista';
+import Pasos from '../../../components/liquidaciones/Pasos';
+import Desprendible from '../../../components/liquidaciones/Desprendible';
+import TotalResumen from '../../../components/liquidaciones/TotalResumen';
+import type { Concepto } from '../../../components/liquidaciones/ConceptosTabla';
+import { fmtCOP, TEXTOS_PERIODO, type TipoPeriodoDetalle } from './textos';
 import VistaPeriodoCerrado from './VistaPeriodoCerrado';
 
-// ── Step indicator (diseño V.24, sin cambios) ────────────────────────────────
-const pasos = [
-  { numero: 1, titulo: 'Información del Período', icono: Calendar },
-  { numero: 2, titulo: 'Seleccionar Colaboradores', icono: Users },
-  { numero: 3, titulo: 'Confirmación', icono: Check },
-];
+const PASOS = ['Información del período', 'Seleccionar colaboradores', 'Confirmación'];
 
-function StepBar({ actual }: { actual: number }) {
+const METODO_LABEL: Record<string, string> = {
+  ULTIMO_SALARIO: 'Último salario',
+  PROMEDIO: 'Promedio devengado',
+  MANUAL: 'Ajuste manual',
+};
+
+/** "cesantías" → "Cesantías", para el eyebrow del encabezado. */
+const mayuscula = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+const cajaAviso = 'flex gap-2 rounded-lg bg-warning-soft p-3 text-sm text-foreground';
+
+// ── Desprendible del paso 3 ──────────────────────────────────────────────────
+
+/** Conceptos del preview: base salarial (cesantías y prima) o saldo y tasa (intereses). */
+function conceptosPreview(fila: PreviewFilaLiquidacion, tipo: TipoPeriodoDetalle): Concepto[] {
+  const txt = TEXTOS_PERIODO[tipo];
+  const formula = `Fórmula: ${fila.resultado.formula_aplicada}`;
+  const total: Concepto = {
+    label: `Total ${txt.colValor.toLowerCase()}`,
+    valor: fmtCOP(fila.resultado.valor_final),
+    total: true,
+  };
+  if (tipo === 'INTERESES_CESANTIAS') {
+    return [
+      { label: 'Saldo cesantías', valor: fmtCOP(fila.origen?.saldo_cesantias ?? fila.base.base_prestacional) },
+      { label: 'Tasa de interés', valor: `${fila.resultado.tasa_aplicada ?? 12}% anual`, detalle: 'Ley 52 de 1975' },
+      { label: 'Días base', valor: fila.resultado.dias, detalle: formula },
+      total,
+    ];
+  }
+  return [
+    { label: 'Salario básico', valor: fmtCOP(fila.base.salario_basico) },
+    { label: 'Auxilio de transporte', valor: fmtCOP(fila.base.auxilio_transporte) },
+    { label: 'Promedio variables', valor: fmtCOP(fila.base.promedio_variables) },
+    {
+      label: 'Base prestacional',
+      valor: fmtCOP(fila.base.base_prestacional),
+      detalle: (fila.base.metodo_base && METODO_LABEL[fila.base.metodo_base]) || 'Base de cálculo',
+    },
+    { label: 'Días', valor: fila.resultado.dias, detalle: formula },
+    total,
+  ];
+}
+
+/** Días computados con el descuento entre paréntesis cuando lo hay. */
+function diasDato(fila: PreviewFilaLiquidacion, conBaseSalarial: boolean): Dato {
+  if (!conBaseSalarial) return { label: 'Días base', value: fila.resultado.dias };
+  const d = fila.dias;
+  return {
+    label: 'Días computados',
+    value: (
+      <>
+        {d.dias_computados}
+        {d.dias_descontados > 0 && (
+          <span className="ml-1 text-xs text-muted-foreground" title="Días descontados por suspensiones o ausencias injustificadas">
+            ({d.dias_vinculacion} − {d.dias_descontados})
+          </span>
+        )}
+      </>
+    ),
+  };
+}
+
+/** Avisos de la fila: valor provisional, bloqueantes y advertencias. */
+function AvisosFila({ fila }: { fila: PreviewFilaLiquidacion }) {
+  const diasProyectados = fila.base.dias_proyectados ?? 0;
+  const advertencias = fila.advertencias.filter((a) => a.code !== 'PRIMA_TRAMO_PROYECTADO');
+  if (diasProyectados === 0 && fila.bloqueantes.length === 0 && advertencias.length === 0) return null;
   return (
-    <div className="flex items-center gap-0">
-      {pasos.map((paso, idx) => {
-        const completado = actual > paso.numero;
-        const activo = actual === paso.numero;
-        const Icono = paso.icono;
-        return (
-          <div key={paso.numero} className="flex items-center flex-1 last:flex-none">
-            <div className="flex flex-col items-center gap-1.5 min-w-0">
-              <div className={`h-10 w-10 rounded-full border-2 flex items-center justify-center transition-colors ${
-                completado ? 'bg-primary border-primary' : activo ? 'border-primary bg-primary/10' : 'border-border bg-background'
-              }`}>
-                {completado
-                  ? <Check className="h-5 w-5 text-white" />
-                  : <Icono className={`h-5 w-5 ${activo ? 'text-primary' : 'text-muted-foreground'}`} />}
-              </div>
-              <div className="text-center">
-                <p className={`text-xs font-semibold ${activo || completado ? 'text-primary' : 'text-muted-foreground'}`}>
-                  Paso {paso.numero}
-                </p>
-                <p className={`text-xs ${activo ? 'text-foreground' : 'text-muted-foreground'} hidden sm:block`}>
-                  {paso.titulo}
-                </p>
-              </div>
-            </div>
-            {idx < pasos.length - 1 && (
-              <div className={`flex-1 h-0.5 mx-3 mb-5 transition-colors ${actual > paso.numero ? 'bg-primary' : 'bg-border'}`} />
-            )}
+    <div className="space-y-2 px-5 pb-4">
+      {/* §2.8: el último tramo del semestre aún no tiene nómina cerrada. */}
+      {diasProyectados > 0 && (
+        <div className={cajaAviso}>
+          <Clock className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+          <div>
+            <p className="font-medium">Valor provisional: {diasProyectados} día(s) proyectados</p>
+            <p className="text-muted-foreground">
+              Los últimos {diasProyectados} día(s) del semestre todavía no tienen nómina cerrada. Se calculan con el promedio de lo ya liquidado para poder pagar a tiempo. Al cerrar esa nómina puedes reabrir el período y recalcular para dejar el valor definitivo.
+            </p>
           </div>
-        );
-      })}
+        </div>
+      )}
+      {fila.bloqueantes.map((b) => (
+        <div key={b} className="flex gap-2 rounded-lg bg-destructive-soft p-3 text-sm font-medium text-foreground">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" strokeWidth={2} />
+          {BLOQUEANTE_LABEL[b] ?? b}
+        </div>
+      ))}
+      {advertencias.map((a, i) => (
+        <div key={i} className={cajaAviso}>
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+          {a.mensaje ?? a.code}
+        </div>
+      ))}
     </div>
   );
 }
 
-// ── Desprendible del paso 3 ──────────────────────────────────────────────────
-
 function DesprendiblePreview({ fila, tipo }: { fila: PreviewFilaLiquidacion; tipo: TipoPeriodoDetalle }) {
-  const txt = TEXTOS_PERIODO[tipo];
   // Prima comparte con cesantías la base salarial de tres componentes
   // (§2.8); el caso distinto es intereses, que parte de un saldo y una tasa.
-  const esIntereses = tipo === 'INTERESES_CESANTIAS';
-  const conBaseSalarial = !esIntereses;
+  const conBaseSalarial = tipo !== 'INTERESES_CESANTIAS';
   const col = fila.empleado;
-  const bloqueada = fila.bloqueantes.length > 0;
-  const diasProyectados = fila.base.dias_proyectados ?? 0;
-
-  const metodoLabel = fila.base.metodo_base === 'ULTIMO_SALARIO'
-    ? 'Último salario'
-    : fila.base.metodo_base === 'PROMEDIO'
-      ? 'Promedio devengado'
-      : fila.base.metodo_base === 'MANUAL'
-        ? 'Ajuste manual'
-        : esIntereses ? 'Saldo de cesantías' : '';
-
   return (
-    <Card className={`overflow-hidden ${bloqueada ? 'border-destructive/50' : ''}`}>
-      {/* Desprendible header */}
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-background">
-        <div className="h-9 w-9 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center justify-center text-xs font-bold shrink-0">
-          {getIniciales(col.nombre_completo)}
-        </div>
-        <div>
-          <p className="font-semibold text-sm">{col.nombre_completo}</p>
-          <p className="text-xs text-muted-foreground">{col.cargo ?? '—'}</p>
-        </div>
-        <div className="ml-auto text-right">
-          <p className="text-xs text-muted-foreground">Fondo</p>
-          <p className="text-sm font-medium">{col.fondo_cesantias ?? '—'}</p>
-        </div>
-      </div>
-
-      {/* Info bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 divide-x divide-border bg-muted/20 border-b border-border">
-        <div className="px-5 py-3">
-          <p className="text-xs text-muted-foreground mb-0.5">Cédula</p>
-          <p className="text-sm font-medium">{col.documento}</p>
-        </div>
-        <div className="px-5 py-3">
-          <p className="text-xs text-muted-foreground mb-0.5">{conBaseSalarial ? 'Días Computados' : 'Días Base'}</p>
-          <p className="text-sm font-medium">
-            {conBaseSalarial ? fila.dias.dias_computados : fila.resultado.dias}
-            {conBaseSalarial && fila.dias.dias_descontados > 0 && (
-              <span className="text-xs text-muted-foreground ml-1" title="Días descontados por suspensiones o ausencias injustificadas">
-                ({fila.dias.dias_vinculacion} − {fila.dias.dias_descontados})
-              </span>
-            )}
-          </p>
-        </div>
-        <div className="px-5 py-3">
-          <p className="text-xs text-muted-foreground mb-0.5">Período</p>
-          <p className="text-sm font-medium">
-            {formatFecha(fila.dias.fecha_computo_desde)} — {formatFecha(fila.dias.fecha_computo_hasta)}
-          </p>
-        </div>
-      </div>
-
-      <CardContent className="p-0">
-        {/* Base de Cálculo */}
-        <div className="bg-primary/5 border-b border-primary/10">
-          <div className="flex items-center gap-2 px-5 pt-4 pb-2">
-            <TrendingUp className="h-4 w-4 text-primary" />
-            <span className="text-sm font-semibold text-primary">Base de Cálculo</span>
-            <span className="ml-auto text-xs font-medium text-muted-foreground">
-              {metodoLabel}
-            </span>
-          </div>
-          {conBaseSalarial ? (
-            <>
-              <div className="px-5 pb-1 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-[13px] font-medium text-muted-foreground">Salario Básico</span>
-                  <span className="text-sm font-medium">{fmtCOP(fila.base.salario_basico)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[13px] font-medium text-muted-foreground">Auxilio de Transporte</span>
-                  <span className="text-sm font-medium">{fila.base.auxilio_transporte > 0 ? fmtCOP(fila.base.auxilio_transporte) : <span className="text-muted-foreground">$0</span>}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[13px] font-medium text-muted-foreground">Promedio Variables</span>
-                  <span className="text-sm font-medium">{fila.base.promedio_variables > 0 ? fmtCOP(fila.base.promedio_variables) : <span className="text-muted-foreground">$0</span>}</span>
-                </div>
-              </div>
-              <div className="mx-5 my-3 border-t border-primary/20" />
-              <div className="flex justify-between items-center px-5 pb-4">
-                <span className="text-xs font-semibold text-primary">Base Prestacional</span>
-                <span className="text-sm font-bold text-primary">{fmtCOP(fila.base.base_prestacional)}</span>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="px-5 pb-1 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-[13px] font-medium text-muted-foreground">Saldo Cesantías</span>
-                  <span className="text-sm font-medium">{fmtCOP(fila.origen?.saldo_cesantias ?? fila.base.base_prestacional)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[13px] font-medium text-muted-foreground">Tasa de Interés</span>
-                  <span className="text-sm font-medium">
-                    {fila.resultado.tasa_aplicada ?? 12}% anual <span className="text-muted-foreground text-xs">(Ley 52/75)</span>
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[13px] font-medium text-muted-foreground">Días Base</span>
-                  <span className="text-sm font-medium">{fila.resultado.dias}</span>
-                </div>
-              </div>
-              <div className="mx-5 my-3 border-t border-primary/20" />
-              <div className="flex justify-between items-center px-5 pb-4">
-                <span className="text-xs font-semibold text-primary">Fórmula</span>
-                <span className="text-xs text-primary">{fila.resultado.formula_aplicada}</span>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Resultado */}
-        {conBaseSalarial && (
-          <div className="px-5 pt-4 pb-2 space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="text-[13px] font-medium text-muted-foreground">Días</span>
-              <span className="text-sm font-medium">{fila.resultado.dias}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-[13px] font-medium text-muted-foreground">Fórmula</span>
-              <span className="text-xs text-muted-foreground">{fila.resultado.formula_aplicada}</span>
-            </div>
-          </div>
-        )}
-        <div className={`mx-5 border-t-2 border-primary/20 ${conBaseSalarial ? '' : 'mt-4'}`} />
-        <div className="flex justify-between items-center px-5 py-4">
-          <span className="text-sm font-semibold">{txt.totalCardLabel}</span>
-          <span className="text-xl font-bold text-primary">{fmtCOP(fila.resultado.valor_final)}</span>
-        </div>
-
-        {/* §2.8 — El último tramo del semestre aún no tiene nómina cerrada:
-            el promedio se proyecta sobre lo ya liquidado. El valor es
-            provisional, así que se avisa aparte de las advertencias. */}
-        {diasProyectados > 0 && (
-          <div className="mx-5 mb-4 rounded-lg border border-warning/20 bg-warning-soft px-4 py-3">
-            <p className="text-xs font-semibold text-warning flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5 shrink-0" />
-              Valor provisional: {diasProyectados} día(s) proyectados
-            </p>
-            <p className="text-xs text-warning mt-1">
-              Los últimos {diasProyectados} día(s) del semestre todavía no tienen nómina cerrada. Se calculan con el promedio de lo ya liquidado para poder pagar a tiempo. Al cerrar esa nómina puedes reabrir el período y recalcular para dejar el valor definitivo.
-            </p>
-          </div>
-        )}
-
-        {/* Bloqueantes y advertencias de la fila */}
-        {(bloqueada || fila.advertencias.some((a) => a.code !== 'PRIMA_TRAMO_PROYECTADO')) && (
-          <div className="px-5 pb-4 space-y-1.5">
-            {fila.bloqueantes.map((b) => (
-              <p key={b} className="text-xs font-semibold text-destructive flex items-center gap-1.5">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                {BLOQUEANTE_LABEL[b] ?? b}
-              </p>
-            ))}
-            {fila.advertencias
-              .filter((a) => a.code !== 'PRIMA_TRAMO_PROYECTADO')
-              .map((a, i) => (
-                <p key={i} className="text-xs text-warning flex items-center gap-1.5">
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                  {a.mensaje ?? a.code}
-                </p>
-              ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <Desprendible
+      nombre={col.nombre_completo}
+      cargo={col.cargo ?? '—'}
+      meta={{ label: 'Fondo', value: col.fondo_cesantias ?? '—' }}
+      datos={[
+        { label: 'Cédula', value: col.documento },
+        diasDato(fila, conBaseSalarial),
+        {
+          label: 'Período',
+          value: `${formatFecha(fila.dias.fecha_computo_desde)} – ${formatFecha(fila.dias.fecha_computo_hasta)}`,
+        },
+      ]}
+      conceptos={conceptosPreview(fila, tipo)}
+    >
+      <AvisosFila fila={fila} />
+    </Desprendible>
   );
 }
 
@@ -276,7 +184,6 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
   const esCesantias = tipo === 'CESANTIAS';
   const esIntereses = tipo === 'INTERESES_CESANTIAS';
   const esPrima = tipo === 'PRIMA';
-  const IconoTipo = esCesantias ? PiggyBank : esPrima ? Gift : Percent;
 
   const [periodo, setPeriodo] = useState<LiquidacionPeriodoDetalle | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -490,19 +397,19 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
 
   if (cargando) {
     return (
-      <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" />
+      <Card className="flex-row items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
         Cargando período...
-      </div>
+      </Card>
     );
   }
   if (!periodo) {
     return (
-      <div className="space-y-4">
-        <Button variant="ghost" size="sm" asChild>
-          <Link to={txt.rutaTab}><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
-        </Button>
-        <p className="text-muted-foreground">Período no encontrado.</p>
+      <div className="space-y-6">
+        <PageHeader eyebrow={mayuscula(txt.nombre)} title="Período no encontrado" backTo={txt.rutaTab} />
+        <Card className="items-center py-12 text-center">
+          <p className="text-sm text-muted-foreground">No se encontró el período de liquidación.</p>
+        </Card>
       </div>
     );
   }
@@ -516,287 +423,242 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
   // lo mande al final de los chips.
   const filasAgregadas = [...(periodo.filas ?? [])]
     .sort((a, b) => comparePersonaByFirstName(a.empleado, b.empleado));
+  const fechaLarga = (f: string) => formatFecha(f, { day: 'numeric', month: 'long', year: 'numeric' });
+  const todosMarcados = elegibles.length > 0 && marcados.length === elegibles.length;
+
+  const datosPeriodo: Dato[] = [
+    { label: 'Año', value: periodo.anio },
+    { label: 'Descripción', value: periodo.descripcion },
+    ...(esPrima
+      ? [{ label: 'Semestre', value: periodo.semestre === 1 ? '1° semestre (ene – jun)' : '2° semestre (jul – dic)' }]
+      : []),
+    { label: 'Fecha de inicio', value: formatFecha(periodo.fecha_inicio) },
+    { label: 'Fecha de fin', value: formatFecha(periodo.fecha_fin) },
+    ...(esIntereses ? [{ label: 'Tasa de interés', value: '12% anual (Ley 52 de 1975, fija por ley)' }] : []),
+    ...(esIntereses && periodo.periodo_base
+      ? [{
+          label: 'Cesantías base',
+          value: `${periodo.periodo_base.descripcion} (${periodo.periodo_base.total_colaboradores} colaboradores)`,
+        }]
+      : []),
+  ];
 
   // ── Wizard BORRADOR ───────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      <Button variant="ghost" size="sm" asChild>
-        <Link to={txt.rutaTab}><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
-      </Button>
+      <PageHeader
+        eyebrow={mayuscula(txt.nombre)}
+        title={periodo.descripcion}
+        description={
+          <>
+            {txt.subtituloWizard} · Fecha límite: {formatFecha(periodo.fecha_limite_operativa)}
+            <span title={`Fecha legal: ${formatFecha(periodo.fecha_limite_legal)}`}> (legal {formatFecha(periodo.fecha_limite_legal)})</span>
+          </>
+        }
+        backTo={txt.rutaTab}
+      />
 
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-primary">{periodo.descripcion}</h1>
-        <p className="text-muted-foreground mt-1">
-          {txt.subtituloWizard} · Fecha límite: {formatFecha(periodo.fecha_limite_operativa)}
-          <span title={`Fecha legal: ${formatFecha(periodo.fecha_limite_legal)}`}> (legal {formatFecha(periodo.fecha_limite_legal)})</span>
-        </p>
-      </div>
-
-      <Card>
-        <CardContent>
-          <StepBar actual={paso} />
-        </CardContent>
-      </Card>
+      <Pasos pasos={PASOS} actual={paso} />
 
       {/* ── PASO 1: Info del período ── */}
       {paso === 1 && (
-        <Card>
-          <CardContent className="p-6 space-y-6">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                <IconoTipo className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <h2 className="font-semibold text-lg">Información del Período</h2>
-                <p className="text-sm text-muted-foreground">Revisa los datos antes de continuar</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div className="space-y-1.5">
-                <Label htmlFor="periodoliq-ano">Año</Label>
-                <Input id="periodoliq-ano" value={periodo.anio} disabled className="bg-muted/30" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="periodoliq-descripcion">Descripción</Label>
-                <Input id="periodoliq-descripcion" value={periodo.descripcion} disabled className="bg-muted/30" />
-              </div>
-              {esPrima && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="periodoliq-semestre">Semestre</Label>
-                  <Input id="periodoliq-semestre"
-                    value={periodo.semestre === 1 ? '1° Semestre (ene – jun)' : '2° Semestre (jul – dic)'}
-                    disabled
-                    className="bg-muted/30"
-                  />
-                </div>
-              )}
-              <div className="space-y-1.5">
-                <Label htmlFor="periodoliq-fecha-inicio">Fecha inicio</Label>
-                <Input id="periodoliq-fecha-inicio" type="date" value={periodo.fecha_inicio} disabled className="bg-muted/30" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="periodoliq-fecha-fin">Fecha fin</Label>
-                <Input id="periodoliq-fecha-fin" type="date" value={periodo.fecha_fin} disabled className="bg-muted/30" />
-              </div>
-              {esIntereses && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="periodoliq-tasa-de-interes">Tasa de interés</Label>
-                  <Input id="periodoliq-tasa-de-interes" value="12% anual (Ley 52 de 1975, fija por ley)" disabled className="bg-muted/30" />
-                </div>
-              )}
-              {esIntereses && periodo.periodo_base && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="periodoliq-cesantias-base">Cesantías base</Label>
-                  <Input id="periodoliq-cesantias-base" value={`${periodo.periodo_base.descripcion} (${periodo.periodo_base.total_colaboradores} colaboradores)`} disabled className="bg-muted/30" />
-                </div>
-              )}
-            </div>
-            <div className="p-4 rounded-xl border border-warning/20 bg-warning-soft text-sm text-warning">
-              Fecha límite: legal el <strong>{formatFecha(periodo.fecha_limite_legal, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>, operativa el <strong>{formatFecha(periodo.fecha_limite_operativa, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>. {txt.avisoLimite}
+        <SeccionCard title="Información del período" description="Revisa los datos antes de continuar.">
+          <div className="space-y-5">
+            <DatoLista items={datosPeriodo} />
+            <div className={cajaAviso}>
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+              <p>
+                Fecha límite: legal el <strong>{fechaLarga(periodo.fecha_limite_legal)}</strong>, operativa el <strong>{fechaLarga(periodo.fecha_limite_operativa)}</strong>. {txt.avisoLimite}
+              </p>
             </div>
             {periodo.advertencias_globales.map((a, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-xl border border-warning/20 bg-warning-soft px-4 py-3 text-sm text-warning">
-                <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
+              <div key={i} className={cajaAviso}>
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
                 <span>{a.mensaje ?? a.code}</span>
               </div>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </SeccionCard>
       )}
 
       {/* ── PASO 2: Seleccionar colaboradores ── */}
       {paso === 2 && (
-        <Card className="overflow-hidden">
-          <CardContent className="p-6 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <Users className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <h2 className="font-semibold text-lg">Seleccionar Personal</h2>
-                  <p className="text-sm text-muted-foreground">Agrega los colaboradores a este período de {txt.nombre}</p>
-                </div>
-              </div>
-              <Button variant="outline" size="sm" onClick={toggleTodos} disabled={elegibles.length === 0}>
-                <Users className="h-4 w-4" />
-                {elegibles.length > 0 && marcados.length === elegibles.length ? 'Quitar Todos' : 'Agregar Todos'}
-              </Button>
-            </div>
-
-            {(filasAgregadas.length > 0 || marcados.length > 0) && (
-              <div className="text-sm text-primary font-medium">
-                {filasAgregadas.length > 0 && `${filasAgregadas.length} ya en el período`}
-                {filasAgregadas.length > 0 && marcados.length > 0 && ' · '}
-                {marcados.length > 0 && `${marcados.length} por agregar`}
-              </div>
-            )}
-
-            {/* Ya agregados al período (persistidos) */}
-            {filasAgregadas.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {filasAgregadas.map((f) => (
-                  <span key={f.id} className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-medium pl-3 pr-1.5 py-1">
-                    {f.empleado.nombre_completo}
-                    <button
-                      type="button"
-                      onClick={() => quitarFila(f.id)}
-                      disabled={quitandoFila === f.id}
-                      className="rounded-full hover:bg-primary/20 p-0.5"
-                      title="Quitar del período"
-                    >
-                      {quitandoFila === f.id
-                        ? <Loader2 className="h-3 w-3 animate-spin" />
-                        : <X className="h-3 w-3" />}
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {cargandoDisponibles ? (
-              <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                Cargando colaboradores disponibles...
-              </div>
-            ) : elegibles.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8 border border-dashed border-border rounded-xl">
-                No hay más colaboradores elegibles para este período.
+        <Card className="gap-0 overflow-hidden">
+          <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-0.5">
+              <h3>Seleccionar personal</h3>
+              <p className="text-sm text-muted-foreground">
+                Agrega los colaboradores a este período de {txt.nombre}
+                {filasAgregadas.length > 0 && (
+                  <span className="text-foreground"> · {filasAgregadas.length} ya en el período</span>
+                )}
+                {marcados.length > 0 && (
+                  <span className="text-foreground"> · {marcados.length} por agregar</span>
+                )}
               </p>
-            ) : (
-              <div className="rounded-xl border border-border overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/30">
-                      <th className="w-12 p-4">
-                        <Checkbox checked={elegibles.length> 0 && marcados.length === elegibles.length} onCheckedChange={toggleTodos} />
-                      </th>
-                      <th className="p-4 text-left text-[13px] font-semibold text-muted-foreground">Nombre</th>
-                      <th className="p-4 text-left text-[13px] font-semibold text-muted-foreground">Cargo</th>
-                      {esIntereses ? (
-                        <>
-                          <th className="p-4 text-right text-[13px] font-semibold text-muted-foreground">Saldo Cesantías</th>
-                          <th className="p-4 text-right text-[13px] font-semibold text-muted-foreground">Días Base</th>
-                          <th className="p-4 text-right text-[13px] font-semibold text-muted-foreground">Intereses Estimados</th>
-                        </>
-                      ) : (
-                        <>
-                          {esCesantias && (
-                            <th className="p-4 text-left text-[13px] font-semibold text-muted-foreground">Fondo</th>
-                          )}
-                          <th className="p-4 text-right text-[13px] font-semibold text-muted-foreground">Salario / Promedio</th>
-                          {esPrima && (
-                            <th className="p-4 text-right text-[13px] font-semibold text-muted-foreground">Días</th>
-                          )}
-                        </>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {elegibles.map((col, i) => {
-                      const sel = marcados.includes(col.id);
-                      // §3.1 — para PRODUCCION el salario_base es placeholder:
-                      // se pinta el promedio mensual devengado.
-                      const monto = col.salario_base_es_contractual
-                        ? col.salario_base
-                        : col.promedio_mensual_devengado;
-                      return (
-                        <tr key={col.id} {...comoBoton(() => toggleMarcado(col.id))}
-                          className={`border-b border-border last:border-0 cursor-pointer transition-colors ${sel ? 'bg-primary/5' : i % 2 === 0 ? 'bg-background hover:bg-muted/20' : 'bg-muted/5 hover:bg-muted/20'}`}>
-                          <td className="p-4">
-                            <Checkbox checked={sel} onCheckedChange={() => toggleMarcado(col.id)} onClick={e => e.stopPropagation()} />
-                          </td>
-                          <td className="p-4">
-                            <div className="flex items-center gap-3">
-                              <div className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold border ${sel ? 'bg-primary text-white border-primary' : 'bg-primary/10 text-primary border-primary/20'}`}>
-                                {getIniciales(col.nombre_completo)}
-                              </div>
-                              <div>
-                                <span className="font-medium text-sm">{col.nombre_completo}</span>
-                                <p className="text-xs text-muted-foreground">{col.documento}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="p-4 text-sm text-muted-foreground">{col.cargo ?? '—'}</td>
-                          {esIntereses ? (
-                            <>
-                              <td className="p-4 text-right text-sm font-medium">{fmtCOP(col.saldo_cesantias ?? 0)}</td>
-                              <td className="p-4 text-right text-sm font-medium">{col.dias_base_intereses ?? '—'}</td>
-                              <td className="p-4 text-right">
-                                <span className="font-semibold text-sm text-primary">{fmtCOP(col.intereses_estimados ?? 0)}</span>
-                                <p className="text-[10px] text-muted-foreground uppercase">Tasa {col.tasa ?? 12}%</p>
-                              </td>
-                            </>
-                          ) : (
-                            <>
-                              {esCesantias && (
-                                <td className="p-4 text-sm text-muted-foreground">{col.fondo_cesantias ?? '—'}</td>
-                              )}
-                              <td className="p-4 text-right">
-                                <span className="font-semibold text-sm">{fmtCOP(monto ?? 0)}</span>
-                                <p className="text-[10px] text-muted-foreground uppercase">
-                                  {col.salario_base_es_contractual ? 'Salario contractual' : 'Promedio mensual'}
-                                </p>
-                              </td>
-                              {esPrima && (
-                                <td className="p-4 text-right">
-                                  <span className="font-semibold text-sm">{col.dias_computados ?? '—'}</span>
-                                  {(col.dias_proyectados ?? 0) > 0 && (
-                                    <p className="text-[10px] text-warning uppercase">
-                                      {col.dias_proyectados} proyectados
-                                    </p>
-                                  )}
-                                </td>
-                              )}
-                            </>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            </div>
+            <Button variant="outline" onClick={toggleTodos} disabled={elegibles.length === 0}>
+              <Users strokeWidth={2} />
+              {todosMarcados ? 'Quitar todos' : 'Agregar todos'}
+            </Button>
+          </div>
 
-            {/* Excluidos con motivo (§3.1) */}
-            {excluidos.length > 0 && (
-              <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-1.5">
-                <p className="text-[13px] font-medium text-muted-foreground">
-                  {excluidos.length} colaborador{excluidos.length !== 1 ? 'es' : ''} no elegible{excluidos.length !== 1 ? 's' : ''}
+          {/* Ya agregados al período (persistidos) */}
+          {filasAgregadas.length > 0 && (
+            <div className="flex flex-wrap gap-2 border-t border-border px-5 py-3">
+              {filasAgregadas.map((f) => (
+                <span key={f.id} className="inline-flex items-center gap-1 rounded-full bg-primary-soft py-1 pl-3 pr-1.5 text-xs font-medium text-foreground">
+                  {f.empleado.nombre_completo}
+                  <button
+                    type="button"
+                    onClick={() => quitarFila(f.id)}
+                    disabled={quitandoFila === f.id}
+                    className="rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    title="Quitar del período"
+                    aria-label={`Quitar a ${f.empleado.nombre_completo}`}
+                  >
+                    {quitandoFila === f.id
+                      ? <Loader2 className="h-3 w-3 animate-spin" />
+                      : <X className="h-3 w-3" />}
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {cargandoDisponibles ? (
+            <div className="flex items-center justify-center gap-2 border-t border-border py-10 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Cargando colaboradores disponibles...
+            </div>
+          ) : elegibles.length === 0 ? (
+            <p className="border-t border-border py-10 text-center text-sm text-muted-foreground">
+              No hay más colaboradores elegibles para este período.
+            </p>
+          ) : (
+            <div className="overflow-x-auto border-t border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/60 text-[13px] font-medium text-muted-foreground">
+                  <tr>
+                    <th className="w-12 px-5 py-2.5">
+                      <Checkbox checked={todosMarcados} onCheckedChange={toggleTodos} aria-label="Seleccionar todos" />
+                    </th>
+                    <th className="px-4 py-2.5 text-left font-semibold">Nombre</th>
+                    <th className="hidden px-4 py-2.5 text-left font-semibold sm:table-cell">Cargo</th>
+                    {esIntereses ? (
+                      <>
+                        <th className="px-4 py-2.5 text-right font-semibold">Saldo cesantías</th>
+                        <th className="hidden px-4 py-2.5 text-right font-semibold sm:table-cell">Días base</th>
+                        <th className="px-4 py-2.5 text-right font-semibold">Intereses estimados</th>
+                      </>
+                    ) : (
+                      <>
+                        {esCesantias && (
+                          <th className="hidden px-4 py-2.5 text-left font-semibold sm:table-cell">Fondo</th>
+                        )}
+                        <th className="px-4 py-2.5 text-right font-semibold">Salario / promedio</th>
+                        {esPrima && (
+                          <th className="hidden px-4 py-2.5 text-right font-semibold sm:table-cell">Días</th>
+                        )}
+                      </>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {elegibles.map((col) => {
+                    const sel = marcados.includes(col.id);
+                    // §3.1: para PRODUCCION el salario_base es placeholder,
+                    // se pinta el promedio mensual devengado.
+                    const monto = col.salario_base_es_contractual
+                      ? col.salario_base
+                      : col.promedio_mensual_devengado;
+                    return (
+                      <tr key={col.id} {...comoBoton(() => toggleMarcado(col.id))}
+                        className={`cursor-pointer transition-colors ${sel ? 'bg-primary-soft' : 'hover:bg-muted/40'}`}>
+                        <td className="px-5 py-3">
+                          <Checkbox
+                            checked={sel}
+                            onCheckedChange={() => toggleMarcado(col.id)}
+                            onClick={e => e.stopPropagation()}
+                            aria-label={`Seleccionar a ${col.nombre_completo}`}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="font-medium text-foreground">{col.nombre_completo}</span>
+                          <span className="block text-xs text-muted-foreground">{col.documento}</span>
+                        </td>
+                        <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">{col.cargo ?? '—'}</td>
+                        {esIntereses ? (
+                          <>
+                            <td className="px-4 py-3 text-right tabular-nums text-foreground">{fmtCOP(col.saldo_cesantias ?? 0)}</td>
+                            <td className="hidden px-4 py-3 text-right tabular-nums text-foreground sm:table-cell">{col.dias_base_intereses ?? '—'}</td>
+                            <td className="px-4 py-3 text-right tabular-nums">
+                              <span className="font-medium text-foreground">{fmtCOP(col.intereses_estimados ?? 0)}</span>
+                              <span className="block text-xs text-muted-foreground">Tasa {col.tasa ?? 12}%</span>
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            {esCesantias && (
+                              <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">{col.fondo_cesantias ?? '—'}</td>
+                            )}
+                            <td className="px-4 py-3 text-right tabular-nums">
+                              <span className="font-medium text-foreground">{fmtCOP(monto ?? 0)}</span>
+                              <span className="block text-xs text-muted-foreground">
+                                {col.salario_base_es_contractual ? 'Salario contractual' : 'Promedio mensual'}
+                              </span>
+                            </td>
+                            {esPrima && (
+                              <td className="hidden px-4 py-3 text-right tabular-nums sm:table-cell">
+                                <span className="text-foreground">{col.dias_computados ?? '—'}</span>
+                                {(col.dias_proyectados ?? 0) > 0 && (
+                                  <span className="block text-xs text-warning">{col.dias_proyectados} proyectados</span>
+                                )}
+                              </td>
+                            )}
+                          </>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Excluidos con motivo (§3.1) */}
+          {excluidos.length > 0 && (
+            <div className="space-y-1.5 border-t border-border bg-muted/30 px-5 py-4">
+              <p className="text-[13px] font-medium text-muted-foreground">
+                {excluidos.length} colaborador{excluidos.length !== 1 ? 'es' : ''} no elegible{excluidos.length !== 1 ? 's' : ''}
+              </p>
+              {excluidos.map((ex) => (
+                <p key={`${ex.id}-${ex.motivo}`} className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">{ex.nombre_completo}</span>
+                  {' · '}{MOTIVO_EXCLUSION_LABEL[ex.motivo] ?? ex.motivo}
+                  {ex.motivo === 'RETIRADO_EN_EL_ANIO' && ex.fecha_retiro ? ` (${formatFecha(ex.fecha_retiro)})` : ''}
                 </p>
-                {excluidos.map((ex) => (
-                  <p key={`${ex.id}-${ex.motivo}`} className="text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">{ex.nombre_completo}</span>
-                    {' — '}{MOTIVO_EXCLUSION_LABEL[ex.motivo] ?? ex.motivo}
-                    {ex.motivo === 'RETIRADO_EN_EL_ANIO' && ex.fecha_retiro ? ` (${formatFecha(ex.fecha_retiro)})` : ''}
-                  </p>
-                ))}
-              </div>
-            )}
-          </CardContent>
+              ))}
+            </div>
+          )}
         </Card>
       )}
 
       {/* ── PASO 3: Confirmación (preview del backend) ── */}
       {paso === 3 && (
         <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-success/10 flex items-center justify-center">
-              <CheckCircle className="h-5 w-5 text-success" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-lg">Confirmación</h2>
-              <p className="text-sm text-muted-foreground">
-                Desprendibles de liquidación de {txt.nombre} — {preview?.totales.colaboradores ?? 0} colaborador{(preview?.totales.colaboradores ?? 0) !== 1 ? 'es' : ''}
-              </p>
-            </div>
+          <div className="space-y-1">
+            <h2>Confirmación</h2>
+            <p className="text-sm text-muted-foreground">
+              Desprendibles de liquidación de {txt.nombre} · {preview?.totales.colaboradores ?? 0} colaborador{(preview?.totales.colaboradores ?? 0) !== 1 ? 'es' : ''}
+            </p>
           </div>
 
           {cargandoPreview && (
-            <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
+            <Card className="flex-row items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
               Calculando liquidación...
-            </div>
+            </Card>
           )}
 
           {!cargandoPreview && [...(preview?.filas ?? [])]
@@ -805,43 +667,37 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
             <DesprendiblePreview key={fila.fila_id} fila={fila} tipo={tipo} />
           ))}
 
-          {/* Total resumen */}
           {!cargandoPreview && preview && (
-            <div className="p-5 rounded-xl border border-primary/20 bg-primary/5 flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Colaboradores liquidados</p>
-                <p className="font-bold text-lg">{preview.totales.colaboradores}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm text-muted-foreground">{txt.totalPreviewLabel}</p>
-                <p className="font-bold text-2xl text-primary">{fmtCOP(preview.totales.valor)}</p>
-              </div>
-            </div>
+            <TotalResumen
+              conteoLabel="Colaboradores liquidados"
+              conteo={preview.totales.colaboradores}
+              totalLabel={txt.totalPreviewLabel}
+              total={fmtCOP(preview.totales.valor)}
+            />
           )}
         </div>
       )}
 
       {/* Navegación */}
-      <div className="barra-acciones flex justify-between">
-        <Button variant="outline" onClick={paso === 1 ? () => navigate(txt.rutaTab) : retroceder} disabled={avanzando || confirmando} >
-          <ArrowLeft className="h-4 w-4" />
+      <div className="barra-acciones flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button variant="outline" onClick={paso === 1 ? () => navigate(txt.rutaTab) : retroceder} disabled={avanzando || confirmando}>
+          {paso > 1 && <ArrowLeft strokeWidth={2} />}
           {paso === 1 ? 'Cancelar' : 'Anterior'}
         </Button>
         {paso < 3 ? (
           <Button onClick={avanzar} disabled={avanzando}>
-            {avanzando && <Loader2 className="h-4 w-4 animate-spin" />}
+            {avanzando && <Loader2 className="animate-spin" />}
             Siguiente
-            <ArrowRight className="h-4 w-4" />
+            <ArrowRight strokeWidth={2} />
           </Button>
         ) : (
           <Button
             onClick={() => confirmar(false)}
             disabled={confirmando || cargandoPreview || !preview || (preview.bloqueantes.length > 0)}
-            className="bg-success hover:bg-success/90"
             title={preview && preview.bloqueantes.length > 0 ? 'Hay colaboradores con datos bloqueantes: quítalos o corrige sus datos' : undefined}
           >
-            {confirmando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-            Confirmar Liquidación
+            {confirmando ? <Loader2 className="animate-spin" /> : <Check strokeWidth={2} />}
+            Confirmar liquidación
           </Button>
         )}
       </div>
@@ -855,7 +711,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
               <div className="space-y-2">
                 <p>Estos colaboradores tienen meses del período sin nómina cerrada en el sistema, así que su promedio puede quedar corto:</p>
                 {(coberturaDialog ?? []).map((c, i) => (
-                  <p key={i}><strong>{c.nombre_completo}</strong> — cobertura {Number(c.cobertura_pct).toFixed(0)}%</p>
+                  <p key={i}><strong>{c.nombre_completo}</strong> · cobertura {Number(c.cobertura_pct).toFixed(0)}%</p>
                 ))}
                 <p>Puedes confirmar de todas formas dejando el motivo por escrito (queda en auditoría).</p>
               </div>
@@ -875,7 +731,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
           <AlertDialogFooter>
             <AlertDialogCancel disabled={confirmando}>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={() => confirmar(true)} disabled={confirmando}>
-              {confirmando && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              {confirmando && <Loader2 className="h-4 w-4 animate-spin" />}
               Confirmar de todas formas
             </AlertDialogAction>
           </AlertDialogFooter>

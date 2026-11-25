@@ -11,16 +11,17 @@ import { useNavigate } from 'react-router';
 import { sortByFirstName } from '../../utils/personas';
 import { toast } from 'sonner';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import PageHeader from '../../components/common/PageHeader';
+import { Eyebrow, SegmentedTabs } from '../../components/nomina/piezas';
+import { Card, CardContent, CardDescription, CardHeader } from '../../components/ui/card';
+import Avatar from '../../components/common/Avatar';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
-import {
-  ArrowLeft, Save, DollarSign, Search, X, Loader2, CalendarDays, Info,
-} from 'lucide-react';
+import { Save, Search, X, Loader2, AlertTriangle } from 'lucide-react';
 import { colaboradoresApi } from '../../../api/colaboradores';
 import type { ColaboradorSelectItem } from '../../../api/colaboradores';
 import { prestamosApi, PrestamoErrorCodes } from '../../../api/prestamos';
@@ -195,7 +196,7 @@ export default function NuevoPrestamo() {
         inicio_quincena: periodicidadTenant === 'QUINCENAL' ? inicioQuincena : null,
         observaciones: observaciones.trim() || null,
       });
-      toast.success('Préstamo creado — descargue el comprobante para firmarlo', {
+      toast.success('Préstamo creado. Descarga el comprobante para firmarlo', {
         description: 'Las cuotas se aplicarán en cada liquidación.',
       });
       // Al detalle, no al listado: lo primero que se hace con un préstamo
@@ -214,46 +215,30 @@ export default function NuevoPrestamo() {
     }
   };
 
+  const req = <span className="text-destructive">*</span>;
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => navigate('/nomina/prestamos')}
-          className="h-10 w-10 rounded-xl hover:bg-muted border border-border/50"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div className="flex items-center gap-3">
-          <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
-            <DollarSign className="h-6 w-6 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-primary">Nuevo Préstamo</h1>
-            <p className="text-sm text-muted-foreground">
-              Registra el préstamo y programa los descuentos por quincena
-            </p>
-          </div>
-        </div>
-      </div>
+    <div className="mx-auto max-w-3xl space-y-6">
+      <PageHeader
+        backTo="/nomina/prestamos"
+        eyebrow="Préstamos"
+        title="Nuevo préstamo"
+        description="Registra el préstamo y programa los descuentos por quincena."
+      />
 
       <Card>
-        <CardHeader className="rounded-t-xl border-b bg-muted/20 py-4">
-          <CardTitle className="text-base">Información del Préstamo</CardTitle>
+        <CardHeader>
+          <h3>Colaborador</h3>
+          <CardDescription>A quién se le entrega el préstamo</CardDescription>
         </CardHeader>
-        <CardContent className="p-6 space-y-6">
-
-          {/* Colaborador */}
+        <CardContent className="space-y-3">
           <div className="space-y-2">
-            <Label className="font-semibold" htmlFor="nuevoprest-colaborador-span-classname-text-destructive-span">
-              Colaborador <span className="text-destructive">*</span>
-            </Label>
+            <Label htmlFor="prestamo-colaborador">Colaborador {req}</Label>
             <div className="relative" ref={searchRef}>
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input id="nuevoprest-colaborador-span-classname-text-destructive-span"
-                placeholder="Buscar por nombre o cédula..."
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
+              <Input
+                id="prestamo-colaborador"
+                placeholder="Buscar por nombre o cédula"
                 value={busquedaColaborador}
                 onChange={(e) => {
                   setBusquedaColaborador(e.target.value);
@@ -270,70 +255,73 @@ export default function NuevoPrestamo() {
               {empleadoSeleccionado && (
                 <button
                   type="button"
+                  aria-label="Quitar colaborador"
                   onClick={limpiarSeleccion}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-4 w-4" strokeWidth={2} />
                 </button>
               )}
               {mostrarSugerencias && colaboradoresFiltrados.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-background border border-border rounded-lg shadow-md max-h-64 overflow-y-auto">
+                <div className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-border bg-popover shadow-sm">
                   {colaboradoresFiltrados.map((c) => (
                     <button
                       key={c.id}
                       type="button"
                       onClick={() => seleccionar(c)}
-                      className="w-full px-4 py-2.5 text-left hover:bg-muted flex items-center gap-3 border-b border-border/50 last:border-0"
+                      className="flex w-full items-center gap-3 border-b border-border px-4 py-2.5 text-left last:border-0 hover:bg-muted"
                     >
-                      <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
-                        {c.nombre_completo.split(' ').slice(0, 2).map((p) => p[0]).join('').toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">{c.nombre_completo}</p>
-                        <p className="text-xs text-muted-foreground">
-                          CC {c.documento} · {c.modalidad_pago}
-                        </p>
-                      </div>
+                      <Avatar nombre={c.nombre_completo} size="sm" />
+                      <span className="min-w-0">
+                        <span className="block break-words text-sm font-medium text-foreground">{c.nombre_completo}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {c.documento} · {c.modalidad_pago}
+                        </span>
+                      </span>
                     </button>
                   ))}
                 </div>
               )}
             </div>
-            {empleadoSeleccionado && (
-              <div className="flex items-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-lg">
-                <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold flex-shrink-0">
-                  {empleadoSeleccionado.nombre_completo.split(' ').slice(0, 2).map((p) => p[0]).join('').toUpperCase()}
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">{empleadoSeleccionado.nombre_completo}</p>
-                  <p className="text-xs text-muted-foreground">
-                    CC {empleadoSeleccionado.documento} · {empleadoSeleccionado.modalidad_pago}
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
+          {empleadoSeleccionado && (
+            <div className="flex items-center gap-3 rounded-lg bg-muted/60 p-3">
+              <Avatar nombre={empleadoSeleccionado.nombre_completo} size="md" />
+              <div className="min-w-0">
+                <p className="break-words text-sm font-semibold text-foreground">{empleadoSeleccionado.nombre_completo}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {empleadoSeleccionado.documento} · {empleadoSeleccionado.modalidad_pago}
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-          {/* Concepto y valor */}
-          <div className="grid gap-4 sm:grid-cols-2">
+      <Card>
+        <CardHeader>
+          <h3>Préstamo</h3>
+          <CardDescription>Concepto y valor entregado</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label className="font-semibold">Concepto <span className="text-destructive">*</span></Label>
+              <Label htmlFor="prestamo-concepto">Concepto {req}</Label>
               <Input
-                placeholder="Ej: Préstamo personal, Anticipo de nómina..."
+                id="prestamo-concepto"
+                placeholder="Ej: Préstamo personal, anticipo de nómina"
                 value={concepto}
                 onChange={(e) => setConcepto(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label className="font-semibold">
-                Valor total del préstamo <span className="text-destructive">*</span>
-              </Label>
+              <Label htmlFor="prestamo-valor">Valor total del préstamo {req}</Label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
                 <Input
+                  id="prestamo-valor"
                   type="text"
                   inputMode="numeric"
-                  placeholder="1.500.000"
+                  placeholder="0"
                   value={formatThousands(valorTotal)}
                   onChange={(e) => {
                     const nuevoTotal = parseCOP(e.target.value);
@@ -352,51 +340,51 @@ export default function NuevoPrestamo() {
                 />
               </div>
             </div>
-          </div>
+
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h3>Plan de descuento</h3>
+          <CardDescription>Cuándo empieza y en cuántas cuotas se descuenta de la nómina</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
 
           {/* Frecuencia de descuento (viene del tenant, readonly) */}
           <div className="space-y-2">
-            <Label className="font-semibold">
-              Frecuencia de descuento <span className="text-destructive">*</span>
-            </Label>
-            <div className="flex rounded-xl border border-border overflow-hidden">
-              {(['QUINCENAL', 'MENSUAL'] as const).map((tipo) => (
-                <button
-                  key={tipo}
-                  type="button"
-                  disabled
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition ${
-                    periodicidadTenant === tipo
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-background text-muted-foreground'
-                  } cursor-not-allowed`}
-                >
-                  {tipo === 'QUINCENAL' ? 'Quincenal (cada 15 días)' : 'Mensual (1 vez al mes)'}
-                </button>
-              ))}
+            <Label>Frecuencia de descuento {req}</Label>
+            {/* La frecuencia la fija la finca en configuración, asi que
+                aqui solo se muestra: el cambio no hace nada. */}
+            <div className="pointer-events-none opacity-70">
+              <SegmentedTabs
+                value={periodicidadTenant}
+                onChange={() => {}}
+                options={[
+                  { value: 'QUINCENAL', label: 'Quincenal' },
+                  { value: 'MENSUAL', label: 'Mensual' },
+                ]}
+              />
             </div>
             <p className="text-xs text-muted-foreground">
-              La frecuencia se configura en Configuración → Pagos y Liquidaciones.
+              {periodicidadTenant === 'QUINCENAL' ? 'Cada 15 días.' : 'Una vez al mes.'}
+              {' '}Se configura en Configuración → Pagos y Liquidaciones.
             </p>
           </div>
 
           {/* Inicio del descuento */}
           <div className="space-y-2">
-            <Label className="font-semibold flex items-center gap-1.5">
-              <CalendarDays className="h-4 w-4 text-primary" />
-              {periodicidadTenant === 'QUINCENAL' ? 'Desde qué quincena' : 'Desde qué mes'} se descuenta
-              <span className="text-destructive">*</span>
-            </Label>
+            <Label>{periodicidadTenant === 'QUINCENAL' ? 'Quincena' : 'Mes'} de inicio {req}</Label>
             {periodicidadTenant === 'QUINCENAL' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <Select value={String(inicioAnio)} onValueChange={(v) => setInicioAnio(parseInt(v))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label="Año"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {ANIOS.map((a) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <Select value={String(inicioMes)} onValueChange={(v) => setInicioMes(parseInt(v))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label="Mes"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {MESES.map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
                   </SelectContent>
@@ -405,7 +393,7 @@ export default function NuevoPrestamo() {
                   value={inicioQuincena ? String(inicioQuincena) : ''}
                   onValueChange={(v) => setInicioQuincena(parseInt(v) as 1 | 2)}
                 >
-                  <SelectTrigger><SelectValue placeholder="Quincena" /></SelectTrigger>
+                  <SelectTrigger aria-label="Quincena"><SelectValue placeholder="Quincena" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="1">1ª quincena ({q1Range.inicio}–{q1Range.fin})</SelectItem>
                     <SelectItem value="2">2ª quincena ({q2Range.inicio}–{q2Range.fin})</SelectItem>
@@ -413,15 +401,15 @@ export default function NuevoPrestamo() {
                 </Select>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Select value={String(inicioAnio)} onValueChange={(v) => setInicioAnio(parseInt(v))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label="Año"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {ANIOS.map((a) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <Select value={String(inicioMes)} onValueChange={(v) => setInicioMes(parseInt(v))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label="Mes"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {MESES.map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
                   </SelectContent>
@@ -433,11 +421,11 @@ export default function NuevoPrestamo() {
           {/* Número de cuotas y cuota */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label className="font-semibold">
-                Número de {periodicidadTenant === 'QUINCENAL' ? 'quincenas' : 'meses'}
-                <span className="text-destructive"> *</span>
+              <Label htmlFor="prestamo-periodos">
+                Número de {periodicidadTenant === 'QUINCENAL' ? 'quincenas' : 'meses'} {req}
               </Label>
               <Input
+                id="prestamo-periodos"
                 type="number" step="0.001"
                 placeholder="Ej: 4"
                 min="1"
@@ -458,17 +446,25 @@ export default function NuevoPrestamo() {
                   }
                 }}
               />
+              {numCuotasNum > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {periodicidadTenant === 'QUINCENAL'
+                    ? `Equivale a ${Math.ceil(numCuotasNum / 2)} ${Math.ceil(numCuotasNum / 2) === 1 ? 'mes' : 'meses'}`
+                    : `Equivale a ${numCuotasNum * 2} quincenas`}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
-              <Label className="font-semibold">
+              <Label htmlFor="prestamo-cuota">
                 Cuota por {periodicidadTenant === 'QUINCENAL' ? 'quincena' : 'mes'}
               </Label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
                 <Input
+                  id="prestamo-cuota"
                   type="text"
                   inputMode="numeric"
-                  placeholder="0"
+                  placeholder={cuotaCalculada > 0 ? cuotaCalculada.toLocaleString('es-CO') : '0'}
                   value={formatThousands(cuotaManual)}
                   onChange={(e) => {
                     const nuevoValor = parseCOP(e.target.value);
@@ -484,56 +480,64 @@ export default function NuevoPrestamo() {
                   className="pl-7"
                 />
               </div>
+              {cuotaCalculada > 0 && !cuotaManual && (
+                <p className="text-xs text-muted-foreground">
+                  Calculado: <span className="font-semibold text-foreground">${cuotaCalculada.toLocaleString('es-CO')}</span>
+                </p>
+              )}
             </div>
           </div>
 
           {/* Resumen calculado */}
           {numCuotasNum > 0 && periodoFin && (
-            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
-              <p className="text-sm font-semibold text-primary flex items-center gap-2">
-                <Info className="h-4 w-4" /> Resumen del descuento
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="space-y-3 rounded-lg bg-muted/60 p-4">
+              <Eyebrow>Resumen del descuento</Eyebrow>
+              <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground">Desde</p>
-                  <p className="text-sm font-semibold">
+                  <dt className="text-xs text-muted-foreground">Desde</dt>
+                  <dd className="text-sm font-semibold text-foreground">
                     {periodicidadTenant === 'QUINCENAL' && inicioQuincena
                       ? labelQuincena(inicioAnio, inicioMes, inicioQuincena)
                       : `${MESES[inicioMes - 1]} ${inicioAnio}`}
-                  </p>
+                  </dd>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground">Hasta</p>
-                  <p className="text-sm font-semibold text-primary">
+                  <dt className="text-xs text-muted-foreground">Hasta</dt>
+                  <dd className="text-sm font-semibold text-foreground">
                     {periodicidadTenant === 'QUINCENAL' && 'quincena' in periodoFin
                       ? labelQuincena(periodoFin.anio, periodoFin.mes, periodoFin.quincena as 1 | 2)
                       : `${MESES[periodoFin.mes - 1]} ${periodoFin.anio}`}
-                  </p>
+                  </dd>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground">Cuota</p>
-                  <p className="text-sm font-semibold">
+                  <dt className="text-xs text-muted-foreground">Cuota</dt>
+                  <dd className="text-sm font-semibold tabular-nums text-foreground">
                     ${cuotaFinal > 0 ? cuotaFinal.toLocaleString('es-CO') : '—'} / {periodicidadTenant === 'QUINCENAL' ? 'quincena' : 'mes'}
-                  </p>
+                  </dd>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground">Total descontado</p>
-                  <p className="text-sm font-semibold text-primary">${totalCalculado.toLocaleString('es-CO')}</p>
+                  <dt className="text-xs text-muted-foreground">Total descontado</dt>
+                  <dd className="text-sm font-semibold tabular-nums text-foreground">${totalCalculado.toLocaleString('es-CO')}</dd>
                 </div>
-              </div>
+              </dl>
               {totalCalculado !== totalIngresado && totalIngresado > 0 && (
-                <p className="text-xs text-warning bg-warning-soft px-3 py-1.5 rounded-lg">
-                  El total descontado (${totalCalculado.toLocaleString('es-CO')}) difiere del valor del préstamo (${totalIngresado.toLocaleString('es-CO')}).
-                </p>
+                <div className="flex gap-2 rounded-lg bg-warning-soft px-3 py-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+                  <p className="text-xs text-foreground">
+                    El total descontado (${totalCalculado.toLocaleString('es-CO')}) difiere del valor del préstamo (${totalIngresado.toLocaleString('es-CO')}). Ajusta la cuota si es necesario.
+                  </p>
+                </div>
               )}
             </div>
           )}
 
           {/* Observaciones */}
           <div className="space-y-2">
-            <Label className="font-semibold" htmlFor="nuevoprest-observaciones-opcional">Observaciones (opcional)</Label>
-            <Textarea id="nuevoprest-observaciones-opcional"
-              placeholder="Aprobado por gerencia, motivo del préstamo, etc."
+            <Label htmlFor="prestamo-observaciones">
+              Observaciones <span className="font-normal text-muted-foreground">(opcional)</span>
+            </Label>
+            <Textarea id="prestamo-observaciones"
+              placeholder="Ej: aprobado por gerencia, motivo del préstamo"
               value={observaciones}
               onChange={(e) => setObservaciones(e.target.value)}
               rows={3}
@@ -541,26 +545,24 @@ export default function NuevoPrestamo() {
             />
           </div>
 
-          {/* Acciones */}
-          <div className="barra-acciones flex justify-between items-center pt-2 border-t">
-            <Button
-              variant="outline"
-              onClick={() => navigate('/nomina/prestamos')}
-              disabled={guardando}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={guardando}
-            >
-              {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Guardar Préstamo
-            </Button>
-          </div>
-
         </CardContent>
       </Card>
+
+      <div className="barra-acciones flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button
+          variant="outline"
+          onClick={() => navigate('/nomina/prestamos')}
+          disabled={guardando}
+        >
+          Cancelar
+        </Button>
+        <Button onClick={handleSave} disabled={guardando}>
+          {guardando
+            ? <Loader2 className="animate-spin" strokeWidth={2} />
+            : <Save strokeWidth={2} />}
+          Guardar préstamo
+        </Button>
+      </div>
     </div>
   );
 }

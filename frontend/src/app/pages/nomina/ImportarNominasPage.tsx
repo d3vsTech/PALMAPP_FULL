@@ -20,33 +20,27 @@
  *     tocarlo se vuelve a validar.
  */
 import { useNavigate } from 'react-router';
-import { ArrowLeft, Upload } from 'lucide-react';
+import { AlertCircle, Loader2, Upload } from 'lucide-react';
 import { Button } from '../../components/ui/button';
+import { Badge } from '../../components/ui/badge';
+import PageHeader from '../../components/common/PageHeader';
 import { Checkbox } from '../../components/ui/checkbox';
 import { ACCEPT_NOMINAS } from '../../../api/importarNominas';
 import {
-  BotonesPlantilla, CabecerasIgnoradas, EstadoValidacion, PasoCard, Regla,
+  Aviso, BotonesPlantilla, CabecerasIgnoradas, EstadoValidacion, PasoCard, Regla,
   VistaPreviaPlantilla, ZonaArchivo,
 } from '../liquidaciones/historico/comunes';
+import StatStrip from '../../components/common/StatStrip';
 import { useCargueNominas } from './importar/useCargueNominas';
 import { COLUMNAS_NOMINAS, FILAS_NOMINAS } from './importar/plantillas';
 import { AyudaColumnas } from './importar/AyudaColumnas';
 import { PanelPeriodos } from './importar/PanelPeriodos';
 import { AvisosCargueNominas } from './importar/AvisosCargueNominas';
 
-function Indicador({ titulo, valor, tono }: { titulo: string; valor: string; tono?: string }) {
-  return (
-    <div className="rounded-lg border border-border bg-muted/20 p-3">
-      <p className="text-[13px] font-medium text-muted-foreground">{titulo}</p>
-      <p className={`text-2xl font-bold ${tono ?? 'text-foreground'}`}>{valor}</p>
-    </div>
-  );
-}
-
 function pesos(valor: string | undefined): string {
   const n = Number(valor ?? 0);
   if (Number.isNaN(n)) return '—';
-  return `$${n.toLocaleString('es-CO', { maximumFractionDigits: 0 })}`;
+  return `$${n.toLocaleString('es-CO')}`;
 }
 
 export default function ImportarNominasPage() {
@@ -61,23 +55,18 @@ export default function ImportarNominasPage() {
   const puedeImportar = !!analisis && conError === 0 && aEscribir > 0 && !cargue.importando;
 
   return (
-    <div className="space-y-6">
-      <Button variant="ghost" size="sm" onClick={() => navigate('/nomina')} >
-        <ArrowLeft className="h-4 w-4" />
-        Volver a Nómina
-      </Button>
-
-      <div>
-        <h1 className="text-2xl font-bold text-primary sm:text-3xl">Importar histórico</h1>
-        <p className="mt-1 text-muted-foreground">
-          Carga los períodos de nómina que pagaste antes del sistema
-        </p>
-      </div>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeader
+        backTo="/nomina"
+        eyebrow="Pagos"
+        title="Cargar histórico de pagos"
+        description="Carga los períodos de nómina que pagaste antes del sistema. No se recalcula nada."
+      />
 
       <PasoCard
         n={1}
         titulo="Descarga la plantilla"
-        subtitulo="Trae los colaboradores en una lista desplegable y una hoja con la ayuda de cada columna"
+        subtitulo="Prepara tus datos con las columnas que espera el sistema."
         accion={
           <BotonesPlantilla
             descargando={cargue.descargando}
@@ -120,7 +109,11 @@ export default function ImportarNominasPage() {
         </p>
       </PasoCard>
 
-      <PasoCard n={2} titulo="Sube el archivo" subtitulo="Se revisa al instante, sin guardar nada">
+      <PasoCard
+        n={2}
+        titulo="Carga tu archivo"
+        subtitulo="Arrastra el archivo o haz clic para seleccionarlo."
+      >
         <ZonaArchivo
           archivo={cargue.archivo}
           analisis={analisis?.archivo}
@@ -135,69 +128,75 @@ export default function ImportarNominasPage() {
       </PasoCard>
 
       {analisis && resumen && (
-        <>
-          <PasoCard
-            n={3}
-            titulo="Revisa lo que se va a cargar"
-            subtitulo="Período por período, con quién queda pagado y quién no"
-          >
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Indicador
-                titulo="Nóminas"
-                valor={`${resumen.nominas.total}`}
-                tono="text-success"
-              />
-              <Indicador
-                titulo="Con error"
-                valor={`${conError}`}
-                tono={conError > 0 ? 'text-destructive' : undefined}
-              />
-              <Indicador titulo="Colaboradores" valor={`${resumen.colaboradores}`} />
-              <Indicador titulo="Neto del archivo" valor={pesos(resumen.total_neto)} />
-            </div>
+        <PasoCard
+          n={3}
+          titulo="Revisa los datos"
+          subtitulo="Confirma que todo esté bien antes de subirlo."
+          accion={
+            <Badge variant="default" className="sm:mt-1">
+              {resumen.filas} registro{resumen.filas === 1 ? '' : 's'} detectado{resumen.filas === 1 ? '' : 's'}
+            </Badge>
+          }
+        >
+          <StatStrip
+            items={[
+              { label: 'Nóminas', value: resumen.nominas.total },
+              {
+                label: 'Con error',
+                value: conError > 0 ? <span className="text-destructive">{conError}</span> : conError,
+              },
+              { label: 'Colaboradores', value: resumen.colaboradores },
+              { label: 'Neto del archivo', value: pesos(resumen.total_neto) },
+            ]}
+          />
 
-            <AvisosCargueNominas avisos={analisis.advertencias} />
+          <AvisosCargueNominas avisos={analisis.advertencias} />
 
-            {yaCargadas > 0 && (
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3">
-                <Checkbox
-                  checked={cargue.sobrescribir}
-                  onCheckedChange={(v) => cargue.cambiarSobrescribir(v === true)}
-                  className="mt-0.5"
-                />
-                <span className="text-sm">
-                  <span className="font-medium">Sobrescribir las filas ya cargadas</span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">
-                    {yaCargadas} fila{yaCargadas === 1 ? '' : 's'} de este archivo ya está
-                    {yaCargadas === 1 ? '' : 'n'} en el sistema y se omite
-                    {yaCargadas === 1 ? '' : 'n'}. Al marcarlo se reescriben todas con lo que trae
-                    el archivo, no solo la que corregiste.
-                  </span>
+          {yaCargadas > 0 && (
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg bg-muted/60 p-3">
+              <Checkbox
+                checked={cargue.sobrescribir}
+                onCheckedChange={(v) => cargue.cambiarSobrescribir(v === true)}
+                className="mt-0.5"
+              />
+              <span className="text-sm text-foreground">
+                <span className="font-medium">Sobrescribir las filas ya cargadas</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  {yaCargadas} fila{yaCargadas === 1 ? '' : 's'} de este archivo ya está
+                  {yaCargadas === 1 ? '' : 'n'} en el sistema y se omite
+                  {yaCargadas === 1 ? '' : 'n'}. Al marcarlo se reescriben todas con lo que trae
+                  el archivo, no solo la que corregiste.
                 </span>
-              </label>
-            )}
-
-            <PanelPeriodos nominas={analisis.nominas} filas={analisis.filas} />
-          </PasoCard>
-
-          {conError > 0 && (
-            <p className="text-sm text-destructive">
-              Corrige las {conError} fila{conError === 1 ? '' : 's'} con error. Si una falla, no
-              entra ninguna nómina.
-            </p>
+              </span>
+            </label>
           )}
 
-          <div className="barra-acciones flex flex-wrap items-center justify-end gap-3">
-            <Button
-              onClick={() => void cargue.importar()}
-              disabled={!puedeImportar}
-              
-            >
-              <Upload className="h-4 w-4" />
-              {cargue.importando ? 'Cargando...' : `Importar ${aEscribir} fila(s)`}
-            </Button>
+          <PanelPeriodos nominas={analisis.nominas} filas={analisis.filas} />
+
+          {conError > 0 && (
+            <Aviso tono="destructive" icono={AlertCircle}>
+              Corrige las {conError} fila{conError === 1 ? '' : 's'} con error. Si una falla, no
+              entra ninguna nómina.
+            </Aviso>
+          )}
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              Se subirán <span className="font-semibold text-foreground">{aEscribir} registro{aEscribir === 1 ? '' : 's'}</span> al módulo de pagos.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={cargue.quitarArchivo} disabled={cargue.importando}>
+                Cancelar
+              </Button>
+              <Button onClick={() => void cargue.importar()} disabled={!puedeImportar}>
+                {cargue.importando
+                  ? <Loader2 className="animate-spin" strokeWidth={2} />
+                  : <Upload strokeWidth={2} />}
+                {cargue.importando ? 'Subiendo…' : 'Subir histórico'}
+              </Button>
+            </div>
           </div>
-        </>
+        </PasoCard>
       )}
     </div>
   );

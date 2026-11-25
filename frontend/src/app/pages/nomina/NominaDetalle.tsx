@@ -21,10 +21,14 @@
  *  - Endpoint para exportar la nómina a Excel/PDF.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router';
+import { periodoLabel } from '../../utils/periodoNomina';
+import { useParams, useNavigate } from 'react-router';
 import { comparePersonaByFirstName } from '../../utils/personas';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent } from '../../components/ui/card';
+import PageHeader from '../../components/common/PageHeader';
+import Avatar from '../../components/common/Avatar';
+import StatStrip from '../../components/common/StatStrip';
+import { Card } from '../../components/ui/card';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -37,16 +41,13 @@ import { Label } from '../../components/ui/label';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
-import {
-  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '../../components/ui/breadcrumb';
 import { Badge } from '../../components/ui/badge';
 import { Textarea } from '../../components/ui/textarea';
 import {
-  ArrowLeft, Calculator, Lock, DollarSign, TrendingUp, TrendingDown,
-  FileText, Eye, Loader2, Trash2, Download, Users, Building2, Check,
-  Pencil, Printer, AlertCircle,
+  Calculator,
+  FileText, Eye, Loader2, Trash2, Download, Check,
+  Lock, Pencil, Printer, AlertCircle,
+  Banknote, MinusCircle, Wallet, UserCheck, Building2, Send, CircleCheck,
 } from 'lucide-react';
 import { AdvertenciasBanner } from '../../components/nomina/AdvertenciasBanner';
 import StatusBadge from '../../components/common/StatusBadge';
@@ -66,20 +67,12 @@ import { mensajeDeError } from '../../../api/errores';
 // consulta el módulo de planillas para armar el desglose.
 import type { ApiError } from '../../../api/client';
 import { formatFecha } from '../../utils/fecha';
+import { Eyebrow, SegmentedTabs, thead, th, td } from '../../components/nomina/piezas';
 
 const MESES_NOMBRE: Record<number, string> = {
   1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril', 5: 'Mayo', 6: 'Junio',
   7: 'Julio', 8: 'Agosto', 9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre',
 };
-
-function periodoLabel(n: Nomina): string {
-  const mes = MESES_NOMBRE[n.mes] ?? String(n.mes);
-  if (n.tipo_pago_snapshot === 'QUINCENAL' && n.quincena) {
-    const q = n.quincena === 1 ? 'Primera' : 'Segunda';
-    return `${mes} ${n.anio} - ${q} quincena`;
-  }
-  return `${mes} ${n.anio}`;
-}
 
 /**
  * Pesos con separador de miles y SIEMPRE dos decimales. Sin el minimo la
@@ -97,13 +90,6 @@ function toNumber(v: string | number | null | undefined): number {
 
 /** Formatea YYYY-MM-DD o ISO completo a dd/mm/yyyy. Sin desfase por TZ. */
 const fmtFecha = (s: string | null | undefined): string => formatFecha(s, { day: '2-digit', month: '2-digit', year: 'numeric' });
-
-function getIniciales(nombre: string): string {
-  const partes = nombre.trim().split(' ').filter(Boolean);
-  if (partes.length === 0) return '?';
-  if (partes.length === 1) return partes[0].substring(0, 2).toUpperCase();
-  return `${partes[0][0]}${partes[1][0]}`.toUpperCase();
-}
 
 // ── Tipos y catálogo compartidos para el desglose por tercero ──────────────
 // Se declaran a nivel de módulo para poder tiparlos en el useState del mapa.
@@ -747,7 +733,7 @@ export default function NominaDetalle() {
       } else if (e.code === NominaErrorCodes.NOMINA_VALIDACION_COSECHA_REQUERIDA) {
         toast.error('Debes confirmar la validación de cosecha antes de cerrar');
       } else if (e.code === NominaErrorCodes.NOMINA_TERCERO_NO_LIQUIDADO) {
-        toast.error('Hay terceros sin liquidar — calcula sus actas en "Liquidar Terceros"');
+        toast.error('Hay terceros sin liquidar. Calcula sus actas en "Liquidar terceros"');
       } else if (e.code === NominaErrorCodes.NOMINA_CON_NOVEDADES_PENDIENTES) {
         // PR-N8 — La novedad se registró después de liquidar la fila, así que
         // esa liquidación quedó vieja: no basta con aprobarla, hay que volver
@@ -968,17 +954,21 @@ export default function NominaDetalle() {
 
   if (cargando) {
     return (
-      <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" />
+      <Card className="flex-row items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
         Cargando nómina...
-      </div>
+      </Card>
     );
   }
 
   if (!nomina || !nominaId) {
     return (
-      <div className="text-center py-20 text-muted-foreground">
-        Nómina no encontrada.
+      <div className="space-y-6">
+        <PageHeader
+          backTo="/nomina"
+          title="Período no encontrado"
+          description="El período que buscas no existe o fue eliminado."
+        />
       </div>
     );
   }
@@ -1080,21 +1070,11 @@ export default function NominaDetalle() {
   //  - otros/finca → gris
   // Paleta V.19 por labor:
   //  Cosecha       → amber-600
-  //  Poda / Plateo → #1E5631 (verde oscuro finca)
+  //  Poda / Plateo → el verde de success
   //  Fertilización → blue-600
   //  Abonada       → purple-600
   //  Sanidad       → rose-600
   //  Finca / Otros → zinc-700
-  const acumCategoria = (color: CategoriaLabor['color']) => {
-    switch (color) {
-      case 'amber':  return { header: 'text-warning',   total: 'text-warning' };
-      case 'green':  return { header: 'text-[#1E5631]',   total: 'text-[#1E5631]' };
-      case 'blue':   return { header: 'text-info',    total: 'text-info' };
-      case 'purple': return { header: 'text-primary',  total: 'text-primary' };
-      case 'red':    return { header: 'text-destructive',    total: 'text-destructive' };
-      default:       return { header: 'text-foreground', total: 'text-foreground' };
-    }
-  };
 
   const terceroSeleccionadoPago = modalPagoTerceroId
     ? terceros.find((a) => a.tercero_id === modalPagoTerceroId)
@@ -1112,43 +1092,21 @@ export default function NominaDetalle() {
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link to="/nomina">Pagos</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>{periodoLabel(nomina)}</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
-
-      {/* Header */}
-      <div>
-        <Button variant="ghost" size="sm" asChild className="mb-4">
-          <Link to="/nomina">
-            <ArrowLeft className="h-4 w-4" />
-            Volver
-          </Link>
-        </Button>
-
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-2xl sm:text-3xl font-bold text-primary">{periodoLabel(nomina)}</h1>
-              <StatusBadge status={nomina.estado as any} />
-            </div>
-            <p className="text-muted-foreground">
-              {nomina.mes}/{nomina.anio}
-              {nomina.quincena ? ` - Quincena ${nomina.quincena}` : ''}
-            </p>
-          </div>
-
-          <div className="flex gap-2">
+      <PageHeader
+        backTo="/nomina"
+        eyebrow={`Pagos · ${nomina.mes}/${nomina.anio}${nomina.quincena ? ` · Quincena ${nomina.quincena}` : ''}`}
+        title={
+          <span className="flex flex-wrap items-center gap-3">
+            {periodoLabel(nomina)}
+            <StatusBadge status={nomina.estado as any} />
+          </span>
+        }
+        actions={
+          <>
+            <Button variant="outline">
+              <Download strokeWidth={2} />
+              Exportar
+            </Button>
             {/* §6.1 — La nómina se cierra sola al liquidar la última fila.
                 Este botón es la salida cuando el automático se bloqueó y el
                 bloqueo ya se resolvió por otra vía (p. ej. la validación de
@@ -1204,20 +1162,16 @@ export default function NominaDetalle() {
                   disabled={accionando || !puedeCerrar || cargandoValidacionPreCierre}
                   title={!puedeCerrar ? 'Liquida todos los colaboradores antes de cerrar' : undefined}
                 >
-                  <Check className="h-4 w-4" />
-                  {cargandoValidacionPreCierre ? 'Verificando…' : 'Cerrar Nómina'}
+                  <Lock strokeWidth={2} />
+                  {cargandoValidacionPreCierre ? 'Verificando…' : 'Cerrar nómina'}
                 </Button>
               );
             })()}
-            <Button variant="outline">
-              <Download className="h-4 w-4" />
-              Exportar
-            </Button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
-      {/* §9.9 — Advertencias del snapshot del calendario (200 ⚠). No bloquean
+      {/* §9.9 — Advertencias del snapshot del calendario (200 con aviso). No bloquean
           la operación pero avisan si el calendario congelado quedó obsoleto
           respecto a la fuente externa o si el recargo dominical se desactualizó
           por Ley posterior. */}
@@ -1236,236 +1190,124 @@ export default function NominaDetalle() {
         );
         if (enRango.length === 0) return null;
         return (
-          <div className="rounded-lg border-2 border-warning/20 bg-warning-soft p-4">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 mt-0.5 text-warning shrink-0" />
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-warning mb-1">
-                  {enRango.length} día{enRango.length !== 1 ? 's' : ''} de descanso dentro del rango de esta nómina sin cubrir
-                </p>
-                <p className="text-xs text-foreground mb-2">
-                  Con cortes personalizados hay días de descanso que caen en el hueco entre dos nóminas y no se están pagando en ninguna. Puede ser deliberado.
-                </p>
-                <ul className="text-xs text-foreground space-y-0.5">
-                  {enRango.slice(0, 6).map((d) => (
-                    <li key={d.fecha}>
-                      <span className="font-mono">{d.fecha}</span> · {d.nombre}
-                    </li>
-                  ))}
-                  {enRango.length > 6 && (
-                    <li className="italic">+ {enRango.length - 6} más</li>
-                  )}
-                </ul>
-              </div>
+          <div className="flex gap-2 rounded-lg bg-warning-soft p-3">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+            <div className="min-w-0 flex-1 text-sm text-foreground">
+              <p className="font-medium">
+                {enRango.length} día{enRango.length !== 1 ? 's' : ''} de descanso dentro del rango de esta nómina sin cubrir
+              </p>
+              <p className="mt-0.5 text-muted-foreground">
+                Con cortes personalizados hay días de descanso que caen en el hueco entre dos nóminas y no se están pagando en ninguna. Puede ser deliberado.
+              </p>
+              <p className="mt-1 tabular-nums">
+                {enRango.slice(0, 6).map((d) => `${d.fecha} · ${d.nombre}`).join('; ')}
+                {enRango.length > 6 && `; y ${enRango.length - 6} más`}
+              </p>
             </div>
           </div>
         );
       })()}
 
-      {/* Selector de vista (tabs visuales V.15) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <button
-          type="button"
-          onClick={() => setTabActivo('colaboradores')}
-          className={`relative flex items-center gap-4 rounded-xl border-2 px-5 py-4 text-left transition duration-200 ${
-            tabActivo === 'colaboradores'
-              ? 'border-primary bg-primary/5 shadow-sm'
-              : 'border-border bg-card hover:border-primary/40 hover:bg-muted/40'
-          }`}
-        >
-          <div className={`h-12 w-12 flex-shrink-0 rounded-xl flex items-center justify-center ${
-            tabActivo === 'colaboradores' ? 'bg-primary/15' : 'bg-muted'
-          }`}>
-            <Users className={`h-6 w-6 ${tabActivo === 'colaboradores' ? 'text-primary' : 'text-muted-foreground'}`} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className={`font-semibold text-base ${tabActivo === 'colaboradores' ? 'text-primary' : 'text-foreground'}`}>
-              Colaboradores Internos
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">Colaboradores directos de la finca</p>
-          </div>
-          <span className={`text-2xl font-bold flex-shrink-0 ${tabActivo === 'colaboradores' ? 'text-primary' : 'text-muted-foreground'}`}>
-            {totalColabs}
-          </span>
-          {tabActivo === 'colaboradores' && (
-            <span className="absolute right-3 top-3 h-2 w-2 rounded-full bg-primary" />
-          )}
-        </button>
+      {/* Selector de vista. El del diseño: una barrita, no dos cajones. */}
+      <SegmentedTabs
+        value={tabActivo}
+        onChange={setTabActivo}
+        options={[
+          { value: 'colaboradores', label: 'Colaboradores internos', count: totalColabs },
+          { value: 'terceros', label: 'Terceros', count: tercerosAgrupados.length },
+        ]}
+      />
 
-        <button
-          type="button"
-          onClick={() => setTabActivo('terceros')}
-          className={`relative flex items-center gap-4 rounded-xl border-2 px-5 py-4 text-left transition duration-200 ${
-            tabActivo === 'terceros'
-              ? 'border-warning/40 bg-warning-soft shadow-sm'
-              : 'border-border bg-card hover:border-warning/20 hover:bg-muted/40'
-          }`}
-        >
-          <div className={`h-12 w-12 flex-shrink-0 rounded-xl flex items-center justify-center ${
-            tabActivo === 'terceros' ? 'bg-warning-soft' : 'bg-muted'
-          }`}>
-            <Building2 className={`h-6 w-6 ${tabActivo === 'terceros' ? 'text-warning' : 'text-muted-foreground'}`} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className={`font-semibold text-base ${tabActivo === 'terceros' ? 'text-warning' : 'text-foreground'}`}>
-              Terceros
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">Contratistas y empresas externas</p>
-          </div>
-          <span className={`text-2xl font-bold flex-shrink-0 ${tabActivo === 'terceros' ? 'text-warning' : 'text-muted-foreground'}`}>
-            {tercerosAgrupados.length}
-          </span>
-          {tabActivo === 'terceros' && (
-            <span className="absolute right-3 top-3 h-2 w-2 rounded-full bg-warning" />
-          )}
-        </button>
-      </div>
-
-      {/* KPIs dinámicos según tab */}
+      {/* Indicadores del tab activo */}
       {tabActivo === 'colaboradores' ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Total Devengado</p>
-                  <p className="text-2xl font-bold text-success">${totalDevengado.toLocaleString('es-CO')}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Lo que ganaron en el período</p>
-                </div>
-                <div className="h-11 w-11 rounded-xl bg-success/10 flex items-center justify-center">
-                  <TrendingUp className="h-5 w-5 text-success" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Deducciones</p>
-                  <p className="text-2xl font-bold text-destructive">${totalDeducciones.toLocaleString('es-CO')}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Salud + Pensión + Otros</p>
-                </div>
-                <div className="h-11 w-11 rounded-xl bg-destructive/10 flex items-center justify-center">
-                  <TrendingDown className="h-5 w-5 text-destructive" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-primary/20 bg-primary/5">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Neto a Pagar</p>
-                  <p className="text-2xl font-bold text-primary">${totalNeto.toLocaleString('es-CO')}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Lo que recibe cada colaborador</p>
-                </div>
-                <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <DollarSign className="h-5 w-5 text-primary" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Avance de Liquidación</p>
-                  <p className="text-2xl font-bold text-foreground">
-                    {liquidados} <span className="text-base font-normal text-muted-foreground">de {totalColabs}</span>
-                  </p>
-                  <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-full bg-success rounded-full transition duration-500"
-                      style={{ width: `${totalColabs ? (liquidados / totalColabs) * 100 : 0}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">Colaboradores liquidados</p>
-                </div>
-                <div className="h-11 w-11 rounded-xl bg-success/10 flex items-center justify-center">
-                  <Check className="h-5 w-5 text-success" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <StatStrip
+          items={[
+            {
+              label: 'Total devengado',
+              value: `$${totalDevengado.toLocaleString('es-CO')}`,
+              note: 'Lo que ganaron en el período',
+              icon: Banknote,
+              tone: 'green',
+            },
+            {
+              label: 'Deducciones',
+              value: `$${totalDeducciones.toLocaleString('es-CO')}`,
+              note: 'Salud, pensión y otros',
+              icon: MinusCircle,
+              tone: 'neutral',
+            },
+            {
+              label: 'Neto a pagar',
+              value: `$${totalNeto.toLocaleString('es-CO')}`,
+              note: 'Lo que recibe cada colaborador',
+              icon: Wallet,
+              tone: 'green',
+            },
+            {
+              label: 'Avance de liquidación',
+              value: liquidados,
+              unit: `de ${totalColabs}`,
+              note: 'Colaboradores liquidados',
+              icon: UserCheck,
+              tone: 'amber',
+            },
+          ]}
+        />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Empresas Contratistas</p>
-                  <p className="text-2xl font-bold text-foreground">{tercerosAgrupados.length}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{totalOperarios} operario{totalOperarios !== 1 ? 's' : ''} en campo</p>
-                </div>
-                <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <Building2 className="h-5 w-5 text-primary" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-primary/20 bg-primary/5">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Total a Transferir</p>
-                  <p className="text-2xl font-bold text-primary">${totalServiciosTerceros.toLocaleString('es-CO')}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">A empresas contratistas</p>
-                </div>
-                <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <DollarSign className="h-5 w-5 text-primary" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Avance de Pago</p>
-                  <p className="text-2xl font-bold text-foreground">
-                    {empresasPagadas} <span className="text-base font-normal text-muted-foreground">de {tercerosAgrupados.length}</span>
-                  </p>
-                  <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-full bg-success rounded-full transition duration-500"
-                      style={{ width: `${tercerosAgrupados.length ? (empresasPagadas / tercerosAgrupados.length) * 100 : 0}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">Empresas pagadas</p>
-                </div>
-                <div className="h-11 w-11 rounded-xl bg-success/10 flex items-center justify-center">
-                  <Check className="h-5 w-5 text-success" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <StatStrip
+          items={[
+            {
+              label: 'Total a transferir',
+              value: `$${totalServiciosTerceros.toLocaleString('es-CO')}`,
+              note: 'A empresas contratistas',
+              icon: Send,
+              tone: 'green',
+            },
+            {
+              label: 'Empresas contratistas',
+              value: tercerosAgrupados.length,
+              note: `${totalOperarios} operario${totalOperarios !== 1 ? 's' : ''} en campo`,
+              icon: Building2,
+              tone: 'blue',
+            },
+            {
+              label: 'Avance de pago',
+              value: empresasPagadas,
+              unit: `de ${tercerosAgrupados.length}`,
+              note: 'Empresas pagadas',
+              icon: CircleCheck,
+              tone: 'amber',
+            },
+          ]}
+        />
       )}
 
       {/* ── TAB TERCEROS ── */}
       {tabActivo === 'terceros' && (
-        <div className="space-y-4">
+        <section className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2>Órdenes de pago a terceros</h2>
+              <p className="text-sm text-muted-foreground">Labores registradas por empresa contratista</p>
+            </div>
+            {/* Sin "Liquidar terceros": se quitó a propósito (d2c80cc). */}
+          </div>
 
           {cargandoTerceros ? (
-            <Card>
-              <CardContent className="py-12 flex items-center justify-center gap-2 text-muted-foreground">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                Cargando terceros...
-              </CardContent>
+            <Card className="flex-row items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Cargando terceros...
             </Card>
           ) : tercerosAgrupados.length === 0 ? (
-            <Card className="border-2 border-dashed bg-muted/30">
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <Building2 className="h-16 w-16 text-muted-foreground mb-4" />
-                <p className="text-lg font-semibold mb-2">No hay terceros en este período</p>
-                <p className="text-sm text-muted-foreground mb-4 text-center max-w-md">
+            <Card className="items-center py-12 text-center">
+              <div className="max-w-md space-y-1 px-6">
+                <h3 className="text-base font-semibold text-foreground">No hay terceros en este período</h3>
+                <p className="text-sm text-muted-foreground">
                   {abierta
                     ? 'Agrega operarios de empresas contratistas en el wizard de nómina para verlos aquí.'
                     : 'No se liquidaron empresas contratistas en este período.'}
                 </p>
-              </CardContent>
+              </div>
             </Card>
           ) : (
             tercerosAgrupados.map((grupo) => {
@@ -1485,16 +1327,21 @@ export default function NominaDetalle() {
               const totalEstimado = categorias.reduce((s, c) => s + c.subtotal, 0);
               const total = toNumber(acta?.total_a_transferir);
               return (
-                <Card key={grupo.tercero_id} className="overflow-hidden">
-                  {/* Header acta */}
-                  <div className={`flex items-center justify-between px-5 py-4 border-b border-border ${pagado ? 'bg-success/5' : 'bg-warning-soft'}`}>
-                    <div className="flex items-center gap-3">
-                      <div className={`h-9 w-9 rounded-lg flex items-center justify-center font-bold ${pagado ? 'bg-success/10 text-success' : 'bg-warning-soft text-warning'}`}>
+                <Card key={grupo.tercero_id} className="gap-0 overflow-hidden">
+                  {/* Cabecera de la empresa */}
+                  <div className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:justify-between">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-sm font-semibold text-foreground">
                         {grupo.tercero_nombre.charAt(0)}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-sm">{grupo.tercero_nombre}</p>
-                        <p className="text-xs text-muted-foreground">
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="truncate">{grupo.tercero_nombre}</h3>
+                          <Badge variant={pagado ? 'success' : 'warning'}>
+                            {pagado ? 'Pagado' : 'Pendiente'}
+                          </Badge>
+                        </div>
+                        <p className="truncate text-xs text-muted-foreground">
                           {nit && <>NIT {nit}</>}
                           {nit && representante && ' · '}
                           {representante}
@@ -1502,29 +1349,23 @@ export default function NominaDetalle() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-xs text-muted-foreground">Total a pagar</p>
-                        <p className="text-xl font-bold text-foreground">
+                    <div className="flex flex-wrap items-center justify-between gap-4 md:justify-end">
+                      <div className="text-left md:text-right">
+                        <Eyebrow>Total a pagar</Eyebrow>
+                        <p className="text-lg font-semibold tabular-nums text-foreground">
                           ${(calculada ? total : totalEstimado).toLocaleString('es-CO')}
                         </p>
                       </div>
-                      <Badge className={`text-xs ${
-                        pagado
-                          ? 'bg-success/10 text-success border-success/20'
-                          : 'bg-warning-soft text-warning border-warning/20'
-                      }`}>
-                        {pagado ? 'Pagado' : 'Pendiente'}
-                      </Badge>
                       {!pagado && (
                         <Button
                           size="sm"
+                          variant="outline"
                           onClick={() => navigate(
                             `/nomina/${nominaId}/tercero/${grupo.tercero_id}/liquidar`,
                             { state: { totalEstimado, categorias } },
                           )}
                         >
-                          <FileText className="h-3.5 w-3.5" />
+                          {calculada ? <FileText strokeWidth={2} /> : <Calculator strokeWidth={2} />}
                           {calculada ? 'Ver acta' : 'Liquidar'}
                         </Button>
                       )}
@@ -1534,16 +1375,15 @@ export default function NominaDetalle() {
                         <Button
                           size="sm"
                           variant="outline"
-                          
                           disabled={generandoActa === grupo.tercero_id}
                           onClick={() =>
                             generarComprobanteTercero(grupo.tercero_id, grupo.tercero_nombre)
                           }
                         >
-                          <Printer className="h-3.5 w-3.5" />
+                          <Printer strokeWidth={2} />
                           {generandoActa === grupo.tercero_id
                             ? 'Generando...'
-                            : 'Generar Comprobante'}
+                            : 'Generar comprobante'}
                         </Button>
                       )}
                     </div>
@@ -1558,163 +1398,136 @@ export default function NominaDetalle() {
                       /* §7.3 — El acta no está calculada y VER no debe mutar
                          nada (el POST /liquidar auto-liquida operarios
                          PENDIENTES). El cálculo solo corre con este clic. */
-                      <div className="py-10 flex flex-col items-center gap-3 text-center">
-                        <p className="text-sm text-muted-foreground max-w-md">
+                      <div className="flex flex-col items-center gap-3 border-t border-border px-6 py-10 text-center">
+                        <p className="max-w-md text-sm text-muted-foreground">
                           El acta de este contratista aún no está calculada. Para ver el
-                          desglose por labor se necesita calcularla — esto también
-                          liquida a sus operarios pendientes con los valores del período.
+                          desglose por labor hay que calcularla. Esto también liquida a
+                          sus operarios pendientes con los valores del período.
                         </p>
                         <Button
                           size="sm"
                           onClick={() => calcularActaTercero(grupo.tercero_id)}
                           disabled={calculandoActa === grupo.tercero_id}
-                          
                         >
+                          {calculandoActa === grupo.tercero_id
+                            ? <Loader2 className="animate-spin" />
+                            : <Calculator strokeWidth={2} />}
                           {calculandoActa === grupo.tercero_id
                             ? 'Calculando...'
                             : 'Calcular acta'}
                         </Button>
                       </div>
                     ) : (
-                      <div className="py-10 text-center text-sm text-muted-foreground">
+                      <div className="border-t border-border px-6 py-10 text-center text-sm text-muted-foreground">
                         {detallesPorTercero.size === 0
                           ? 'Cargando desglose por labor...'
                           : 'Sin registros de campo en el período para los operarios de esta empresa.'}
                       </div>
                     )
                   ) : (
-                    <>
-                      {categorias.filter((c) => c.key !== 'finca').length > 0 && (
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="border-b border-border bg-muted/30 text-xs text-muted-foreground">
-                                <th className="text-left p-3 pl-5 font-semibold">Lote</th>
-                                <th className="text-left p-3 font-semibold">Sublote</th>
-                                <th className="text-right p-3 font-semibold">Cantidad</th>
-                                <th className="text-right p-3 font-semibold">Prom.</th>
-                                <th className="text-right p-3 font-semibold">Peso (kg)</th>
-                                <th className="text-right p-3 font-semibold">Precio Unit.</th>
-                                <th className="text-right p-3 pr-5 font-semibold">Total</th>
+                    <div className="overflow-x-auto border-t border-border">
+                      <table className="w-full min-w-[640px] text-sm">
+                        <thead className={thead}>
+                          <tr>
+                            <th className={`${th} pl-5 text-left`}>Lote</th>
+                            <th className={`${th} text-left`}>Sublote</th>
+                            <th className={`${th} text-right`}>Cantidad</th>
+                            <th className={`${th} text-right`}>Prom.</th>
+                            <th className={`${th} text-right`}>Peso (kg)</th>
+                            <th className={`${th} text-right`}>Precio unit.</th>
+                            <th className={`${th} pr-5 text-right`}>Total</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {categorias.filter((c) => c.key !== 'finca').map((cat) => (
+                            <React.Fragment key={cat.key}>
+                              <tr className="bg-muted/30">
+                                <td colSpan={7} className="px-5 py-1.5 text-[13px] font-medium text-muted-foreground">
+                                  {cat.titulo.charAt(0) + cat.titulo.slice(1).toLowerCase()}
+                                </td>
                               </tr>
-                            </thead>
-                            <tbody>
-                              {categorias.filter((c) => c.key !== 'finca').map((cat) => {
-                                const col = acumCategoria(cat.color);
-                                return (
-                                  <React.Fragment key={cat.key}>
-                                    {/* Encabezado de grupo */}
-                                    <tr className="bg-muted/40 border-b border-border">
-                                      <td colSpan={7} className={`px-5 py-1.5 text-xs font-semibold ${col.header}`}>
-                                        {cat.titulo}
-                                      </td>
-                                    </tr>
-                                    {cat.filas.map((f, idx) => (
-                                      <tr
-                                        key={`${cat.key}-${idx}`}
-                                        className={`border-b border-border/40 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}
-                                      >
-                                        <td className="p-3 pl-5 font-semibold">{f.lote}</td>
-                                        <td className="p-3 text-muted-foreground">{f.sublote}</td>
-                                        <td className="p-3 text-right font-semibold">
-                                          {f.cantidad.toLocaleString('es-CO')}
-                                          <span className="text-xs text-muted-foreground ml-1">{f.unidad}</span>
-                                        </td>
-                                        <td className="p-3 text-right text-muted-foreground">
-                                          {f.promedio_kg != null && f.promedio_kg > 0
-                                            ? f.promedio_kg.toFixed(4)
-                                            : '—'}
-                                        </td>
-                                        <td className="p-3 text-right font-semibold">
-                                          {f.peso_kg != null && f.peso_kg > 0
-                                            ? f.peso_kg.toLocaleString('es-CO')
-                                            : '—'}
-                                        </td>
-                                        <td className="p-3 text-right text-muted-foreground">
-                                          ${f.precio.toLocaleString('es-CO')}
-                                          <span className="text-xs ml-1">{f.precio_unidad}</span>
-                                        </td>
-                                        <td className={`p-3 pr-5 text-right font-bold ${col.total}`}>
-                                          ${f.total.toLocaleString('es-CO')}
-                                        </td>
-                                      </tr>
-                                    ))}
-                                    {/* Subtotal por grupo */}
-                                    <tr className="border-b border-border bg-muted/10">
-                                      <td colSpan={6} className="p-2 pl-5 text-right text-xs text-muted-foreground">
-                                        Subtotal {cat.titulo.charAt(0) + cat.titulo.slice(1).toLowerCase()}
-                                      </td>
-                                      <td className={`p-2 pr-5 text-right text-sm font-bold ${col.total}`}>
-                                        ${cat.subtotal.toLocaleString('es-CO')}
-                                      </td>
-                                    </tr>
-                                  </React.Fragment>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-
-                      {/* Tabla aparte para labores de FINCA — mismo estilo
-                          visual que V.16 pero con columnas propias porque
-                          finca no tiene lote/sublote/promedio/peso. */}
-                      {categorias.filter((c) => c.key === 'finca').map((cat) => {
-                        const col = acumCategoria(cat.color);
-                        return (
-                          <div key={cat.key} className="overflow-x-auto border-t border-border">
-                            <table className="w-full text-sm">
-                              <thead>
-                                <tr className="border-b border-border bg-muted/30 text-xs text-muted-foreground">
-                                  <th className={`p-3 pl-5 text-left font-semibold ${col.header}`}>
-                                    Trabajos de finca
-                                  </th>
-                                  <th className="text-right p-3 font-semibold">Precio Unit.</th>
-                                  <th className="text-right p-3 pr-5 font-semibold">Total</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {cat.filas.map((f, idx) => (
-                                  <tr
-                                    key={`finca-${idx}`}
-                                    className={`border-b border-border/40 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}
-                                  >
-                                    <td className="p-3 pl-5 font-semibold">
-                                      {f.lote !== '—' ? f.lote : 'Trabajo de finca'}
-                                    </td>
-                                    <td className="p-3 text-right text-muted-foreground">
-                                      ${f.precio.toLocaleString('es-CO')}
-                                    </td>
-                                    <td className={`p-3 pr-5 text-right font-bold ${col.total}`}>
-                                      ${f.total.toLocaleString('es-CO')}
-                                    </td>
-                                  </tr>
-                                ))}
-                                <tr className="border-b border-border bg-muted/10">
-                                  <td colSpan={2} className="p-2 pl-5 text-right text-xs text-muted-foreground">
-                                    Subtotal Finca
+                              {cat.filas.map((f, idx) => (
+                                <tr key={`${cat.key}-${idx}`}>
+                                  <td className={`${td} pl-5 font-medium text-foreground`}>{f.lote}</td>
+                                  <td className={`${td} text-muted-foreground`}>{f.sublote}</td>
+                                  <td className={`${td} text-right tabular-nums`}>
+                                    {f.cantidad.toLocaleString('es-CO')}
+                                    <span className="ml-1 text-xs text-muted-foreground">{f.unidad}</span>
                                   </td>
-                                  <td className={`p-2 pr-5 text-right text-sm font-bold ${col.total}`}>
-                                    ${cat.subtotal.toLocaleString('es-CO')}
+                                  <td className={`${td} text-right tabular-nums text-muted-foreground`}>
+                                    {f.promedio_kg != null && f.promedio_kg > 0
+                                      ? f.promedio_kg.toFixed(4)
+                                      : '—'}
+                                  </td>
+                                  <td className={`${td} text-right tabular-nums`}>
+                                    {f.peso_kg != null && f.peso_kg > 0
+                                      ? f.peso_kg.toLocaleString('es-CO')
+                                      : '—'}
+                                  </td>
+                                  <td className={`${td} text-right tabular-nums text-muted-foreground`}>
+                                    ${f.precio.toLocaleString('es-CO')}
+                                    <span className="ml-1 text-xs">{f.precio_unidad}</span>
+                                  </td>
+                                  <td className={`${td} pr-5 text-right tabular-nums text-foreground`}>
+                                    ${f.total.toLocaleString('es-CO')}
                                   </td>
                                 </tr>
-                              </tbody>
-                            </table>
-                          </div>
-                        );
-                      })}
-
-                      {/* Total orden de pago — al final después de ambas
-                          tablas (campo + finca). Estilo tfoot de V.16. */}
-                      <div className="border-t-2 border-primary/20 bg-muted/20 flex items-center justify-between px-5 py-3">
-                        <p className="text-sm font-semibold text-primary">
-                          Total orden de pago a {grupo.tercero_nombre}
-                        </p>
-                        <p className="text-lg font-bold text-primary">
-                          ${total.toLocaleString('es-CO')}
-                        </p>
-                      </div>
-                    </>
+                              ))}
+                              <tr>
+                                <td colSpan={6} className="px-5 py-2 text-right text-xs text-muted-foreground">
+                                  Subtotal {cat.titulo.toLowerCase()}
+                                </td>
+                                <td className="px-4 py-2 pr-5 text-right font-semibold tabular-nums text-foreground">
+                                  ${cat.subtotal.toLocaleString('es-CO')}
+                                </td>
+                              </tr>
+                            </React.Fragment>
+                          ))}
+                          {/* Trabajos de finca: sin lote ni promedio, la
+                              descripción ocupa esas columnas. */}
+                          {categorias.filter((c) => c.key === 'finca').map((cat) => (
+                            <React.Fragment key={cat.key}>
+                              <tr className="bg-muted/30">
+                                <td colSpan={7} className="px-5 py-1.5 text-[13px] font-medium text-muted-foreground">
+                                  Trabajos de finca
+                                </td>
+                              </tr>
+                              {cat.filas.map((f, idx) => (
+                                <tr key={`finca-${idx}`}>
+                                  <td className={`${td} pl-5 font-medium text-foreground`} colSpan={5}>
+                                    {f.lote !== '—' ? f.lote : 'Trabajo de finca'}
+                                  </td>
+                                  <td className={`${td} text-right tabular-nums text-muted-foreground`}>
+                                    ${f.precio.toLocaleString('es-CO')}
+                                  </td>
+                                  <td className={`${td} pr-5 text-right tabular-nums text-foreground`}>
+                                    ${f.total.toLocaleString('es-CO')}
+                                  </td>
+                                </tr>
+                              ))}
+                              <tr>
+                                <td colSpan={6} className="px-5 py-2 text-right text-xs text-muted-foreground">
+                                  Subtotal finca
+                                </td>
+                                <td className="px-4 py-2 pr-5 text-right font-semibold tabular-nums text-foreground">
+                                  ${cat.subtotal.toLocaleString('es-CO')}
+                                </td>
+                              </tr>
+                            </React.Fragment>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t border-border bg-muted/60">
+                            <td colSpan={6} className="px-5 py-3 text-right text-sm font-semibold text-foreground">
+                              Total orden de pago a {grupo.tercero_nombre}
+                            </td>
+                            <td className="px-4 py-3 pr-5 text-right text-base font-bold tabular-nums text-foreground">
+                              ${total.toLocaleString('es-CO')}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
                   )}
                 </Card>
               );
@@ -1724,91 +1537,78 @@ export default function NominaDetalle() {
           {/* Total general terceros — igual que V.16, card amber flotante
               al final del listado. */}
           {tercerosAgrupados.length > 0 && (
-            <div className="flex justify-end">
-              <div className="rounded-xl border border-warning/20 bg-warning-soft px-6 py-3 flex items-center gap-6">
-                <p className="text-sm text-muted-foreground">
-                  Total a transferir a empresas terceras
-                </p>
-                <p className="text-2xl font-bold text-warning">
-                  ${tercerosAgrupados
-                    .reduce((s, g) => s + toNumber(g.acta?.total_a_transferir), 0)
-                    .toLocaleString('es-CO')}
-                </p>
-              </div>
-            </div>
+            <Card className="flex-row items-center justify-between gap-4 px-5 py-4">
+              <p className="text-sm text-muted-foreground">Total a transferir a empresas terceras</p>
+              <p className="text-2xl font-bold tabular-nums text-foreground">
+                ${tercerosAgrupados
+                  .reduce((s, g) => s + toNumber(g.acta?.total_a_transferir), 0)
+                  .toLocaleString('es-CO')}
+              </p>
+            </Card>
           )}
-        </div>
+        </section>
       )}
 
       {/* ── TAB COLABORADORES ── */}
       {tabActivo === 'colaboradores' && (
-        <div className="space-y-4">
-          <div>
-            <h2 className="mb-2">
-              {abierta ? 'Liquidación de Colaboradores' : 'Detalle por Colaborador'}
-            </h2>
-            <p className="text-muted-foreground">
-              {abierta
-                ? `${totalColabs} colaboradores - ${liquidados} liquidados, ${pendientesInternos} pendientes`
-                : `${empleadosMostrar.length} colaboradores liquidados en este período`}
-            </p>
+        <section className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2>{abierta ? 'Liquidación de colaboradores' : 'Detalle por colaborador'}</h2>
+              <p className="text-sm text-muted-foreground">
+                {abierta
+                  ? `${totalColabs} colaboradores · ${liquidados} liquidados, ${pendientesInternos} pendientes`
+                  : `${empleadosMostrar.length} colaboradores liquidados en este período`}
+              </p>
+            </div>
           </div>
 
-          <Card className="overflow-hidden">
-            <CardContent className="p-0">
+          <Card className="gap-0 overflow-hidden">
               {empleadosMostrar.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
+                <div className="px-6 py-10 text-center text-sm text-muted-foreground">
                   {abierta
                     ? 'No hay empleados en esta nómina. Edita la nómina para agregar.'
                     : 'No hay empleados liquidados.'}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/30">
-                        <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Colaborador</th>
-                        <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Tipo</th>
+                  <table className="w-full text-sm">
+                    <thead className={thead}>
+                      <tr>
+                        <th className={`${th} pl-5 text-left`}>Colaborador</th>
+                        <th className={`${th} hidden text-left sm:table-cell`}>Tipo</th>
                         {abierta && (
                           <>
-                            <th className="text-right p-4 font-semibold text-sm text-muted-foreground">
+                            <th className={`${th} text-right`} title="Lo que va a cobrar">
                               Neto proyectado
-                              <span className="block text-[10px] font-normal leading-tight">
-                                lo que va a cobrar
-                              </span>
                             </th>
-                            <th className="text-center p-4 font-semibold text-sm text-muted-foreground">Estado</th>
+                            <th className={`${th} text-left`}>Estado</th>
                           </>
                         )}
                         {!abierta && (
                           <>
-                            <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Jornales</th>
-                            <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Cosechas</th>
-                            <th className="text-right p-4 font-semibold text-sm text-muted-foreground">
+                            <th className={`${th} hidden text-right lg:table-cell`}>Jornales</th>
+                            <th className={`${th} hidden text-right lg:table-cell`}>Cosechas</th>
+                            <th className={`${th} hidden text-right md:table-cell`} title="Incluye auxilio de transporte">
                               Devengado
-                              <span className="block text-[10px] font-normal leading-tight">
-                                incluye auxilio de transporte
-                              </span>
                             </th>
-                            <th className="text-right p-4 font-semibold text-sm text-muted-foreground">
-                              Deducciones
-                            </th>
-                            <th className="text-right p-4 font-semibold text-sm text-muted-foreground">
-                              Neto a pagar
-                            </th>
+                            <th className={`${th} hidden text-right md:table-cell`}>Deducciones</th>
+                            <th className={`${th} text-right`}>Neto</th>
                           </>
                         )}
-                        <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Acciones</th>
+                        <th className={`${th} pr-5 text-right`}>
+                          <span className="sr-only">Acciones</span>
+                        </th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-border">
                       {[...empleadosMostrar].sort((a, b) => {
                         // Orden alfabetico por primer nombre. Cada fila puede
                         // ser empleado interno u operario de tercero (XOR).
                         const pA = a.operario ?? a.empleado ?? {};
                         const pB = b.operario ?? b.empleado ?? {};
                         return comparePersonaByFirstName(pA, pB);
-                      }).map((emp, index) => {
+                      }).map((emp) => {
                         const liquidado = emp.estado === 'LIQUIDADO';
                         // XOR empleado_id vs operario_id: cada fila es uno u otro.
                         const esOperario = emp.operario_id != null;
@@ -1836,42 +1636,34 @@ export default function NominaDetalle() {
                         const auxilio = toNumber(emp.subsidio_transporte);
                         const devengado = toNumber(emp.total_devengado) + auxilio;
                         return (
-                          <tr
-                            key={emp.id}
-                            className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${
-                              index % 2 === 0 ? 'bg-background' : 'bg-muted/5'
-                            }`}
-                          >
-                            <td className="p-4">
+                          <tr key={emp.id} className="transition-colors hover:bg-muted/40">
+                            <td className={`${td} pl-5`}>
                               <div className="flex items-center gap-3">
-                                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${
-                                  esOperario
-                                    ? 'bg-warning-soft text-warning border-warning/20'
-                                    : 'bg-primary/10 text-primary border-primary/20'
-                                }`}>
-                                  <span className="text-sm font-bold">{getIniciales(nombre)}</span>
-                                </div>
+                                <Avatar nombre={nombre} size="sm" className="hidden sm:inline-flex" />
                                 <div className="min-w-0">
-                                  <span className="font-semibold text-sm">{nombre}</span>
+                                  <span className="font-semibold text-foreground">{nombre}</span>
                                   {cargo && (
-                                    <p className="text-xs text-muted-foreground">{cargo}</p>
+                                    <span className="block text-xs text-muted-foreground">{cargo}</span>
                                   )}
+                                  <span className="block text-xs text-muted-foreground sm:hidden">
+                                    {esOperario ? (terceroNombre ?? 'Tercero') : (emp.salario_tipo ?? '—')}
+                                  </span>
                                 </div>
                               </div>
                             </td>
-                            <td className="p-4">
+                            <td className={`${td} hidden sm:table-cell`}>
                               {esOperario ? (
-                                <Badge className="text-xs bg-warning-soft text-warning border-warning/20">
+                                <Badge variant="warning">
                                   {terceroNombre ?? 'Tercero'}
                                 </Badge>
                               ) : (
-                                <Badge variant="outline" className="text-xs">
+                                <Badge variant="outline">
                                   {emp.salario_tipo ?? '—'}
                                 </Badge>
                               )}
                             </td>
                             {abierta && (
-                            <td className="p-4 text-right">
+                            <td className={`${td} text-right`}>
                               {/* Prioridad: LIQUIDADO usa total_devengado
                                   congelado. Si el usuario abrió el editor de
                                   este colaborador durante la sesión, mostramos
@@ -1886,7 +1678,7 @@ export default function NominaDetalle() {
                                 // abrir el detalle vía previews en batches de 6.
                                 if (emp.estado === 'LIQUIDADO') {
                                   return (
-                                    <span className="text-sm font-medium">
+                                    <span className="font-medium tabular-nums">
                                       ${toNumber(emp.total_neto).toLocaleString('es-CO')}
                                     </span>
                                   );
@@ -1895,7 +1687,7 @@ export default function NominaDetalle() {
                                 if (enCache != null) {
                                   return (
                                     <span
-                                      className="text-sm font-medium"
+                                      className="font-medium tabular-nums"
                                       title="Neto real que va a cobrar"
                                     >
                                       ${enCache.toLocaleString('es-CO')}
@@ -1915,15 +1707,15 @@ export default function NominaDetalle() {
                             )}
                             {!abierta && (
                               <>
-                                <td className="p-4 text-right tabular-nums">
-                                  <span className="text-sm">{fmtPesos(jornales)}</span>
+                                <td className={`${td} hidden text-right tabular-nums text-muted-foreground lg:table-cell`}>
+                                  {fmtPesos(jornales)}
                                 </td>
-                                <td className="p-4 text-right tabular-nums">
-                                  <span className="text-sm">{fmtPesos(cosechas)}</span>
+                                <td className={`${td} hidden text-right tabular-nums text-muted-foreground lg:table-cell`}>
+                                  {fmtPesos(cosechas)}
                                 </td>
-                                <td className="p-4 text-right tabular-nums">
+                                <td className={`${td} hidden text-right tabular-nums md:table-cell`}>
                                   <span
-                                    className="text-sm font-medium text-success"
+                                    className="text-foreground"
                                     title={auxilio > 0
                                       ? `Salario ${fmtPesos(toNumber(emp.total_devengado))} + auxilio de transporte ${fmtPesos(auxilio)}`
                                       : 'Sin auxilio de transporte en el periodo'}
@@ -1931,37 +1723,28 @@ export default function NominaDetalle() {
                                     {fmtPesos(devengado)}
                                   </span>
                                 </td>
-                                <td className="p-4 text-right tabular-nums">
-                                  <span className="text-sm text-destructive">
-                                    {fmtPesos(toNumber(emp.total_deducciones))}
-                                  </span>
+                                <td className={`${td} hidden text-right tabular-nums md:table-cell`}>
+                                  {fmtPesos(toNumber(emp.total_deducciones))}
                                 </td>
-                                <td className="p-4 text-right tabular-nums">
-                                  <span className="text-sm font-bold text-primary">
-                                    {fmtPesos(toNumber(emp.total_neto))}
-                                  </span>
+                                <td className={`${td} text-right font-semibold tabular-nums text-foreground`}>
+                                  {fmtPesos(toNumber(emp.total_neto))}
                                 </td>
                               </>
                             )}
                             {abierta && (
-                              <td className="p-4 text-center">
-                                <Badge
-                                  className={`text-xs ${
-                                    liquidado
-                                      ? 'bg-success/10 text-success border-success/20'
-                                      : 'bg-warning-soft text-warning border-warning/20'
-                                  }`}
-                                >
-                                  {emp.estado}
+                              <td className={td}>
+                                <Badge variant={liquidado ? 'success' : 'warning'}>
+                                  {emp.estado.charAt(0) + emp.estado.slice(1).toLowerCase()}
                                 </Badge>
                               </td>
                             )}
-                            <td className="p-4">
-                              <div className="flex gap-2 justify-end">
+                            <td className={`${td} pr-5`}>
+                              <div className="flex justify-end gap-1">
                                 {abierta && !liquidado && (
                                   <>
                                     <Button
                                       size="sm"
+                                      variant="outline"
                                       onClick={() => {
                                         if (liquidados === totalColabs - 1) {
                                           setUltimoPendiente(emp.id);
@@ -1969,41 +1752,44 @@ export default function NominaDetalle() {
                                         }
                                         navigate(`/nomina/${nominaId}/liquidar/${emp.id}`);
                                       }}
-                                      title="Liquidar"
                                     >
-                                      <Calculator className="h-4 w-4" />
+                                      <Calculator strokeWidth={2} />
+                                      Liquidar
                                     </Button>
                                     <Button
-                                      size="sm"
+                                      size="icon"
                                       variant="ghost"
                                       onClick={() => setEmpleadoAQuitar(emp)}
-                                      className="text-destructive hover:bg-destructive/10"
+                                      className="text-muted-foreground hover:text-destructive"
                                       title="Quitar de la nómina"
+                                      aria-label="Quitar de la nómina"
                                     >
-                                      <Trash2 className="h-4 w-4" />
+                                      <Trash2 strokeWidth={2} />
                                     </Button>
                                   </>
                                 )}
                                 {liquidado && (
                                   <>
                                     <Button
-                                      variant="outline"
-                                      size="sm"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="text-muted-foreground"
                                       onClick={() => navigate(`/nomina/${nominaId}/ver/${emp.id}`)}
-                                      className="hover:bg-primary/10 hover:text-primary hover:border-primary"
                                       title="Ver liquidación"
+                                      aria-label="Ver liquidación"
                                     >
-                                      {abierta ? <Eye className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                                      {abierta ? <Eye strokeWidth={2} /> : <FileText strokeWidth={2} />}
                                     </Button>
                                     {abierta && (
                                       <Button
-                                        size="sm"
-                                        variant="outline"
+                                        size="icon"
+                                        variant="ghost"
+                                        className="text-muted-foreground"
                                         onClick={() => navigate(`/nomina/${nominaId}/liquidar/${emp.id}?reliquidar=1`)}
-                                        className="hover:bg-warning-soft hover:text-warning hover:border-warning/20"
                                         title="Re-liquidar"
+                                        aria-label="Re-liquidar"
                                       >
-                                        <Pencil className="h-4 w-4" />
+                                        <Pencil strokeWidth={2} />
                                       </Button>
                                     )}
                                   </>
@@ -2016,24 +1802,24 @@ export default function NominaDetalle() {
                     </tbody>
                     {!abierta && (
                       <tfoot>
-                        <tr className="border-t-2 border-border bg-muted/30">
-                          <td className="p-4 text-sm font-semibold">
+                        <tr className="border-t border-border bg-muted/60 font-semibold text-foreground">
+                          <td className={`${td} pl-5`}>
                             Total {empleadosMostrar.length} colaborador{empleadosMostrar.length === 1 ? '' : 'es'}
                           </td>
-                          <td />
-                          <td className="p-4 text-right text-sm font-semibold tabular-nums">
+                          <td className="hidden sm:table-cell" />
+                          <td className={`${td} hidden text-right tabular-nums lg:table-cell`}>
                             {fmtPesos(totalesTabla.jornales)}
                           </td>
-                          <td className="p-4 text-right text-sm font-semibold tabular-nums">
+                          <td className={`${td} hidden text-right tabular-nums lg:table-cell`}>
                             {fmtPesos(totalesTabla.cosechas)}
                           </td>
-                          <td className="p-4 text-right text-sm font-semibold text-success tabular-nums">
+                          <td className={`${td} hidden text-right tabular-nums md:table-cell`}>
                             {fmtPesos(totalesTabla.devengado)}
                           </td>
-                          <td className="p-4 text-right text-sm font-semibold text-destructive tabular-nums">
+                          <td className={`${td} hidden text-right tabular-nums md:table-cell`}>
                             {fmtPesos(totalesTabla.deducciones)}
                           </td>
-                          <td className="p-4 text-right text-sm font-bold text-primary tabular-nums">
+                          <td className={`${td} text-right tabular-nums`}>
                             {fmtPesos(totalesTabla.neto)}
                           </td>
                           <td />
@@ -2043,9 +1829,8 @@ export default function NominaDetalle() {
                   </table>
                 </div>
               )}
-            </CardContent>
           </Card>
-        </div>
+        </section>
       )}
 
       {/* Confirmar quitar empleado */}
@@ -2065,7 +1850,7 @@ export default function NominaDetalle() {
             <AlertDialogAction
               onClick={quitarEmpleado}
               disabled={accionando}
-              className="bg-destructive text-white hover:bg-destructive/90"
+              className="bg-destructive hover:bg-destructive/90"
             >
               {accionando ? 'Quitando...' : 'Quitar'}
             </AlertDialogAction>
@@ -2122,20 +1907,23 @@ export default function NominaDetalle() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               Al cerrar la nómina los valores quedan inmutables. Las ausencias y horas extras del período
-              quedarán LIQUIDADAS y no podrán editarse.
+              quedarán liquidadas y no podrán editarse.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {/* §4.4 — Aviso de gajos sin despachar. Es la única forma en que
               la nómina paga de menos. El backend NO bloquea el cierre, pero
               debe requerir confirmación explícita. */}
           {alertaGajosPreCierre && (
-            <div className="rounded-lg border-2 border-warning/20 bg-warning-soft p-3 my-2">
-              <p className="text-sm font-semibold text-warning">
-                Vas a cerrar con {alertaGajosPreCierre.total_gajos_pendientes_enviar} gajos sin despachar en {alertaGajosPreCierre.cosechas_con_gajos_pendientes} cosecha{alertaGajosPreCierre.cosechas_con_gajos_pendientes !== 1 ? 's' : ''}.
-              </p>
-              <p className="text-xs text-foreground mt-1">
-                Esos gajos quedarán fuera de la liquidación de forma permanente: la cosecha pertenece a este período por fecha de operación, así que la nómina siguiente no los va a tomar.
-              </p>
+            <div className="flex gap-2 rounded-lg bg-warning-soft p-3">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+              <div className="min-w-0 text-sm text-foreground">
+                <p className="font-medium">
+                  Vas a cerrar con {alertaGajosPreCierre.total_gajos_pendientes_enviar} gajos sin despachar en {alertaGajosPreCierre.cosechas_con_gajos_pendientes} cosecha{alertaGajosPreCierre.cosechas_con_gajos_pendientes !== 1 ? 's' : ''}.
+                </p>
+                <p className="mt-0.5 text-muted-foreground">
+                  Esos gajos quedarán fuera de la liquidación de forma permanente: la cosecha pertenece a este período por fecha de operación, así que la nómina siguiente no los va a tomar.
+                </p>
+              </div>
             </div>
           )}
           {/* §3.6 — Filtramos igual que arriba: solo mostramos los huérfanos
@@ -2149,23 +1937,20 @@ export default function NominaDetalle() {
             );
             if (enRango.length === 0) return null;
             return (
-              <div className="rounded-lg border-2 border-warning/20 bg-warning-soft p-3 my-2">
-                <p className="text-sm font-semibold text-warning">
-                  {enRango.length} descanso{enRango.length !== 1 ? 's' : ''} del rango de esta nómina sin cubrir
-                </p>
-                <p className="text-xs text-foreground mt-1">
-                  Estos días caen en un hueco entre nóminas y no se están pagando en ninguna. Puede ser deliberado.
-                </p>
-                <ul className="text-xs text-foreground mt-2 space-y-0.5">
-                  {enRango.slice(0, 6).map((d) => (
-                    <li key={d.fecha}>
-                      <span className="font-mono">{d.fecha}</span> · {d.nombre}
-                    </li>
-                  ))}
-                  {enRango.length > 6 && (
-                    <li className="italic">+ {enRango.length - 6} más</li>
-                  )}
-                </ul>
+              <div className="flex gap-2 rounded-lg bg-warning-soft p-3">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+                <div className="min-w-0 text-sm text-foreground">
+                  <p className="font-medium">
+                    {enRango.length} descanso{enRango.length !== 1 ? 's' : ''} del rango de esta nómina sin cubrir
+                  </p>
+                  <p className="mt-0.5 text-muted-foreground">
+                    Estos días caen en un hueco entre nóminas y no se están pagando en ninguna. Puede ser deliberado.
+                  </p>
+                  <p className="mt-1 tabular-nums">
+                    {enRango.slice(0, 6).map((d) => `${d.fecha} · ${d.nombre}`).join('; ')}
+                    {enRango.length > 6 && `; y ${enRango.length - 6} más`}
+                  </p>
+                </div>
               </div>
             );
           })()}
@@ -2176,7 +1961,7 @@ export default function NominaDetalle() {
           {/* El motivo del forzado queda en la auditoría, así que se pide
               aquí y no después. */}
           {bloqueosDurosCierre.length === 0 && bloqueosForzablesCierre.length > 0 && (
-            <div className="my-2 space-y-1.5">
+            <div className="space-y-1.5">
               <Label htmlFor="motivo-forzar-cierre">
                 Motivo para cerrar de todas formas
               </Label>
@@ -2199,7 +1984,7 @@ export default function NominaDetalle() {
               onClick={() => cerrarNomina(bloqueosForzablesCierre.length > 0)}
               disabled={accionando || bloqueosDurosCierre.length > 0}
               className={alertaGajosPreCierre || bloqueosForzablesCierre.length > 0
-                ? 'bg-warning hover:bg-warning'
+                ? 'bg-warning hover:bg-warning/90'
                 : undefined}
             >
               {accionando
@@ -2250,7 +2035,7 @@ export default function NominaDetalle() {
             <AlertDialogAction
               onClick={() => cerrarNomina(true)}
               disabled={accionando || motivoForzado.trim().length < 5}
-              className="bg-warning hover:bg-warning"
+              className="bg-warning hover:bg-warning/90"
             >
               {accionando ? 'Cerrando...' : 'Cerrar de todas formas'}
             </AlertDialogAction>
@@ -2284,7 +2069,7 @@ export default function NominaDetalle() {
             <AlertDialogDescription>
               Esta acción eliminará la nómina y todos sus colaboradores pendientes. No podrá deshacerse.
               {liquidados > 0 && (
-                <span className="block mt-2 text-destructive font-medium">
+                <span className="mt-2 block font-medium text-destructive">
                   No se puede eliminar: hay {liquidados} colaborador(es) ya liquidados.
                 </span>
               )}
@@ -2295,7 +2080,7 @@ export default function NominaDetalle() {
             <AlertDialogAction
               onClick={eliminarNomina}
               disabled={accionando || liquidados > 0}
-              className="bg-destructive text-white hover:bg-destructive/90"
+              className="bg-destructive hover:bg-destructive/90"
             >
               {accionando ? 'Eliminando...' : 'Eliminar'}
             </AlertDialogAction>
@@ -2307,10 +2092,7 @@ export default function NominaDetalle() {
       <Dialog open={editarOpen} onOpenChange={setEditarOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Pencil className="h-5 w-5 text-primary" />
-              Editar período de la nómina
-            </DialogTitle>
+            <DialogTitle>Editar período de la nómina</DialogTitle>
             <DialogDescription>
               Modifica el mes, periodicidad o quincena. Las fechas se recalculan automáticamente.
             </DialogDescription>
@@ -2365,8 +2147,8 @@ export default function NominaDetalle() {
                     <SelectValue placeholder="Selecciona quincena" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1">Primera Quincena (1-15)</SelectItem>
-                    <SelectItem value="2">Segunda Quincena (16-fin de mes)</SelectItem>
+                    <SelectItem value="1">Primera quincena (1-15)</SelectItem>
+                    <SelectItem value="2">Segunda quincena (16-fin de mes)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -2392,7 +2174,7 @@ export default function NominaDetalle() {
               Cancelar
             </Button>
             <Button onClick={guardarEdicion} disabled={guardandoEdit}>
-              {guardandoEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              {guardandoEdit ? <Loader2 className="animate-spin" /> : <Check strokeWidth={2} />}
               Guardar cambios
             </Button>
           </DialogFooter>
@@ -2405,9 +2187,8 @@ export default function NominaDetalle() {
         <Dialog open onOpenChange={() => setModalPagoTerceroId(null)}>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-primary" />
-                Registrar Pago — {detallePagoSeleccionado?.tercero.nombre ?? terceroSeleccionadoPago.tercero_nombre}
+              <DialogTitle>
+                Registrar pago · {detallePagoSeleccionado?.tercero.nombre ?? terceroSeleccionadoPago.tercero_nombre}
               </DialogTitle>
               <DialogDescription>
                 Confirma que se realizó la transferencia a la empresa
@@ -2415,10 +2196,10 @@ export default function NominaDetalle() {
             </DialogHeader>
 
             <div className="space-y-4">
-              <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-2 text-sm">
+              <div className="space-y-2 rounded-lg bg-muted/60 p-4 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Empresa</span>
-                  <span className="font-medium">
+                  <span className="font-medium text-foreground">
                     {detallePagoSeleccionado?.tercero.nombre ?? terceroSeleccionadoPago.tercero_nombre}
                   </span>
                 </div>
@@ -2434,9 +2215,9 @@ export default function NominaDetalle() {
                   <span className="text-muted-foreground">Operarios</span>
                   <span>{detallePagoSeleccionado?.operarios.length ?? 0} personas</span>
                 </div>
-                <div className="flex justify-between pt-2 border-t border-border">
-                  <span className="font-semibold">Total a transferir</span>
-                  <span className="font-bold text-lg text-primary">
+                <div className="flex justify-between border-t border-border pt-2">
+                  <span className="font-semibold text-foreground">Total a transferir</span>
+                  <span className="font-semibold tabular-nums text-foreground">
                     ${toNumber(terceroSeleccionadoPago.total_a_transferir).toLocaleString('es-CO')}
                   </span>
                 </div>
@@ -2463,7 +2244,7 @@ export default function NominaDetalle() {
 
               {pagandoForm.metodo_pago === 'TRANSFERENCIA' && (
                 <div className="space-y-2">
-                  <Label htmlFor="nominadeta-referencia-n-de-transferencia">Referencia / N° de transferencia *</Label>
+                  <Label htmlFor="nominadeta-referencia-n-de-transferencia">Referencia de la transferencia *</Label>
                   <Input id="nominadeta-referencia-n-de-transferencia"
                     value={pagandoForm.referencia_pago}
                     onChange={(e) =>
@@ -2480,7 +2261,7 @@ export default function NominaDetalle() {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="nominadeta-n-orden-de-pago-opcional">N° orden de pago (opcional)</Label>
+                <Label htmlFor="nominadeta-n-orden-de-pago-opcional">Número de orden de pago (opcional)</Label>
                 <Input id="nominadeta-n-orden-de-pago-opcional"
                   value={pagandoForm.orden_pago_numero}
                   onChange={(e) =>
@@ -2497,7 +2278,7 @@ export default function NominaDetalle() {
                   onChange={(e) =>
                     setPagandoForm((prev) => ({ ...prev, observacion: e.target.value }))
                   }
-                  placeholder="Notas internas..."
+                  placeholder="Notas internas"
                 />
               </div>
             </div>
@@ -2517,8 +2298,8 @@ export default function NominaDetalle() {
                   || (pagandoForm.metodo_pago === 'TRANSFERENCIA' && !pagandoForm.referencia_pago)
                 }
               >
-                {registrandoPago ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                Confirmar Pago
+                {registrandoPago ? <Loader2 className="animate-spin" /> : <Check strokeWidth={2} />}
+                Confirmar pago
               </Button>
             </DialogFooter>
           </DialogContent>

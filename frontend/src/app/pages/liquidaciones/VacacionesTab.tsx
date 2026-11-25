@@ -7,14 +7,14 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Card, CardContent } from '../../components/ui/card';
+import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
-import { Input } from '../../components/ui/input';
-import { Search, Loader2, Plane, Inbox, X } from 'lucide-react';
+import { Calculator, Search, Loader2, Inbox, X } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   vacacionesApi,
+  type EstadoVencimiento,
   type MetaTurnosPendientes,
   type TurnoPendienteVacaciones,
   type VacacionItem,
@@ -23,6 +23,28 @@ import type { ApiError } from '../../../api/client';
 import { formatFecha } from '../../utils/fecha';
 import { SEMAFORO, fmtDias } from './vacaciones/comunes';
 import AnularVacacionDialog from './vacaciones/AnularVacacionDialog';
+import SeccionEncabezado from '../../components/liquidaciones/SeccionEncabezado';
+import FiltrosFila from '../../components/liquidaciones/FiltrosFila';
+import VacioCard from '../../components/liquidaciones/VacioCard';
+
+type VarianteBadge = 'destructive' | 'warning' | 'success' | 'secondary';
+
+/** Semáforo del backend pintado con las variantes de Badge del diseño. */
+const VARIANTE_SEMAFORO: Record<EstadoVencimiento, VarianteBadge> = {
+  VENCIDA: 'destructive',
+  URGENTE: 'destructive',
+  PROXIMA: 'warning',
+  CON_TIEMPO: 'success',
+  AL_DIA: 'secondary',
+};
+
+function textoVencimiento(dias: number | null): string {
+  if (dias == null) return '—';
+  if (dias < 0) return `Vencida hace ${Math.abs(dias)} días`;
+  if (dias === 0) return 'Vence hoy';
+  if (dias === 1) return 'Vence mañana';
+  return `Vence en ${dias} días`;
+}
 
 export default function VacacionesTab() {
   const navigate = useNavigate();
@@ -87,54 +109,49 @@ export default function VacacionesTab() {
   }, [busqueda]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
 
       {/* ── Solicitudes por resolver (PR-N4) ──────────────────────────────── */}
       {solicitudes.length > 0 && (
-        <div className="rounded-xl border border-warning/20 bg-warning-soft p-4">
-          <div className="flex items-start gap-3">
-            <Inbox className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
-            <div className="min-w-0 flex-1 space-y-2">
-              <p className="font-semibold text-warning">
+        <div className="flex gap-2 rounded-lg bg-warning-soft p-4">
+          <Inbox className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className="space-y-0.5">
+              <p className="text-sm font-semibold text-foreground">
                 {solicitudes.length} solicitud{solicitudes.length !== 1 ? 'es' : ''} de vacaciones por resolver
               </p>
-              <p className="text-sm text-warning">
+              <p className="text-sm text-foreground">
                 Se pidieron desde Novedades. Liquidarlas es aprobarlas; mientras no se resuelvan,
                 la nómina del período paga esos días como trabajados.
               </p>
-              <div className="space-y-1">
-                {solicitudes.map((s) => (
-                  <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/20 bg-background/60 px-3 py-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {s.empleado.nombre_completo}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {s.dias_habiles} días hábiles
-                        {s.fecha_inicio && ` desde ${formatFecha(s.fecha_inicio)}`}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setARechazar(s)}
-                        className="bg-background hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                        Rechazar
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => navigate(`/liquidaciones/vacaciones/nueva?solicitud=${s.id}`)}
-                        className="bg-success hover:bg-success/90"
-                      >
-                        Liquidar
-                      </Button>
-                    </div>
+            </div>
+            <div className="space-y-1.5">
+              {solicitudes.map((s) => (
+                <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-card px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground">{s.empleado.nombre_completo}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {s.dias_habiles} días hábiles
+                      {s.fecha_inicio && ` desde ${formatFecha(s.fecha_inicio)}`}
+                    </p>
                   </div>
-                ))}
-              </div>
+                  <div className="flex shrink-0 gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setARechazar(s)}
+                      className="hover:text-destructive"
+                    >
+                      <X strokeWidth={2} />
+                      Rechazar
+                    </Button>
+                    <Button size="sm" onClick={() => navigate(`/liquidaciones/vacaciones/nueva?solicitud=${s.id}`)}>
+                      <Calculator strokeWidth={2} />
+                      Liquidar
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -149,143 +166,118 @@ export default function VacacionesTab() {
         onAnulada={(v) => setSolicitudes((prev) => prev.filter((s) => s.id !== v.id))}
       />
 
-      {/* ── Vacaciones pendientes ─────────────────────────────────────────── */}
-      <div className="space-y-4">
-        {/* "Histórico de vacaciones" vive en el encabezado del módulo, al
-            lado de Importar: al pie quedaba debajo de la tabla y con muchos
-            colaboradores tocaba bajar hasta el final para encontrarlo. */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <h2 className="text-base font-semibold text-foreground">Vacaciones pendientes</h2>
-          <div className="relative w-full sm:w-80">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Buscar colaborador o cédula..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              className="pl-9 rounded-full"
-            />
-          </div>
-        </div>
+      {/* "Histórico de vacaciones" vive en el encabezado del módulo. */}
+      <SeccionEncabezado
+        title="Vacaciones pendientes"
+        description={
+          meta && !meta.anticipadas_habilitadas
+            ? 'Ordenadas por urgencia. Solo se liquidan períodos ya cumplidos: las anticipadas están apagadas en Configuración.'
+            : 'Ordenadas por urgencia: primero las que vencen antes.'
+        }
+      />
 
-        {meta && !meta.anticipadas_habilitadas && (
-          <p className="text-xs text-muted-foreground">
-            Solo se liquidan períodos ya cumplidos. Las vacaciones anticipadas están
-            apagadas en Configuración.
-          </p>
+      <div className="space-y-3">
+        <FiltrosFila
+          busqueda={busqueda}
+          onBusqueda={setBusqueda}
+          placeholder="Buscar colaborador o cédula"
+        />
+
+        {cargando ? (
+          <Card className="flex-row items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Cargando turnos...
+          </Card>
+        ) : filas.length === 0 ? (
+          <VacioCard
+            icon={Search}
+            title="No hay vacaciones pendientes"
+            description={busqueda ? 'Ningún colaborador coincide con la búsqueda.' : 'Nadie tiene días de vacaciones por liquidar.'}
+            action={busqueda ? <Button variant="outline" onClick={() => setBusqueda('')}>Limpiar búsqueda</Button> : undefined}
+          />
+        ) : (
+          <Card className="gap-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/60 text-[13px] font-medium text-muted-foreground">
+                  <tr>
+                    <th className="px-5 py-2.5 text-left font-semibold">Colaborador</th>
+                    <th className="hidden px-4 py-2.5 text-left font-semibold md:table-cell">Documento</th>
+                    <th className="hidden px-4 py-2.5 text-left font-semibold lg:table-cell">Fecha de ingreso</th>
+                    <th className="px-4 py-2.5 text-right font-semibold">Días pend.</th>
+                    <th className="hidden px-4 py-2.5 text-left font-semibold sm:table-cell">Vencimiento</th>
+                    <th className="hidden px-4 py-2.5 text-left font-semibold sm:table-cell">Estado</th>
+                    <th className="px-4 py-2.5"><span className="sr-only">Acciones</span></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filas.map((f) => (
+                    <FilaTurno key={f.empleado.id} fila={f} onLiquidar={() => navigate(`/liquidaciones/vacaciones/nueva?col=${f.empleado.id}`)} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         )}
-
-        <Card className="glass-subtle overflow-hidden">
-          <CardContent className="p-0">
-            {cargando ? (
-              <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                Cargando turnos
-              </div>
-            ) : filas.length === 0 ? (
-              <div className="py-16 text-center">
-                <Plane className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
-                <p className="font-medium text-foreground">No hay vacaciones pendientes</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {busqueda
-                    ? 'Ningún colaborador coincide con la búsqueda.'
-                    : 'Nadie tiene días de vacaciones por liquidar.'}
-                </p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/30">
-                      <th className="p-4 text-left text-sm font-semibold text-muted-foreground">Colaborador</th>
-                      <th className="p-4 text-left text-sm font-semibold text-muted-foreground">No. Documento</th>
-                      <th className="p-4 text-left text-sm font-semibold text-muted-foreground">Fecha de ingreso</th>
-                      <th className="p-4 text-center text-sm font-semibold text-muted-foreground">Días pendientes</th>
-                      <th className="p-4 text-left text-sm font-semibold text-muted-foreground">Vencimiento</th>
-                      <th className="p-4 text-left text-sm font-semibold text-muted-foreground">Estado</th>
-                      <th className="p-4 text-right text-sm font-semibold text-muted-foreground">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filas.map((f, idx) => {
-                      const s = SEMAFORO[f.estado_vencimiento];
-                      const esUrgente = f.estado_vencimiento === 'VENCIDA' || f.estado_vencimiento === 'URGENTE';
-                      const sinSaldo = f.dias_disponibles_exigibles <= 0;
-                      const dias = f.dias_para_vencimiento;
-                      return (
-                        <tr
-                          key={f.empleado.id}
-                          className={`border-b border-border transition-colors last:border-0 hover:bg-muted/20 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}
-                        >
-                          <td className="p-4">
-                            <span className="text-sm font-medium text-foreground">{f.empleado.nombre_completo}</span>
-                          </td>
-                          <td className="p-4">
-                            <span className="text-sm text-foreground">{f.empleado.documento}</span>
-                          </td>
-                          <td className="p-4">
-                            <span className="text-sm text-foreground">{formatFecha(f.empleado.fecha_ingreso)}</span>
-                          </td>
-                          <td className="p-4 text-center">
-                            {sinSaldo ? (
-                              <span className="text-sm text-muted-foreground">—</span>
-                            ) : (
-                              <div className="flex flex-col items-center">
-                                <span className="text-sm font-bold text-warning">
-                                  {fmtDias(f.dias_disponibles_exigibles)}
-                                </span>
-                                {f.dias_causados_periodo_actual > 0 && (
-                                  <span className="text-xs text-muted-foreground">
-                                    +{fmtDias(f.dias_causados_periodo_actual)} en curso
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </td>
-                          <td className="p-4">
-                            {f.fecha_vencimiento == null ? (
-                              <span className="text-sm text-muted-foreground">—</span>
-                            ) : (
-                              <div className="flex flex-col">
-                                <span className={`text-sm font-semibold ${esUrgente ? 'text-destructive' : 'text-foreground'}`}>
-                                  {dias == null
-                                    ? '—'
-                                    : dias < 0 ? `Vencida hace ${Math.abs(dias)} días`
-                                    : dias === 0 ? 'Vence hoy'
-                                    : dias === 1 ? 'Vence mañana'
-                                    : `Vence en ${dias} días`}
-                                </span>
-                                <span className="text-xs text-muted-foreground">{formatFecha(f.fecha_vencimiento)}</span>
-                              </div>
-                            )}
-                          </td>
-                          <td className="p-4">
-                            <Badge variant="outline" className={s.badge}>{s.label}</Badge>
-                          </td>
-                          <td className="p-4">
-                            <div className="flex justify-end">
-                              {sinSaldo ? (
-                                <span className="text-xs text-muted-foreground">Sin pendientes</span>
-                              ) : (
-                                <Button
-                                  size="sm"
-                                  onClick={() => navigate(`/liquidaciones/vacaciones/nueva?col=${f.empleado.id}`)}
-                                >
-                                  Liquidar
-                                </Button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
-
     </div>
+  );
+}
+
+function FilaTurno({ fila: f, onLiquidar }: { fila: TurnoPendienteVacaciones; onLiquidar: () => void }) {
+  const s = SEMAFORO[f.estado_vencimiento];
+  const variante = VARIANTE_SEMAFORO[f.estado_vencimiento];
+  const esUrgente = f.estado_vencimiento === 'VENCIDA' || f.estado_vencimiento === 'URGENTE';
+  const sinSaldo = f.dias_disponibles_exigibles <= 0;
+  return (
+    <tr className="transition-colors hover:bg-muted/40">
+      <td className="px-5 py-3">
+        <span className="font-semibold text-foreground">{f.empleado.nombre_completo}</span>
+        <span className="mt-1 block sm:hidden">
+          <Badge variant={variante}>{s.label}</Badge>
+        </span>
+      </td>
+      <td className="hidden px-4 py-3 tabular-nums text-muted-foreground md:table-cell">{f.empleado.documento}</td>
+      <td className="hidden px-4 py-3 text-muted-foreground lg:table-cell">{formatFecha(f.empleado.fecha_ingreso)}</td>
+      <td className="px-4 py-3 text-right font-semibold tabular-nums text-foreground">
+        {sinSaldo ? (
+          <span className="font-normal text-muted-foreground">—</span>
+        ) : (
+          <>
+            {fmtDias(f.dias_disponibles_exigibles)}
+            {f.dias_causados_periodo_actual > 0 && (
+              <span className="block text-xs font-normal text-muted-foreground">
+                +{fmtDias(f.dias_causados_periodo_actual)} en curso
+              </span>
+            )}
+          </>
+        )}
+      </td>
+      <td className="hidden px-4 py-3 sm:table-cell">
+        {f.fecha_vencimiento == null ? (
+          <span className="text-muted-foreground">—</span>
+        ) : (
+          <>
+            <span className={esUrgente ? 'font-medium text-destructive' : 'text-foreground'}>
+              {textoVencimiento(f.dias_para_vencimiento)}
+            </span>
+            <span className="block text-xs text-muted-foreground">{formatFecha(f.fecha_vencimiento)}</span>
+          </>
+        )}
+      </td>
+      <td className="hidden px-4 py-3 sm:table-cell">
+        <Badge variant={variante}>{s.label}</Badge>
+      </td>
+      <td className="px-4 py-3 text-right">
+        {sinSaldo ? (
+          <span className="text-xs text-muted-foreground">Sin pendientes</span>
+        ) : (
+          <Button variant="outline" size="sm" onClick={onLiquidar}>
+            <Calculator strokeWidth={2} />
+            Liquidar
+          </Button>
+        )}
+      </td>
+    </tr>
   );
 }

@@ -10,6 +10,8 @@
  * se muestra solo cuando `diasPerdidos > 0`.
  */
 
+import { estiloDetalle } from './estiloDetalle';
+
 export interface DescansoItem {
   fecha: string;
   tipo: 'DOMINICAL' | 'FESTIVO';
@@ -64,94 +66,62 @@ export function DetalleDescansos({
   if (!items || items.length === 0) return null;
 
   const isCompact = variant === 'compact';
-  // Anchos fijos en las columnas numéricas para que cada valor caiga debajo
-  // de su header. Con `auto` el "—" (más angosto que el título) se colapsaba
-  // al lado derecho y dejaba las dos celdas apretadas bajo "Recargo".
-  const gridCols = isCompact
-    ? 'grid-cols-[80px_70px_1fr_90px_90px]'
-    : 'grid-cols-[100px_90px_1fr_120px_120px]';
-  const headerText = isCompact ? 'text-[10px]' : 'text-xs';
-  const rowText = 'text-xs';
-  const container = isCompact
-    ? 'bg-muted/30 rounded-lg p-3 border border-border'
-    : 'rounded-lg border border-border overflow-hidden';
-  const notaText = isCompact
-    ? 'text-[10px] text-muted-foreground mt-2 italic'
-    : 'text-xs text-muted-foreground mt-2 leading-relaxed';
+  const e = estiloDetalle(variant);
 
   return (
     <div>
-      {titulo && !isCompact && (
-        <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
-          {titulo}
-        </h3>
-      )}
-      {titulo && isCompact && (
-        <h3 className="font-bold text-xs uppercase mb-2">{titulo}</h3>
-      )}
-      <div className={container}>
-        <div
-          className={`grid ${gridCols} ${headerText} font-medium text-muted-foreground ${
-            isCompact ? 'pb-1 mb-1 border-b border-border' : 'px-4 py-2 bg-muted/40 border-b'
-          }`}
-        >
-          <span>Fecha</span>
-          <span>Tipo</span>
-          <span>{isCompact ? 'Estado' : 'Estado / motivo'}</span>
-          <span className="text-right pr-2">Descanso</span>
-          <span className="text-right">Recargo</span>
-        </div>
-        {items.map((d) => {
-          // §9.9 — El backend puede enviar `resultado` (PAGADO / PERDIDO / SUSPENDIDO)
-          // y no siempre incluye el flag `pagado`. Derivamos localmente para no
-          // pintar "—" cuando el día sí fue pagado.
-          const esPagado = d.pagado ?? d.resultado === 'PAGADO';
-          // Un día suspendido no es una pérdida: el trabajador no dejó de
-          // ganarlo por faltar. Solo se pinta en rojo lo que sí se perdió.
-          const esSuspendido = d.resultado === 'SUSPENDIDO_VACACIONES'
-            || d.resultado === 'SUSPENDIDO_INCAPACIDAD';
-          const alerta = !esPagado && !esSuspendido;
-          const valorDescanso = Number(d.valor_descanso ?? 0);
-          const valorRecargo = Number(d.valor_recargo ?? 0);
-          return (
-            <div
-              key={d.fecha}
-              className={`grid ${gridCols} ${rowText} ${
-                isCompact
-                  ? 'py-0.5'
-                  : `px-4 py-2 border-b last:border-b-0 ${alerta ? 'bg-destructive/5' : ''}`
-              }`}
-            >
-              <span className="font-mono">{d.fecha}</span>
-              <span>{d.tipo === 'DOMINICAL' ? 'Dominical' : 'Festivo'}</span>
-              <span className={alerta ? 'text-destructive' : ''}>
-                {esPagado
-                  ? (d.nombre ?? d.nombre_festivo ?? 'Pagado')
-                  : (d.motivo ?? RESULTADO_LABEL[d.resultado ?? ''] ?? d.resultado ?? 'No pagado')}
-              </span>
-              {/* Descanso: pintamos el valor cuando exista, aunque el día no
-                  esté PAGADO (para SUSPENDIDO_INCAPACIDAD suele venir 0 y sale
-                  "—" naturalmente). */}
-              <span className="text-right pr-2 font-semibold">
-                {valorDescanso > 0 ? formatMoney(valorDescanso) : '—'}
-              </span>
-              {/* Recargo: solo si el colaborador TRABAJÓ ese día (art. 179).
-                  Si no hay valor o no trabajó, sale "—". */}
-              <span className="text-right font-semibold">
-                {valorRecargo > 0 ? formatMoney(valorRecargo) : '—'}
-              </span>
-            </div>
-          );
-        })}
+      {titulo && <h4 className={e.titulo}>{titulo}</h4>}
+      <div className={e.marco}>
+        <table className={e.tabla}>
+          <thead>
+            <tr className={e.encabezado}>
+              <th className={`${e.th} text-left`}>Fecha</th>
+              <th className={`${e.th} text-left`}>Tipo</th>
+              <th className={`${e.th} text-left`}>{isCompact ? 'Estado' : 'Estado o motivo'}</th>
+              <th className={`${e.th} text-right`}>Descanso</th>
+              <th className={`${e.th} text-right`}>Recargo</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {items.map((d) => {
+              // §9.9 — El backend puede enviar `resultado` sin el flag
+              // `pagado`. Derivamos localmente para no pintar "—" cuando el
+              // día sí fue pagado.
+              const esPagado = d.pagado ?? d.resultado === 'PAGADO';
+              const valorDescanso = Number(d.valor_descanso ?? 0);
+              const valorRecargo = Number(d.valor_recargo ?? 0);
+              return (
+                <tr key={d.fecha}>
+                  <td className={`${e.td} whitespace-nowrap tabular-nums text-muted-foreground`}>{d.fecha}</td>
+                  <td className={e.td}>{d.tipo === 'DOMINICAL' ? 'Dominical' : 'Festivo'}</td>
+                  <td className={`${e.td} ${esPagado ? 'text-muted-foreground' : 'text-foreground'}`}>
+                    {esPagado
+                      ? (d.nombre ?? d.nombre_festivo ?? 'Pagado')
+                      : (d.motivo ?? RESULTADO_LABEL[d.resultado ?? ''] ?? d.resultado ?? 'No pagado')}
+                  </td>
+                  {/* Descanso: el valor cuando exista, aunque el día no esté
+                      PAGADO (en SUSPENDIDO_INCAPACIDAD suele venir 0). */}
+                  <td className={`${e.td} whitespace-nowrap text-right tabular-nums`}>
+                    {valorDescanso > 0 ? formatMoney(valorDescanso) : '-'}
+                  </td>
+                  {/* Recargo: solo si el colaborador trabajó ese día (art. 179). */}
+                  <td className={`${e.td} whitespace-nowrap text-right tabular-nums`}>
+                    {valorRecargo > 0 ? formatMoney(valorRecargo) : '-'}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
       {(diasPerdidos ?? 0) > 0 && (
-        <p className={notaText}>
-          <strong>Nota (art. 173 num. 1 CST):</strong>{' '}
+        <p className={e.nota}>
+          <span className="font-medium text-foreground">Nota (art. 173 num. 1 CST):</span>{' '}
           se pierden {diasPerdidos} descanso{diasPerdidos !== 1 ? 's' : ''} por inasistencia sin justa causa en la semana previa
           {(totalDescansoPerdido ?? 0) > 0 && (
             <>
-              . El monto no percibido —informativo, no se descuenta— asciende a{' '}
-              <strong>{formatMoney(totalDescansoPerdido!)}</strong>
+              . El monto no percibido, informativo y sin descuento, asciende a{' '}
+              <span className="font-medium text-foreground">{formatMoney(totalDescansoPerdido!)}</span>
             </>
           )}
           .

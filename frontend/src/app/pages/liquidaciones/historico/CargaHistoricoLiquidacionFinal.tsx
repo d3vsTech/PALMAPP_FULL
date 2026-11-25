@@ -14,7 +14,9 @@
  */
 import { Fragment, useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
+import { Card, CardContent, CardHeader } from '../../../components/ui/card';
+import PageHeader from '../../../components/common/PageHeader';
+import StatStrip from '../../../components/common/StatStrip';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
 import { Label } from '../../../components/ui/label';
@@ -28,11 +30,9 @@ import {
 } from '../../../components/ui/select';
 import {
   AlertTriangle,
-  ArrowLeft,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  FileText,
   Info,
   Loader2,
   Upload,
@@ -49,13 +49,17 @@ import {
 } from '../../../../api/historicoLiquidacionFinal';
 import {
   ACCEPT_ARCHIVO,
-  ESTADO_FILA_BADGE,
   ESTADO_FILA_LABEL,
   HistoricoArchivoErrorCodes as E,
   MAX_FILAS_ARCHIVO,
 } from '../../../../api/historicoComun';
 import { descargarBlob, fmtCOP, fmtFecha } from '../final/comunes';
 import {
+  Aviso,
+  BadgeEstadoFila,
+  TD,
+  TH,
+  THEAD,
   BotonesPlantilla,
   CabecerasIgnoradas,
   CeldaColaborador,
@@ -243,37 +247,19 @@ export default function CargaHistoricoLiquidacionFinal() {
   const aCargar = (resumen?.validas ?? 0) + (resumen?.a_sobrescribir ?? 0);
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate('/liquidaciones?tab=liquidacion-final')}
-          
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Volver a Liquidaciones
-        </Button>
-
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-            <FileText className="h-6 w-6 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-primary sm:text-3xl">Cargar histórico de liquidaciones</h1>
-            <p className="mt-0.5 text-muted-foreground">
-              Registre las liquidaciones finales que ya pagó antes de usar el sistema. Un archivo
-              por año de retiro.
-            </p>
-          </div>
-        </div>
-      </div>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeader
+        backTo="/liquidaciones?tab=liquidacion-final"
+        eyebrow="Liquidación final"
+        title="Cargar histórico de liquidaciones"
+        description="Registre las liquidaciones finales que ya pagó antes de usar el sistema. Un archivo por año de retiro."
+      />
 
       {/* Paso 1: plantilla. El año no va dentro del archivo. */}
       <PasoCard
         n={1}
         titulo="Descarga la plantilla"
-        subtitulo="Usa esta plantilla para preparar tus datos correctamente"
+        subtitulo="Prepara tus datos con las columnas que espera el sistema."
         accion={
           <BotonesPlantilla
             descargando={descargandoPlantilla}
@@ -296,7 +282,7 @@ export default function CargaHistoricoLiquidacionFinal() {
       <PasoCard
         n={2}
         titulo="Carga tu archivo"
-        subtitulo="Arrastra el archivo o haz clic para seleccionarlo"
+        subtitulo="Arrastra el archivo o haz clic para seleccionarlo."
       >
         {/* El año va aquí y no en el paso 1: el paso 1 solo baja la plantilla,
             y el año define contra qué se valida este archivo. */}
@@ -350,57 +336,41 @@ export default function CargaHistoricoLiquidacionFinal() {
 
       {/* Paso 3: revisión */}
       {analisis && resumen && (
-        <Card>
-          <CardHeader className="border-b">
-            <CardTitle>3. Revise antes de cargar</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 p-6">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-lg border border-border p-3">
-                <p className="text-xs text-muted-foreground">Se cargan</p>
-                <p className="text-2xl font-bold text-success">{resumen.validas}</p>
-                <p className="text-xs text-muted-foreground">
-                  {resumen.colaboradores} colaborador{resumen.colaboradores === 1 ? '' : 'es'}
-                </p>
-              </div>
-              <div className="rounded-lg border border-border p-3">
-                <p className="text-xs text-muted-foreground">Reemplazan</p>
-                <p className="text-2xl font-bold text-warning">{resumen.a_sobrescribir}</p>
-              </div>
-              <div className="rounded-lg border border-border p-3">
-                <p className="text-xs text-muted-foreground">Con error</p>
-                <p
-                  className={`text-2xl font-bold ${
-                    hayErrores ? 'text-destructive' : 'text-muted-foreground'
-                  }`}
-                >
-                  {resumen.con_error}
-                </p>
-              </div>
-              <div className="rounded-lg border border-border p-3">
-                <p className="text-xs text-muted-foreground">Neto total</p>
-                <p className="text-lg font-bold text-foreground">{fmtCOP(resumen.total_neto)}</p>
-                <p className="text-xs text-muted-foreground">
-                  {fmtCOP(resumen.total_devengado)} − {fmtCOP(resumen.total_deducciones)}
-                </p>
-              </div>
-            </div>
+        <PasoCard
+          n={3}
+          titulo="Revisa los datos"
+          subtitulo="Confirma que todo esté bien antes de cargarlo."
+        >
+            <StatStrip
+              items={[
+                {
+                  label: 'Se cargan',
+                  value: resumen.validas,
+                  note: `${resumen.colaboradores} colaborador${resumen.colaboradores === 1 ? '' : 'es'}`,
+                },
+                { label: 'Reemplazan', value: resumen.a_sobrescribir },
+                {
+                  label: 'Con error',
+                  value: hayErrores ? <span className="text-destructive">{resumen.con_error}</span> : resumen.con_error,
+                },
+                {
+                  label: 'Neto total',
+                  value: fmtCOP(resumen.total_neto),
+                  note: `${fmtCOP(resumen.total_devengado)} − ${fmtCOP(resumen.total_deducciones)}`,
+                },
+              ]}
+            />
 
             {/* Los dos contadores que la pantalla debe dejar ver: una fila sin
                 contrato no impide volver a liquidar ese contrato desde la
                 pestaña, y una sin desglose se guarda como un solo concepto. */}
             {(resumen.sin_contrato > 0 || resumen.sin_desglose > 0) && (
-              <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+              <div className="flex flex-wrap gap-2">
                 {resumen.sin_contrato > 0 && (
-                  <span className="flex items-center gap-1.5 rounded-full border border-warning/20 bg-warning-soft px-3 py-1 text-warning">
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                    {resumen.sin_contrato} sin contrato enlazado
-                  </span>
+                  <Badge variant="warning">{resumen.sin_contrato} sin contrato enlazado</Badge>
                 )}
                 {resumen.sin_desglose > 0 && (
-                  <span className="rounded-full border border-border px-3 py-1">
-                    {resumen.sin_desglose} solo con el total
-                  </span>
+                  <Badge variant="secondary">{resumen.sin_desglose} solo con el total</Badge>
                 )}
               </div>
             )}
@@ -416,14 +386,14 @@ export default function CargaHistoricoLiquidacionFinal() {
             ))}
 
             {hayYaCargados && (
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-warning/20 bg-warning-soft p-4">
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg bg-warning-soft p-4">
                 <Checkbox
                   checked={sobrescribir}
                   onCheckedChange={(v) => cambiarSobrescribir(v === true)}
                   className="mt-0.5"
                 />
                 <div>
-                  <p className="text-sm font-medium">Reemplazar las que ya estaban cargadas</p>
+                  <p className="text-sm font-medium text-foreground">Reemplazar las que ya estaban cargadas</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     La liquidación anterior se borra y la nueva queda con{' '}
                     <strong>otro número LIQ-</strong>: un comprobante ya entregado conserva el
@@ -436,17 +406,16 @@ export default function CargaHistoricoLiquidacionFinal() {
             <TablaFilasLiquidacion filas={analisis.filas} />
 
             {hayErrores && (
-              <p className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <Aviso tono="destructive" icono={AlertTriangle}>
                 Hay {resumen.con_error} fila{resumen.con_error === 1 ? '' : 's'} con error. El
                 cargue es todo o nada: corrija el archivo y vuelva a subirlo.
-              </p>
+              </Aviso>
             )}
 
             {cargado ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-success/30 bg-success/5 p-4">
-                <p className="flex items-center gap-2 text-sm font-medium text-success">
-                  <CheckCircle2 className="h-4 w-4" />
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-success-soft p-4">
+                <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <CheckCircle2 className="h-4 w-4 text-success" strokeWidth={2} />
                   Liquidaciones de {analisis.anio} cargadas.
                 </p>
                 <div className="flex gap-2">
@@ -467,28 +436,26 @@ export default function CargaHistoricoLiquidacionFinal() {
                 <Button
                   onClick={() => void cargar()}
                   disabled={!listoParaCargar || !puedeCargar}
-                  
                 >
                   {cargando ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="animate-spin" strokeWidth={2} />
                   ) : (
-                    <Upload className="h-4 w-4" />
+                    <Upload strokeWidth={2} />
                   )}
                   Cargar {aCargar} liquidación{aCargar === 1 ? '' : 'es'}
                 </Button>
               </div>
             )}
-          </CardContent>
-        </Card>
+        </PasoCard>
       )}
 
       {/* Las mismas reglas que trae la hoja de instrucciones de la plantilla,
           aquí donde se leen antes de subir el archivo. */}
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle className="text-base">Cómo llenar el archivo</CardTitle>
+      <Card className="gap-4">
+        <CardHeader>
+          <h3>Cómo llenar el archivo</h3>
         </CardHeader>
-        <CardContent className="space-y-5 p-6">
+        <CardContent className="space-y-5">
           <div className="space-y-2 text-sm text-muted-foreground">
             <Regla n={1}>
               <strong className="text-foreground">El colaborador debe existir.</strong> El cargue
@@ -552,12 +519,11 @@ export default function CargaHistoricoLiquidacionFinal() {
             </Regla>
           </div>
 
-          <p className="flex items-start gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
+          <Aviso tono="warning" icono={AlertTriangle}>
             Si este archivo se sube por error a la pantalla de cesantías o de prima, esas lo
             rechazan por cabeceras. Los prefijos <code>liq_</code> y <code>ded_</code> existen
             justamente para eso.
-          </p>
+          </Aviso>
         </CardContent>
       </Card>
     </div>
@@ -576,31 +542,31 @@ function TablaFilasLiquidacion({ filas }: { filas: FilaHistoricoLiquidacionFinal
   const [abierta, setAbierta] = useState<number | null>(null);
 
   if (filas.length === 0) {
-    return <p className="py-6 text-center text-sm text-muted-foreground">El archivo está vacío.</p>;
+    return <p className="rounded-lg bg-muted/60 py-6 text-center text-sm text-muted-foreground">El archivo está vacío.</p>;
   }
 
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full">
-        <thead>
-          <tr className="border-b border-border bg-muted/30">
-            <th className="w-8 p-3" />
-            <th className="p-3 text-left text-xs font-semibold text-muted-foreground">Fila</th>
-            <th className="p-3 text-left text-xs font-semibold text-muted-foreground">
+      <table className="w-full text-sm">
+        <thead className={THEAD}>
+          <tr>
+            <th className="w-8 px-4 py-2.5" />
+            <th className={TH}>Fila</th>
+            <th className={TH}>
               Colaborador
             </th>
-            <th className="p-3 text-left text-xs font-semibold text-muted-foreground">Retiro</th>
-            <th className="hidden p-3 text-left text-xs font-semibold text-muted-foreground lg:table-cell">
+            <th className={TH}>Retiro</th>
+            <th className={`${TH} hidden lg:table-cell`}>
               Motivo
             </th>
-            <th className="hidden p-3 text-left text-xs font-semibold text-muted-foreground md:table-cell">
+            <th className={`${TH} hidden md:table-cell`}>
               Contrato
             </th>
-            <th className="p-3 text-right text-xs font-semibold text-muted-foreground">Neto</th>
-            <th className="p-3 text-left text-xs font-semibold text-muted-foreground">Estado</th>
+            <th className={`${TH} text-right`}>Neto</th>
+            <th className={TH}>Estado</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-border">
           {filas.map((f) => {
             const l = f.liquidacion;
             const t = l?.totales;
@@ -611,11 +577,9 @@ function TablaFilasLiquidacion({ filas }: { filas: FilaHistoricoLiquidacionFinal
             return (
               <Fragment key={f.fila}>
                 <tr
-                  className={`border-b border-border last:border-0 ${
-                    f.estado === 'ERROR' ? 'bg-destructive/[0.03]' : ''
-                  }`}
+                  className={f.estado === 'ERROR' ? 'bg-destructive-soft/40' : undefined}
                 >
-                  <td className="p-3 align-top">
+                  <td className={TD}>
                     {expandible && (
                       <button
                         type="button"
@@ -624,17 +588,17 @@ function TablaFilasLiquidacion({ filas }: { filas: FilaHistoricoLiquidacionFinal
                         aria-label={abierto ? 'Ocultar conceptos' : 'Ver conceptos'}
                       >
                         {abierto ? (
-                          <ChevronDown className="h-4 w-4" />
+                          <ChevronDown className="h-4 w-4" strokeWidth={2} />
                         ) : (
-                          <ChevronRight className="h-4 w-4" />
+                          <ChevronRight className="h-4 w-4" strokeWidth={2} />
                         )}
                       </button>
                     )}
                   </td>
 
-                  <td className="p-3 align-top text-sm text-muted-foreground">{f.fila}</td>
+                  <td className={`${TD} text-muted-foreground`}>{f.fila}</td>
 
-                  <td className="p-3 align-top">
+                  <td className={TD}>
                     <CeldaColaborador
                       nombre={f.empleado?.nombre_completo}
                       documento={f.empleado?.documento}
@@ -650,8 +614,8 @@ function TablaFilasLiquidacion({ filas }: { filas: FilaHistoricoLiquidacionFinal
                     />
                   </td>
 
-                  <td className="p-3 align-top">
-                    <p className="text-sm">{l ? fmtFecha(l.fecha_retiro) : '—'}</p>
+                  <td className={TD}>
+                    <p className="text-foreground">{l ? fmtFecha(l.fecha_retiro) : '—'}</p>
                     {l?.dias_servicio != null && (
                       <p className="text-xs text-muted-foreground">
                         {l.dias_servicio} días de servicio
@@ -659,14 +623,14 @@ function TablaFilasLiquidacion({ filas }: { filas: FilaHistoricoLiquidacionFinal
                     )}
                   </td>
 
-                  <td className="hidden p-3 align-top lg:table-cell">
-                    <p className="text-sm">{l?.motivo_etiqueta ?? '—'}</p>
+                  <td className={`${TD} hidden lg:table-cell`}>
+                    <p className="text-foreground">{l?.motivo_etiqueta ?? '—'}</p>
                     {l?.motivo_por_defecto && (
                       <p className="text-xs text-muted-foreground">por defecto</p>
                     )}
                   </td>
 
-                  <td className="hidden p-3 align-top md:table-cell">
+                  <td className={`${TD} hidden md:table-cell`}>
                     {l ? (
                       <span
                         className={`text-xs ${
@@ -682,8 +646,8 @@ function TablaFilasLiquidacion({ filas }: { filas: FilaHistoricoLiquidacionFinal
                     )}
                   </td>
 
-                  <td className="p-3 align-top text-right">
-                    <p className="text-sm font-medium">{t ? fmtCOP(t.total_neto) : '—'}</p>
+                  <td className={`${TD} text-right`}>
+                    <p className="font-medium tabular-nums text-foreground">{t ? fmtCOP(t.total_neto) : '—'}</p>
                     {descuadre && (
                       <p className="text-xs text-destructive">
                         archivo: {fmtCOP(t.neto_archivo)}
@@ -694,16 +658,16 @@ function TablaFilasLiquidacion({ filas }: { filas: FilaHistoricoLiquidacionFinal
                     )}
                   </td>
 
-                  <td className="p-3 align-top">
-                    <Badge variant="outline" className={ESTADO_FILA_BADGE[f.estado]}>
+                  <td className={TD}>
+                    <BadgeEstadoFila estado={f.estado}>
                       {ESTADO_FILA_LABEL[f.estado]}
-                    </Badge>
+                    </BadgeEstadoFila>
                   </td>
                 </tr>
 
                 {abierto && l && (
-                  <tr className="border-b border-border bg-muted/20">
-                    <td colSpan={8} className="p-4">
+                  <tr className="bg-muted/30">
+                    <td colSpan={8} className="px-4 py-4">
                       <div className="grid gap-6 sm:grid-cols-2">
                         <div>
                           <p className="mb-2 text-xs font-semibold text-muted-foreground">
@@ -718,7 +682,7 @@ function TablaFilasLiquidacion({ filas }: { filas: FilaHistoricoLiquidacionFinal
                                     <span className="text-muted-foreground"> · {c.dias} días</span>
                                   )}
                                 </span>
-                                <span className="font-medium">{fmtCOP(c.valor)}</span>
+                                <span className="font-medium tabular-nums">{fmtCOP(c.valor)}</span>
                               </li>
                             ))}
                           </ul>
@@ -734,7 +698,7 @@ function TablaFilasLiquidacion({ filas }: { filas: FilaHistoricoLiquidacionFinal
                               {l.conceptos.deducciones.map((c) => (
                                 <li key={c.codigo} className="flex justify-between gap-4 text-sm">
                                   <span>{c.nombre}</span>
-                                  <span className="font-medium">{fmtCOP(c.valor)}</span>
+                                  <span className="font-medium tabular-nums">{fmtCOP(c.valor)}</span>
                                 </li>
                               ))}
                             </ul>

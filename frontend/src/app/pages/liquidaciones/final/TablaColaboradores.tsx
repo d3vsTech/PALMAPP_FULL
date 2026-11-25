@@ -27,7 +27,6 @@ import {
   Loader2,
   Search,
   UserCheck,
-  Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { colaboradoresApi, type Colaborador } from '../../../../api/colaboradores';
@@ -138,15 +137,15 @@ export function TablaColaboradores({
   // Ya hay uno elegido: se muestra plegado hasta que pidan cambiarlo.
   if (seleccionado && !cambiando) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-primary/30 bg-primary/5 p-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-primary bg-primary-soft p-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
             {getIniciales(seleccionado.nombre_completo)}
           </div>
           <div className="min-w-0">
-            <p className="truncate font-medium">{seleccionado.nombre_completo}</p>
+            <p className="truncate font-medium text-foreground">{seleccionado.nombre_completo}</p>
             <p className="truncate text-xs text-muted-foreground">
-              CC {seleccionado.documento}
+              C.C. {seleccionado.documento}
               {seleccionado.cargo ? ` · ${seleccionado.cargo}` : ''}
             </p>
           </div>
@@ -163,47 +162,48 @@ export function TablaColaboradores({
 
   return (
     <div className="space-y-3">
-      <div className="relative">
-        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+      <div className="relative w-full sm:w-72">
+        <Search
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          strokeWidth={2}
+        />
         <Input
+          type="search"
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar por nombre o cédula..."
+          placeholder="Buscar por nombre o cédula"
           className="pl-9"
         />
         {cargando && (
-          <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-muted-foreground" />
+          <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-border bg-muted/30">
-              <th className="p-3 text-left text-xs font-semibold text-muted-foreground">
-                Colaborador
-              </th>
-              <th className="p-3 text-left text-xs font-semibold text-muted-foreground">Cédula</th>
-              <th className="hidden p-3 text-left text-xs font-semibold text-muted-foreground sm:table-cell">
-                Modalidad
-              </th>
-              <th className="hidden p-3 text-left text-xs font-semibold text-muted-foreground md:table-cell">
-                Ingreso
-              </th>
-              <th className="p-3 text-right text-xs font-semibold text-muted-foreground">Acción</th>
+      <div className="overflow-hidden rounded-lg border border-border">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/60 text-[13px] font-medium text-muted-foreground">
+            <tr>
+              <th className="px-4 py-2.5 text-left font-semibold">Colaborador</th>
+              <th className="px-4 py-2.5 text-left font-semibold">Cédula</th>
+              <th className="hidden px-4 py-2.5 text-left font-semibold sm:table-cell">Modalidad</th>
+              <th className="hidden px-4 py-2.5 text-left font-semibold md:table-cell">Fecha de ingreso</th>
+              <th className="px-4 py-2.5 text-right font-semibold"><span className="sr-only">Acción</span></th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-border">
             {cargando ? (
               <tr>
-                <td colSpan={5} className="py-10 text-center">
-                  <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
+                <td colSpan={5} className="py-10">
+                  <span className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Cargando colaboradores...
+                  </span>
                 </td>
               </tr>
             ) : filas.length === 0 ? (
               <tr>
                 <td colSpan={5} className="py-10 text-center">
-                  <Users className="mx-auto mb-2 h-7 w-7 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
                     {termino
                       ? 'Ningún colaborador coincide con esa búsqueda'
@@ -212,28 +212,23 @@ export function TablaColaboradores({
                 </td>
               </tr>
             ) : (
-              filas.map((c, i) => (
-                <tr
-                  key={c.id}
-                  className={`border-b border-border transition-colors last:border-0 hover:bg-muted/20 ${
-                    i % 2 === 0 ? 'bg-background' : 'bg-muted/5'
-                  }`}
-                >
-                  <td className="p-3">
+              filas.map((c) => (
+                <tr key={c.id} className="transition-colors hover:bg-muted/40">
+                  <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
                         {getIniciales(c.nombre_completo)}
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{c.nombre_completo}</p>
+                        <p className="truncate font-medium text-foreground">{c.nombre_completo}</p>
                         <p className="truncate text-xs text-muted-foreground">{c.cargo ?? '—'}</p>
                       </div>
                     </div>
                   </td>
 
-                  <td className="p-3 text-sm text-muted-foreground">{c.documento}</td>
+                  <td className="px-4 py-3 tabular-nums text-muted-foreground">{c.documento}</td>
 
-                  <td className="hidden p-3 text-sm text-muted-foreground sm:table-cell">
+                  <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
                     {c.modalidad_pago === 'FIJO'
                       ? 'Fijo'
                       : c.modalidad_pago === 'PRODUCCION'
@@ -241,31 +236,29 @@ export function TablaColaboradores({
                         : '—'}
                   </td>
 
-                  <td className="hidden p-3 text-sm text-muted-foreground md:table-cell">
+                  <td className="hidden px-4 py-3 tabular-nums text-muted-foreground md:table-cell">
                     {fmtFecha(c.fecha_ingreso)}
                   </td>
 
-                  <td className="p-3">
+                  <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">
                       {c.fecha_retiro && (
-                        <Badge variant="outline" className="text-[10px]">
-                          Retirado {fmtFecha(c.fecha_retiro)}
-                        </Badge>
+                        <Badge variant="secondary">Retirado {fmtFecha(c.fecha_retiro)}</Badge>
                       )}
                       <Button
                         type="button"
                         size="sm"
+                        variant="outline"
                         disabled={cargandoId != null}
                         onClick={() => {
                           onSeleccionar(c.id);
                           setCambiando(false);
                         }}
-                        
                       >
                         {cargandoId === c.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <Loader2 className="animate-spin" />
                         ) : (
-                          <UserCheck className="h-3.5 w-3.5" />
+                          <UserCheck strokeWidth={2} />
                         )}
                         {etiquetaAccion}
                       </Button>
@@ -276,12 +269,13 @@ export function TablaColaboradores({
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {total > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-muted-foreground">
-            {filas.length} de <span className="font-medium text-foreground">{total}</span>{' '}
+          <p className="text-sm text-muted-foreground">
+            Mostrando <span className="font-medium text-foreground">{filas.length}</span> de <span className="font-medium text-foreground">{total}</span>{' '}
             colaborador{total === 1 ? '' : 'es'}
             {termino ? ' con esa búsqueda' : ''}
           </p>
@@ -294,12 +288,11 @@ export function TablaColaboradores({
                 variant="outline"
                 disabled={pagina <= 1 || cargando}
                 onClick={() => setPagina((p) => Math.max(1, p - 1))}
-                
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft strokeWidth={2} />
                 Anterior
               </Button>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm tabular-nums text-muted-foreground">
                 {pagina} de {ultimaPagina}
               </span>
               <Button
@@ -308,10 +301,9 @@ export function TablaColaboradores({
                 variant="outline"
                 disabled={pagina >= ultimaPagina || cargando}
                 onClick={() => setPagina((p) => p + 1)}
-                
               >
                 Siguiente
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight strokeWidth={2} />
               </Button>
             </div>
           )}

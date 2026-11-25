@@ -14,6 +14,7 @@
  *   una nómina inmutable y la interrupción ya no es posible.
  */
 import { Link } from 'react-router';
+import { Ban } from 'lucide-react';
 import { Button } from '../ui/button';
 import type {
   BloqueoCierre,
@@ -35,7 +36,7 @@ function FilaColaborador({ col }: { col: ColaboradorConNovedadesPendientes }) {
   const vacaciones = col.vacaciones ?? [];
 
   return (
-    <li className="rounded-lg border border-destructive/20 bg-background/60 p-2.5">
+    <li className="rounded-md bg-card p-3">
       <p className="text-sm font-medium text-foreground">{col.nombre_completo}</p>
       <p className="text-xs text-muted-foreground">{col.documento}</p>
       <ul className="mt-1.5 space-y-1">
@@ -81,7 +82,7 @@ function FilaVacacionTrabajada({
   onInterrumpir?: (v: VacacionTrabajadaEnNomina) => void;
 }) {
   return (
-    <li className="rounded-lg border border-destructive/20 bg-background/60 p-2.5">
+    <li className="rounded-md bg-card p-3">
       <p className="text-sm font-medium text-foreground">{col.nombre_completo}</p>
       <p className="text-xs text-muted-foreground">{col.documento}</p>
       <ul className="mt-1.5 space-y-1.5">
@@ -98,7 +99,7 @@ function FilaVacacionTrabajada({
               <Button
                 size="sm"
                 variant="outline"
-                className="h-6 px-2 text-[11px]"
+                className="h-7"
                 onClick={() => onInterrumpir(v)}
                 title={v.fecha_reintegro_sugerida
                   ? `La planilla dice que volvió el ${formatFecha(v.fecha_reintegro_sugerida)}`
@@ -129,47 +130,50 @@ export function BloqueosCierre({
   if (bloqueos.length === 0) return null;
 
   return (
-    <div className="my-2 rounded-lg border-2 border-destructive/40 bg-destructive/5 p-3">
-      <p className="text-sm font-semibold text-destructive">
-        {bloqueos.length === 1
-          ? 'Hay algo que impide cerrar'
-          : `Hay ${bloqueos.length} cosas que impiden cerrar`}
-      </p>
-      <ul className="mt-2 space-y-2 text-xs text-destructive/90">
-        {bloqueos.map((b) => {
-          const esVacacionTrabajada = b.code === NominaErrorCodes.NOMINA_CON_VACACION_TRABAJADA;
-          const colaboradores = b.colaboradores ?? [];
-          return (
-            <li key={b.code}>
-              <p>{b.mensaje ?? b.message}</p>
-              {colaboradores.length > 0 && (
-                <>
-                  <ul className="mt-2 space-y-2">
-                    {esVacacionTrabajada
-                      ? (colaboradores as ColaboradorConVacacionTrabajada[]).map((c) => (
-                        <FilaVacacionTrabajada
-                          key={c.nomina_empleado_id}
-                          col={c}
-                          onInterrumpir={onInterrumpir}
-                        />
-                      ))
-                      : (colaboradores as ColaboradorConNovedadesPendientes[]).map((c) => (
-                        <FilaColaborador key={c.nomina_empleado_id} col={c} />
-                      ))}
-                  </ul>
-                  {/* §6.1 — La fila ya liquidada quedó vieja: decidir la novedad
-                      o interrumpir la vacación no la recalcula. */}
-                  <p className="mt-2 text-destructive/80">
-                    {esVacacionTrabajada
-                      ? 'Después de interrumpir la vacación o corregir la planilla, vuelva a liquidar a esos colaboradores.'
-                      : 'Después de decidir cada novedad, vuelva a liquidar a esos colaboradores.'}
-                  </p>
-                </>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+    <div className="flex gap-2 rounded-lg bg-destructive-soft p-3">
+      <Ban className="mt-0.5 h-4 w-4 shrink-0 text-destructive" strokeWidth={2} />
+      <div className="min-w-0 flex-1 text-sm text-foreground">
+        <p className="font-medium">
+          {bloqueos.length === 1
+            ? 'Hay algo que impide cerrar'
+            : `Hay ${bloqueos.length} cosas que impiden cerrar`}
+        </p>
+        <ul className="mt-2 space-y-2">
+          {bloqueos.map((b) => {
+            const esVacacionTrabajada = b.code === NominaErrorCodes.NOMINA_CON_VACACION_TRABAJADA;
+            const colaboradores = b.colaboradores ?? [];
+            return (
+              <li key={b.code}>
+                <p>{b.mensaje ?? b.message}</p>
+                {colaboradores.length > 0 && (
+                  <>
+                    <ul className="mt-2 space-y-2">
+                      {esVacacionTrabajada
+                        ? (colaboradores as ColaboradorConVacacionTrabajada[]).map((c) => (
+                          <FilaVacacionTrabajada
+                            key={c.nomina_empleado_id}
+                            col={c}
+                            onInterrumpir={onInterrumpir}
+                          />
+                        ))
+                        : (colaboradores as ColaboradorConNovedadesPendientes[]).map((c) => (
+                          <FilaColaborador key={c.nomina_empleado_id} col={c} />
+                        ))}
+                    </ul>
+                    {/* §6.1 — La fila ya liquidada quedó vieja: decidir la novedad
+                        o interrumpir la vacación no la recalcula. */}
+                    <p className="mt-2 text-muted-foreground">
+                      {esVacacionTrabajada
+                        ? 'Después de interrumpir la vacación o corregir la planilla, vuelva a liquidar a esos colaboradores.'
+                        : 'Después de decidir cada novedad, vuelva a liquidar a esos colaboradores.'}
+                    </p>
+                  </>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </div>
   );
 }

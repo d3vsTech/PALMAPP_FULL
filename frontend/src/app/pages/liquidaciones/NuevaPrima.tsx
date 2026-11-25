@@ -9,7 +9,6 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
@@ -21,8 +20,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
-import { ArrowLeft, Calendar, FileText, Gift, Loader2 } from 'lucide-react';
+import { Info, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import PageHeader from '../../components/common/PageHeader';
+import SeccionCard from '../../components/liquidaciones/SeccionCard';
 import {
   liquidacionesApi,
   LiquidacionesErrorCodes,
@@ -155,36 +156,22 @@ export default function NuevaPrima() {
     }
   };
 
-  const etiquetaSemestre = formData.semestre === '1' ? '1° semestre' : '2° semestre';
+  const etiquetaSemestre = formData.semestre === '1' ? '1.er semestre' : '2.º semestre';
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones?tab=prima')} >
-          <ArrowLeft className="h-4 w-4" />
-          Volver a Liquidaciones
-        </Button>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-primary">Nuevo Período de Prima</h1>
-          <p className="text-muted-foreground mt-1">
-            Define el semestre. Los colaboradores se agregan al momento de liquidar.
-          </p>
-        </div>
-      </div>
+    <div className="mx-auto max-w-3xl space-y-6">
+      <PageHeader
+        eyebrow="Liquidaciones"
+        title="Nuevo período de prima"
+        description="Define el semestre. Los colaboradores se agregan al momento de liquidar."
+        backTo="/liquidaciones?tab=prima"
+      />
 
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Información del Período
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <SeccionCard title="Información del período" description="Los campos con * son obligatorios.">
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
             <div className="space-y-2">
-              <Label htmlFor="anio">
-                Año <span className="text-destructive">*</span>
-              </Label>
+              <Label htmlFor="anio">Año *</Label>
               <Input
                 id="anio"
                 type="number"
@@ -195,59 +182,45 @@ export default function NuevaPrima() {
             </div>
 
             <div className="space-y-2">
-              <Label>
-                Semestre <span className="text-destructive">*</span>
-              </Label>
+              <Label htmlFor="semestre">Semestre *</Label>
               <Select value={formData.semestre} onValueChange={(v) => handleChange('semestre', v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="semestre"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1">1° Semestre (ene – jun)</SelectItem>
-                  <SelectItem value="2">2° Semestre (jul – dic)</SelectItem>
+                  <SelectItem value="1">1.er semestre (ene a jun)</SelectItem>
+                  <SelectItem value="2">2.º semestre (jul a dic)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="descripcion">Descripción</Label>
-            <Input
-              id="descripcion"
-              placeholder={`Prima de servicios ${etiquetaSemestre} ${formData.anio || anioActual}`}
-              value={formData.descripcion}
-              onChange={(e) => handleChange('descripcion', e.target.value)}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="fechaInicio">
-                Fecha Inicio <span className="text-destructive">*</span>
-              </Label>
-              <div className="relative">
-                <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="fechaInicio"
-                  type="date"
-                  value={formData.fechaInicio}
-                  onChange={(e) => handleChange('fechaInicio', e.target.value)}
-                  className="pl-9"
-                />
-              </div>
+              <Label htmlFor="descripcion">Descripción</Label>
+              <Input
+                id="descripcion"
+                placeholder={`Prima de servicios ${etiquetaSemestre} ${formData.anio || anioActual}`}
+                value={formData.descripcion}
+                onChange={(e) => handleChange('descripcion', e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="fechaInicio">Fecha de inicio *</Label>
+              <Input
+                id="fechaInicio"
+                type="date"
+                value={formData.fechaInicio}
+                onChange={(e) => handleChange('fechaInicio', e.target.value)}
+              />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="fechaFin">
-                Fecha Fin <span className="text-destructive">*</span>
-              </Label>
-              <div className="relative">
-                <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="fechaFin"
-                  type="date"
-                  value={formData.fechaFin}
-                  onChange={(e) => handleChange('fechaFin', e.target.value)}
-                  className="pl-9"
-                />
-              </div>
+              <Label htmlFor="fechaFin">Fecha de fin *</Label>
+              <Input
+                id="fechaFin"
+                type="date"
+                value={formData.fechaFin}
+                onChange={(e) => handleChange('fechaFin', e.target.value)}
+              />
             </div>
           </div>
 
@@ -256,7 +229,7 @@ export default function NuevaPrima() {
             <Textarea
               id="notas"
               rows={3}
-              placeholder="Observaciones adicionales del período..."
+              placeholder="Observaciones adicionales del período"
               value={formData.notas}
               onChange={(e) => handleChange('notas', e.target.value)}
               className="resize-none"
@@ -265,7 +238,7 @@ export default function NuevaPrima() {
 
           {/* Fechas límite del semestre elegido (legal + operativa, §2.2) */}
           {fechaLimite && (
-            <div className="p-4 rounded-xl border border-warning/20 bg-warning-soft text-sm text-warning">
+            <div className="rounded-lg bg-warning-soft p-3 text-sm text-foreground">
               Fecha límite de pago: legal el{' '}
               <strong>{formatFecha(fechaLimite.fecha_limite_legal, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
               {!fechaLimite.es_dia_habil && (
@@ -278,25 +251,22 @@ export default function NuevaPrima() {
             </div>
           )}
 
-          <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 flex items-start gap-3">
-            <Gift className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-semibold text-primary">¿Cómo continuar?</p>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                La prima equivale a 15 días de salario por semestre completo y es proporcional al tiempo trabajado. Al crear el período pasarás directo al wizard para agregar colaboradores y calcular los montos.
-              </p>
-            </div>
+          <div className="flex items-start gap-3 rounded-lg bg-muted/60 px-4 py-3 text-sm">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2} />
+            <p className="text-muted-foreground">
+              <span className="font-medium text-foreground">¿Cómo continuar?</span> La prima equivale a 15 días de salario por semestre completo y es proporcional al tiempo trabajado. Al crear el período pasarás directo al asistente para agregar colaboradores y calcular los montos.
+            </p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </SeccionCard>
 
-      <div className="barra-acciones flex justify-end gap-3">
-        <Button variant="outline" size="lg" onClick={() => navigate('/liquidaciones?tab=prima')} disabled={guardando}>
+      <div className="barra-acciones flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button variant="outline" onClick={() => navigate('/liquidaciones?tab=prima')} disabled={guardando}>
           Cancelar
         </Button>
-        <Button size="lg" onClick={() => guardar()} disabled={guardando} >
-          {guardando ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />}
-          Crear Período
+        <Button onClick={() => guardar()} disabled={guardando}>
+          {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
+          Crear período
         </Button>
       </div>
 
@@ -321,7 +291,7 @@ export default function NuevaPrima() {
           <AlertDialogFooter>
             <AlertDialogCancel disabled={guardando}>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={() => guardar(true)} disabled={guardando}>
-              {guardando && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
               Crear adicional
             </AlertDialogAction>
           </AlertDialogFooter>

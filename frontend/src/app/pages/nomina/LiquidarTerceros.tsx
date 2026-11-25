@@ -17,10 +17,12 @@
  * documentada al patrón "CERRADA = inmutable".
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router';
+import { periodoLabel } from '../../utils/periodoNomina';
+import { useParams, useNavigate } from 'react-router';
 import { sortByFirstName } from '../../utils/personas';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent } from '../../components/ui/card';
+import PageHeader from '../../components/common/PageHeader';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
@@ -28,15 +30,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
 import {
-  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
-  BreadcrumbPage, BreadcrumbSeparator,
-} from '../../components/ui/breadcrumb';
-import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle,
 } from '../../components/ui/dialog';
 import {
-  ArrowLeft, Building2, Check, Download, AlertCircle, Loader2,
+  Check, Download, AlertCircle, Loader2, FileText, RefreshCw, Info,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -47,6 +45,7 @@ import {
   NominaErrorCodes,
 } from '../../../api/nomina';
 import type { ApiError } from '../../../api/client';
+import { Eyebrow, FilaMonto, thead, th, td } from '../../components/nomina/piezas';
 
 function toNumber(v: string | number | null | undefined): number {
   if (v == null) return 0;
@@ -64,6 +63,15 @@ export default function LiquidarTerceros() {
    * NO trae operarios ni datos bancarios; para eso usamos `detalles`.
    */
   const [actas, setActas] = useState<NominaTerceroActaResumen[]>([]);
+  /** Período de la nómina para el encabezado. Si no carga, queda el número. */
+  const [periodo, setPeriodo] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!nominaId) return;
+    nominaApi.ver(nominaId)
+      .then((res) => setPeriodo(periodoLabel(res.data)))
+      .catch(() => setPeriodo(null));
+  }, [nominaId]);
   /**
    * Detalle completo del acta (§7.2) indexado por `tercero_id`. Se carga en
    * paralelo tras el listado para poder renderizar la tabla de operarios y
@@ -212,7 +220,7 @@ export default function LiquidarTerceros() {
     }
   };
 
-  const periodoLabel = `Nómina #${nominaId}`;
+  const etiquetaPeriodo = periodo ?? `Nómina #${nominaId}`;
   const terceroSeleccionadoPago = modalPagoTerceroId
     ? actas.find((a) => a.tercero_id === modalPagoTerceroId)
     : null;
@@ -234,75 +242,37 @@ export default function LiquidarTerceros() {
 
   return (
     <div className="space-y-6">
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild><Link to="/nomina">Pagos</Link></BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild><Link to={`/nomina/${nominaId}`}>{periodoLabel}</Link></BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>Liquidar Terceros</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
-
-      {/* Header */}
-      <div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate(`/nomina/${nominaId}`)}
-          className="mb-4"
-        >
-          <ArrowLeft className="h-4 w-4" />Volver
-        </Button>
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-primary">Liquidación de Terceros</h1>
-            <p className="text-muted-foreground mt-1">{periodoLabel}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="text-right">
-              <p className="text-xs text-muted-foreground">Total a transferir</p>
-              <p className="text-2xl font-bold text-primary">
-                ${totalGeneral.toLocaleString('es-CO')}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        backTo={`/nomina/${nominaId}`}
+        eyebrow={etiquetaPeriodo}
+        title="Liquidación de terceros"
+        description="Revisa las labores de cada operario, agrega descuentos y registra el pago de la orden por empresa."
+      />
 
       {/* Alerta informativa */}
-      <div className="flex items-start gap-3 rounded-lg border border-warning/20 bg-warning-soft p-4">
-        <AlertCircle className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />
-        <p className="text-sm text-warning">
-          El pago se realiza a la <strong>empresa prestadora de servicios</strong>, no al colaborador individual.
-          Puedes ajustar días, tarifa o agregar un ajuste antes de registrar el pago. Los cambios se guardan al salir de cada campo.
+      <div className="flex gap-2 rounded-lg bg-info-soft p-3">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-info" strokeWidth={2} />
+        <p className="text-sm text-foreground">
+          El pago se realiza a la empresa prestadora de servicios, no al colaborador individual.
+          Los descuentos se agregan desde el detalle de cada empresa, antes de registrar el pago.
         </p>
       </div>
 
       {/* Lista de actas */}
       {cargando ? (
-        <Card>
-          <CardContent className="py-12 flex items-center justify-center gap-2 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            Cargando actas...
-          </CardContent>
+        <Card className="flex-row items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Cargando actas...
         </Card>
       ) : actas.length === 0 ? (
-        <Card className="border-2 border-dashed bg-muted/30">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Building2 className="h-16 w-16 text-muted-foreground mb-4" />
-            <p className="text-lg font-semibold mb-2">No hay actas de terceros aún</p>
-            <p className="text-sm text-muted-foreground text-center max-w-md mb-4">
-              Para crear las actas, los terceros deben estar agregados a la nómina (paso 2 del wizard).
-              Luego, desde el detalle, presiona "Liquidar Terceros" para calcular los totales.
+        <Card className="items-center px-6 py-10 text-center">
+          <div className="max-w-md">
+            <p className="font-semibold text-foreground">Sin actas de terceros</p>
+            <p className="text-sm text-muted-foreground">
+              Agrega los terceros a la nómina en el paso 2 del asistente. Luego, desde el detalle,
+              presiona Liquidar terceros para calcular los totales.
             </p>
-          </CardContent>
+          </div>
         </Card>
       ) : (
         actas.map((acta) => {
@@ -318,153 +288,141 @@ export default function LiquidarTerceros() {
           const subtotalAcatual = toNumber(acta.total_a_transferir);
 
           return (
-            <Card key={acta.id} className="overflow-hidden">
-              <div className={`flex items-center justify-between px-5 py-4 border-b border-border ${estaPagada ? 'bg-[#1E5631]/5' : 'bg-warning-soft'}`}>
-                <div className="flex items-center gap-3">
-                  <div className={`h-9 w-9 rounded-lg flex items-center justify-center font-bold ${estaPagada ? 'bg-[#1E5631]/10 text-[#1E5631]' : 'bg-warning-soft text-warning'}`}>
+            <Card key={acta.id} className="gap-0 overflow-hidden">
+              {/* Cabecera de la empresa. Sin fondo de color: el estado lo
+                  dice la etiqueta, no el recuadro entero. */}
+              <div className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-sm font-semibold text-foreground">
                     {razonSocial.charAt(0)}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold">{razonSocial}</p>
-                      <Badge className={`text-xs ${estaPagada ? 'bg-[#1E5631]/10 text-[#1E5631] border-[#1E5631]/20' : 'bg-warning-soft text-warning border-warning/20'}`}>
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="truncate">{razonSocial}</h3>
+                      <Badge variant={estaPagada ? 'success' : 'warning'}>
                         {estaPagada ? 'Pagado' : 'Pendiente'}
                       </Badge>
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="truncate text-xs text-muted-foreground">
                       NIT {nit}
                       {contacto && ` · ${contacto}`}
                       {telefono && ` · ${telefono}`}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground">Orden de pago</p>
-                    <p className="text-xl font-bold text-foreground">
+                <div className="flex flex-wrap items-center justify-between gap-3 md:justify-end md:gap-4">
+                  <div className="md:text-right">
+                    <Eyebrow>Total a pagar</Eyebrow>
+                    <p className="text-lg font-semibold tabular-nums text-foreground">
                       ${subtotalAcatual.toLocaleString('es-CO')}
                     </p>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    
-                    onClick={() => descargarPdf(acta.tercero_id, razonSocial)}
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    PDF
-                  </Button>
-                  {!estaPagada && (
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button
-                      size="sm"
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground"
+                      aria-label="Descargar PDF"
+                      title="Descargar PDF"
+                      onClick={() => descargarPdf(acta.tercero_id, razonSocial)}
+                    >
+                      <Download strokeWidth={2} />
+                    </Button>
+                    {!estaPagada && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground"
+                        aria-label="Recalcular"
+                        title="Recalcular"
+                        onClick={() => reliquidarActa(acta.tercero_id)}
+                      >
+                        <RefreshCw strokeWidth={2} />
+                      </Button>
+                    )}
+                    <Button
                       variant="outline"
-                      
-                      onClick={() => reliquidarActa(acta.tercero_id)}
+                      onClick={() =>
+                        navigate(`/nomina/${nominaId}/tercero/${acta.tercero_id}/liquidar`)
+                      }
                     >
-                      Recalcular
+                      <FileText strokeWidth={2} />
+                      Ver detalle
                     </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    
-                    onClick={() =>
-                      navigate(`/nomina/${nominaId}/tercero/${acta.tercero_id}/liquidar`)
-                    }
-                  >
-                    Ver detalle
-                  </Button>
-                  {!estaPagada ? (
-                    <Button
-                      size="sm"
-                      onClick={() => abrirModalPago(acta.tercero_id)}
-                    >
-                      Registrar Pago
-                    </Button>
-                  ) : (
-                    <Button variant="outline" size="sm" className="text-success border-success/30">
-                      <Check className="h-3.5 w-3.5" />
-                      Pagado
-                    </Button>
-                  )}
+                    {!estaPagada ? (
+                      <Button onClick={() => abrirModalPago(acta.tercero_id)}>
+                        <FileText strokeWidth={2} />
+                        Registrar pago
+                      </Button>
+                    ) : (
+                      <Button variant="outline" disabled>
+                        <Check strokeWidth={2} />
+                        Pagado
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
 
               {/* Tabla detalle operarios (solo-lectura — edición vive en la
                   pantalla dedicada). */}
               {operarios.length === 0 ? (
-                <div className="py-8 text-center text-sm text-muted-foreground">
+                <p className="border-t border-border px-5 py-8 text-center text-sm text-muted-foreground">
                   No hay operarios en esta acta todavía.
-                </div>
+                </p>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto border-t border-border">
                   <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/20 text-xs text-muted-foreground">
-                        <th className="text-left p-3 pl-5 font-semibold">Colaborador</th>
-                        <th className="text-left p-3 font-semibold">Cargo</th>
-                        <th className="text-right p-3 font-semibold">Jornales</th>
-                        <th className="text-right p-3 font-semibold">Cosecha</th>
-                        <th className="text-right p-3 font-semibold">Descuentos</th>
-                        <th className="text-right p-3 pr-5 font-semibold">Subtotal</th>
+                    <thead className={thead}>
+                      <tr>
+                        <th className={`${th} pl-5 text-left`}>Operario</th>
+                        <th className={`${th} text-left`}>Cargo</th>
+                        <th className={`${th} text-right`}>Jornales</th>
+                        <th className={`${th} text-right`}>Cosecha</th>
+                        <th className={`${th} text-right`}>Descuentos</th>
+                        <th className={`${th} pr-5 text-right`}>Subtotal</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {sortByFirstName(operarios).map((op, idx) => {
+                    <tbody className="divide-y divide-border">
+                      {sortByFirstName(operarios).map((op) => {
                         const totalJornales = toNumber(op.total_jornales);
                         const totalCosecha = toNumber(op.total_cosecha);
                         const totalDescuentos = toNumber(op.total_descuentos);
                         const subtotal = toNumber(op.subtotal);
-                        const iniciales = (op.nombre_completo ?? '').split(' ').slice(0, 2).map((n) => n[0] ?? '').join('').toUpperCase() || '?';
                         return (
-                          <tr
-                            key={op.id}
-                            className={`border-b border-border/60 last:border-0 ${
-                              idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'
-                            }`}
-                          >
-                            <td className="p-3 pl-5">
-                              <div className="flex items-center gap-2.5">
-                                <div className="h-8 w-8 rounded-full bg-warning-soft text-warning flex items-center justify-center text-xs font-bold flex-shrink-0">
-                                  {iniciales}
-                                </div>
-                                <div>
-                                  <p className="font-medium">{op.nombre_completo || `Operario #${op.operario_id}`}</p>
-                                  <p className="text-xs text-muted-foreground">{op.cedula || '—'}</p>
-                                </div>
-                              </div>
+                          <tr key={op.id}>
+                            <td className={`${td} pl-5`}>
+                              <p className="font-semibold text-foreground">{op.nombre_completo || `Operario #${op.operario_id}`}</p>
+                              <p className="text-xs text-muted-foreground">{op.cedula || '—'}</p>
                             </td>
-                            <td className="p-3 text-muted-foreground">{op.cargo || '—'}</td>
-                            <td className="p-3 text-right">
+                            <td className={`${td} text-muted-foreground`}>{op.cargo || '—'}</td>
+                            <td className={`${td} text-right tabular-nums text-foreground`}>
                               ${totalJornales.toLocaleString('es-CO')}
                             </td>
-                            <td className="p-3 text-right">
+                            <td className={`${td} text-right tabular-nums text-foreground`}>
                               ${totalCosecha.toLocaleString('es-CO')}
                             </td>
-                            <td className="p-3 text-right text-destructive">
+                            <td className={`${td} text-right tabular-nums text-foreground`}>
                               {totalDescuentos > 0 ? `−$${totalDescuentos.toLocaleString('es-CO')}` : '$0'}
                             </td>
-                            <td className="p-3 pr-5 text-right font-semibold text-primary">
+                            <td className={`${td} pr-5 text-right font-semibold tabular-nums text-foreground`}>
                               ${subtotal.toLocaleString('es-CO')}
                             </td>
                           </tr>
                         );
                       })}
                     </tbody>
-                    <tfoot>
-                      <tr className="bg-muted/30 border-t border-border font-semibold">
-                        <td colSpan={5} className="p-3 pl-5 text-right text-muted-foreground">
-                          Total a transferir a {razonSocial}
-                        </td>
-                        <td className="p-3 text-right text-lg font-bold text-primary">
-                          ${subtotalAcatual.toLocaleString('es-CO')}
-                        </td>
-                        <td />
-                      </tr>
-                    </tfoot>
                   </table>
                 </div>
               )}
+
+              {/* Total de la orden, como la barra del diseño. */}
+              <div className="flex flex-col gap-1 border-t border-border bg-muted/60 px-5 py-3 sm:flex-row sm:items-center sm:justify-end sm:gap-4">
+                <span className="text-sm font-semibold text-foreground">Total orden de pago a {razonSocial}</span>
+                <span className="text-lg font-bold tabular-nums text-foreground">
+                  ${subtotalAcatual.toLocaleString('es-CO')}
+                </span>
+              </div>
             </Card>
           );
         })
@@ -472,28 +430,21 @@ export default function LiquidarTerceros() {
 
       {/* Resumen final */}
       {actas.length > 0 && (
-        <Card className={`overflow-hidden ${todasPagadas ? 'border-success/30' : ''}`}>
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Total a transferir a empresas terceras
-                </p>
-                <p className="text-2xl sm:text-3xl font-bold text-primary mt-1">
-                  ${totalGeneral.toLocaleString('es-CO')}
-                </p>
-                {/* El resumen §7.1 no trae la lista de operarios; el conteo
-                    anterior siempre daba 0. Se muestra solo el de empresas. */}
-                <p className="text-xs text-muted-foreground mt-1">
-                  {actas.length} empresa{actas.length !== 1 ? 's' : ''}
-                </p>
-              </div>
-              {todasPagadas && (
-                <div className="flex items-center gap-2 text-success">
-                  <Check className="h-5 w-5" />
-                  <span className="font-semibold">Todas las empresas pagadas</span>
-                </div>
-              )}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex flex-wrap items-center gap-2">
+              Resumen
+              {todasPagadas && <Badge variant="success">Todas las empresas pagadas</Badge>}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* El resumen §7.1 no trae la lista de operarios; solo se cuentan empresas. */}
+            <FilaMonto label="Empresas" value={actas.length} />
+            <div className="flex items-baseline justify-between gap-4 border-t border-border pt-4">
+              <span className="font-semibold text-foreground">Total a transferir</span>
+              <span className="text-2xl font-bold tabular-nums text-foreground">
+                ${totalGeneral.toLocaleString('es-CO')}
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -504,52 +455,42 @@ export default function LiquidarTerceros() {
         <Dialog open onOpenChange={() => setModalPagoTerceroId(null)}>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-primary" />
-                Registrar Pago — {detallePagoSeleccionado?.tercero.nombre ?? terceroSeleccionadoPago.tercero_nombre}
+              <DialogTitle>
+                Registrar pago a {detallePagoSeleccionado?.tercero.nombre ?? terceroSeleccionadoPago.tercero_nombre}
               </DialogTitle>
               <DialogDescription>
-                Confirma que se realizó la transferencia a la empresa
+                Confirma el pago de la orden a esta empresa.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4">
-              <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Empresa</span>
-                  <span className="font-medium">
-                    {detallePagoSeleccionado?.tercero.nombre ?? terceroSeleccionadoPago.tercero_nombre}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">NIT</span>
-                  <span>
-                    {detallePagoSeleccionado?.tercero.nit
-                      ?? detallePagoSeleccionado?.tercero.cedula
-                      ?? '—'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Operarios</span>
-                  <span>{detallePagoSeleccionado?.operarios.length ?? 0} personas</span>
-                </div>
-                <div className="flex justify-between pt-2 border-t border-border">
-                  <span className="font-semibold">Total a transferir</span>
-                  <span className="font-bold text-lg text-primary">
+              <div className="space-y-2 rounded-lg bg-muted/60 p-4">
+                <FilaMonto
+                  label="Empresa"
+                  value={detallePagoSeleccionado?.tercero.nombre ?? terceroSeleccionadoPago.tercero_nombre}
+                />
+                <FilaMonto
+                  label="NIT"
+                  value={detallePagoSeleccionado?.tercero.nit ?? detallePagoSeleccionado?.tercero.cedula ?? '—'}
+                />
+                <FilaMonto label="Operarios" value={`${detallePagoSeleccionado?.operarios.length ?? 0} personas`} />
+                <div className="flex items-baseline justify-between border-t border-border pt-2">
+                  <span className="font-semibold text-foreground">Total a pagar</span>
+                  <span className="text-lg font-bold tabular-nums text-foreground">
                     ${toNumber(terceroSeleccionadoPago.total_a_transferir).toLocaleString('es-CO')}
                   </span>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label>Método de pago</Label>
+                <Label htmlFor="liquidarte-metodo-pago">Método de pago</Label>
                 <Select
                   value={pagandoForm.metodo_pago}
                   onValueChange={(v) =>
                     setPagandoForm((prev) => ({ ...prev, metodo_pago: v as MetodoPagoTercero }))
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="liquidarte-metodo-pago">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -562,7 +503,7 @@ export default function LiquidarTerceros() {
 
               {pagandoForm.metodo_pago === 'TRANSFERENCIA' && (
                 <div className="space-y-2">
-                  <Label htmlFor="liquidarte-referencia-n-de-transferencia">Referencia / N° de transferencia *</Label>
+                  <Label htmlFor="liquidarte-referencia-n-de-transferencia">Referencia de la transferencia *</Label>
                   <Input id="liquidarte-referencia-n-de-transferencia"
                     value={pagandoForm.referencia_pago}
                     onChange={(e) =>
@@ -571,15 +512,18 @@ export default function LiquidarTerceros() {
                     placeholder="Ej: TRF-2026-001"
                   />
                   {detallePagoSeleccionado && !datosBancariosCompletos && (
-                    <p className="text-xs text-destructive">
-                      Falta configurar los datos bancarios del tercero.
-                    </p>
+                    <div className="flex gap-2 rounded-lg bg-destructive-soft p-3">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" strokeWidth={2} />
+                      <p className="text-sm text-foreground">
+                        Falta configurar los datos bancarios del tercero.
+                      </p>
+                    </div>
                   )}
                 </div>
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="liquidarte-n-orden-de-pago-opcional">N° orden de pago (opcional)</Label>
+                <Label htmlFor="liquidarte-n-orden-de-pago-opcional">N.º de orden de pago (opcional)</Label>
                 <Input id="liquidarte-n-orden-de-pago-opcional"
                   value={pagandoForm.orden_pago_numero}
                   onChange={(e) =>
@@ -600,11 +544,10 @@ export default function LiquidarTerceros() {
                 />
               </div>
 
-              <div className="rounded-lg border border-warning/20 bg-warning-soft p-3 flex gap-2">
-                <AlertCircle className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-warning">
-                  Esta acción registra el pago como completado. Asegúrate de haber realizado la
-                  transferencia antes de confirmar.
+              <div className="flex gap-2 rounded-lg bg-warning-soft p-3">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+                <p className="text-sm text-foreground">
+                  Al confirmar, la orden quedará marcada como pagada. Revisa todos los valores antes de continuar.
                 </p>
               </div>
             </div>
@@ -625,11 +568,11 @@ export default function LiquidarTerceros() {
                 }
               >
                 {registrandoPago ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="animate-spin" strokeWidth={2} />
                 ) : (
-                  <Check className="h-4 w-4" />
+                  <Check strokeWidth={2} />
                 )}
-                Confirmar Pago
+                Confirmar pago
               </Button>
             </DialogFooter>
           </DialogContent>

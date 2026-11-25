@@ -5,10 +5,9 @@
  * añade el filtro por semestre y la columna de días promedio (§2.8).
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { Button } from '../ui/button';
-import { Card, CardContent } from '../ui/card';
-import { Input } from '../ui/input';
+import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -18,10 +17,15 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../ui/alert-dialog';
 import {
-  Plus, FileText, Calculator, Eye, Search, Filter, Trash2,
-  Users, AlertTriangle, PiggyBank, Percent, Gift, CheckCircle, Clock, Loader2,
+  Plus, Search, Trash2, AlertTriangle, PiggyBank, Percent, Gift,
+  CheckCircle2, CalendarClock, CircleDollarSign, Loader2,
 } from 'lucide-react';
 import StatusBadge from '../common/StatusBadge';
+import StatStrip from '../common/StatStrip';
+import SeccionEncabezado from './SeccionEncabezado';
+import FiltrosFila from './FiltrosFila';
+import VacioCard from './VacioCard';
+import PeriodoAccion from './PeriodoAccion';
 import { toast } from 'sonner';
 import {
   liquidacionesApi,
@@ -52,61 +56,53 @@ const TEXTOS: Record<TipoTab, {
   cardPendienteSub: string;
   colTotal: string;
   colPagado: string;
-  listaTitulo: string;
-  listaSub: string;
   emptyTitulo: string;
   tooltipLegal: string;
 }> = {
   CESANTIAS: {
     titulo: 'Cesantías',
-    subtitulo: 'Gestión de períodos anuales de cesantías',
-    botonNuevo: 'Nuevo Período de Cesantías',
+    subtitulo: 'Un mes de salario por año trabajado, consignado al fondo antes del 14 de febrero.',
+    botonNuevo: 'Nuevo período de cesantías',
     ruta: '/liquidaciones/cesantias',
-    cardTotal: 'Total Cesantías',
+    cardTotal: 'Total cesantías',
     cardTotalSub: 'Períodos cerrados',
     cardPagado: 'Consignadas',
     cardPagadoSub: 'Giradas al fondo',
     cardPendienteSub: 'Sin consignar',
-    colTotal: 'Total Cesantías',
+    colTotal: 'Total cesantías',
     colPagado: 'Consignado',
-    listaTitulo: 'Períodos de Cesantías',
-    listaSub: 'Historial de liquidaciones anuales de cesantías',
     emptyTitulo: 'No hay períodos de cesantías',
     tooltipLegal: 'Ley 50/1990',
   },
   INTERESES_CESANTIAS: {
-    titulo: 'Intereses de Cesantías',
-    subtitulo: 'Liquidación anual de intereses sobre cesantías (12% — Ley 52 de 1975)',
-    botonNuevo: 'Nuevo Período de Intereses',
+    titulo: 'Intereses de cesantías',
+    subtitulo: 'Liquidación anual de intereses sobre cesantías (12 %, Ley 52 de 1975).',
+    botonNuevo: 'Nuevo período de intereses',
     ruta: '/liquidaciones/intereses',
-    cardTotal: 'Total Intereses',
-    cardTotalSub: 'Tasa: 12% anual',
+    cardTotal: 'Total intereses',
+    cardTotalSub: 'Tasa: 12 % anual',
     cardPagado: 'Pagados',
     cardPagadoSub: 'Pagados al trabajador',
     cardPendienteSub: 'Sin pagar',
-    colTotal: 'Intereses',
+    colTotal: 'Intereses 12 %',
     colPagado: 'Pagado',
-    listaTitulo: 'Períodos de Intereses',
-    listaSub: 'Historial de liquidaciones anuales de intereses sobre cesantías',
     emptyTitulo: 'No hay períodos de intereses',
     tooltipLegal: 'Ley 52/1975',
   },
   PRIMA: {
-    titulo: 'Prima de Servicios',
+    titulo: 'Prima de servicios',
     // La Ley 1/1963 solo incorpora el auxilio de transporte a la base; la
     // prima es el art. 306 del CST (Anexo B del contrato).
-    subtitulo: 'Liquidación semestral de prima de servicios (CST art. 306, Ley 1788 de 2016)',
-    botonNuevo: 'Nuevo Período de Prima',
+    subtitulo: 'Liquidación semestral de prima de servicios (CST art. 306, Ley 1788 de 2016).',
+    botonNuevo: 'Nuevo período de prima',
     ruta: '/liquidaciones/prima',
-    cardTotal: 'Total Prima',
+    cardTotal: 'Total prima',
     cardTotalSub: 'Períodos cerrados',
     cardPagado: 'Pagadas',
     cardPagadoSub: 'Pagadas al trabajador',
     cardPendienteSub: 'Sin pagar',
-    colTotal: 'Total Prima',
+    colTotal: 'Total prima',
     colPagado: 'Pagado',
-    listaTitulo: 'Períodos de Prima',
-    listaSub: 'Historial de liquidaciones semestrales de prima de servicios',
     emptyTitulo: 'No hay períodos de prima',
     tooltipLegal: 'CST art. 306',
   },
@@ -214,33 +210,25 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
     }
   };
 
+  const pendiente = resumen?.monto_pendiente ?? 0;
+  const filtrosActivos = filtroEstado !== 'todos' || filtroBusqueda !== '' || filtroSemestre !== 'todos';
+  const th = 'px-4 py-2.5 font-semibold';
+  /* El cargue del histórico vive en el botón "Importar" del encabezado de Liquidaciones. */
+  const nuevo = (
+    <Button onClick={() => navigate(`${txt.ruta}/nueva`)}>
+      <Plus strokeWidth={2} />
+      {txt.botonNuevo}
+    </Button>
+  );
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="min-w-0">
-          <h2>{txt.titulo}</h2>
-          <p className="text-muted-foreground mt-1">{txt.subtitulo}</p>
-        </div>
-        <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
-          {/* El cargue del histórico vive en el botón "Importar" del
-              encabezado de Liquidaciones, el mismo para las cinco pestañas.
-              Aquí había un segundo botón que llevaba a la misma pantalla. */}
-          <Button
-            onClick={() => navigate(`${txt.ruta}/nueva`)}
-            size="lg"
-            className="w-full sm:w-auto"
-          >
-            <Plus className="h-5 w-5" />
-            {txt.botonNuevo}
-          </Button>
-        </div>
-      </div>
+      <SeccionEncabezado title={txt.titulo} description={txt.subtitulo} actions={nuevo} />
 
       {/* Alerta vencimiento */}
       {alertaLimite && (
-        <div className="flex items-center gap-3 rounded-xl border border-warning/20 bg-warning-soft px-4 py-3 text-sm text-warning">
-          <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
+        <div className="flex items-start gap-2 rounded-lg bg-warning-soft p-3 text-sm text-foreground">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
           <span>
             {alertaLimite.vencida ? (
               <>La fecha límite de <strong>{alertaLimite.periodo.descripcion}</strong> ya venció ({formatFecha(alertaLimite.periodo.fecha_limite_legal)}). Riesgo de sanción moratoria.</>
@@ -251,318 +239,172 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
         </div>
       )}
 
-      {/* KPIs */}
-      <Card>
-        <CardContent className="p-5">
-          <p className="text-sm font-semibold text-foreground mb-4">Resumen</p>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="flex items-center justify-between p-4 rounded-xl bg-primary/5 border border-primary/20">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1">{txt.cardTotal}</p>
-                <p className="text-2xl font-bold text-primary">{fmtMillones(resumen?.total_liquidado ?? 0)}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{txt.cardTotalSub}</p>
-              </div>
-              <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                <IconoTab className="h-5 w-5 text-primary" />
-              </div>
-            </div>
+      <StatStrip
+        items={[
+          { label: txt.cardTotal, value: fmtMillones(resumen?.total_liquidado ?? 0), note: txt.cardTotalSub, icon: IconoTab, tone: 'green' },
+          { label: txt.cardPagado, value: fmtMillones(resumen?.total_consignado ?? 0), note: txt.cardPagadoSub, icon: CheckCircle2, tone: 'green' },
+          { label: 'Períodos pendientes', value: resumen?.periodos_pendientes ?? 0, note: 'Por liquidar o girar', icon: CalendarClock, tone: 'amber' },
+          {
+            label: 'Monto pendiente',
+            value: pendiente > 0 ? <span className="text-destructive">{fmtMillones(pendiente)}</span> : fmtMillones(pendiente),
+            note: txt.cardPendienteSub,
+            icon: CircleDollarSign,
+            tone: 'amber',
+          },
+        ]}
+      />
 
-            <div className="flex items-center justify-between p-4 rounded-xl bg-success/5 border border-success/20">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1">{txt.cardPagado}</p>
-                <p className="text-2xl font-bold text-success">{fmtMillones(resumen?.total_consignado ?? 0)}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{txt.cardPagadoSub}</p>
-              </div>
-              <div className="h-11 w-11 rounded-xl bg-success/10 flex items-center justify-center shrink-0">
-                <CheckCircle className="h-5 w-5 text-success" />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between p-4 rounded-xl bg-warning-soft border border-warning/20">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1">Períodos Pendientes</p>
-                <p className="text-2xl font-bold text-warning">{resumen?.periodos_pendientes ?? 0}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Por liquidar o girar</p>
-              </div>
-              <div className="h-11 w-11 rounded-xl bg-warning-soft flex items-center justify-center shrink-0">
-                <Clock className="h-5 w-5 text-warning" />
-              </div>
-            </div>
-
-            <div className={`flex items-center justify-between p-4 rounded-xl border ${(resumen?.monto_pendiente ?? 0) > 0 ? 'bg-destructive/5 border-destructive/20' : 'bg-muted/30 border-border'}`}>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1">Monto Pendiente</p>
-                <p className={`text-2xl font-bold ${(resumen?.monto_pendiente ?? 0) > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
-                  {fmtMillones(resumen?.monto_pendiente ?? 0)}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">{txt.cardPendienteSub}</p>
-              </div>
-              <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${(resumen?.monto_pendiente ?? 0) > 0 ? 'bg-destructive/10' : 'bg-muted'}`}>
-                <Users className={`h-5 w-5 ${(resumen?.monto_pendiente ?? 0)> 0 ? 'text-destructive' : 'text-muted-foreground'}`} />
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Filtros */}
-      <Card>
-        <CardContent className="p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <h3 className="font-semibold text-base">Filtros</h3>
-          </div>
-          <div className={`grid gap-4 sm:grid-cols-2 ${esPrima ? 'lg:grid-cols-3' : ''}`}>
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="tabperiodo-buscar">Buscar</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input id="tabperiodo-buscar"
-                  placeholder="Buscar por año o descripción..."
-                  value={filtroBusqueda}
-                  onChange={(e) => setFiltroBusqueda(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="tabperiodo-estado">Estado</label>
-              <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-                <SelectTrigger id="tabperiodo-estado"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="BORRADOR">Borrador</SelectItem>
-                  <SelectItem value="CERRADA">Cerrada</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {esPrima && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="tabperiodo-semestre">Semestre</label>
-                <Select value={filtroSemestre} onValueChange={setFiltroSemestre}>
-                  <SelectTrigger id="tabperiodo-semestre"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos</SelectItem>
-                    <SelectItem value="1">1° Semestre (ene – jun)</SelectItem>
-                    <SelectItem value="2">2° Semestre (jul – dic)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-          {(filtroEstado !== 'todos' || filtroBusqueda !== '' || filtroSemestre !== 'todos') && (
-            <div className="mt-4 flex items-center gap-2">
-              <Badge variant="outline">{periodosFiltrados.length} resultado{periodosFiltrados.length !== 1 ? 's' : ''}</Badge>
-              <Button variant="ghost" size="sm" onClick={limpiarFiltros}>
-                Limpiar filtros
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Lista de períodos */}
       <div className="space-y-3">
-        <div>
-          <h2 className="mb-1">{txt.listaTitulo}</h2>
-          <p className="text-muted-foreground">{txt.listaSub}</p>
-        </div>
+        <FiltrosFila
+          busqueda={filtroBusqueda}
+          onBusqueda={setFiltroBusqueda}
+          placeholder="Buscar por año o descripción"
+          activos={filtrosActivos}
+          resultados={periodosFiltrados.length}
+          onLimpiar={limpiarFiltros}
+        >
+          <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+            <SelectTrigger className="w-full sm:w-52" aria-label="Estado"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos los estados</SelectItem>
+              <SelectItem value="BORRADOR">Borrador</SelectItem>
+              <SelectItem value="CERRADA">Cerrada</SelectItem>
+            </SelectContent>
+          </Select>
+          {esPrima && (
+            <Select value={filtroSemestre} onValueChange={setFiltroSemestre}>
+              <SelectTrigger className="w-full sm:w-48" aria-label="Semestre"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos los semestres</SelectItem>
+                <SelectItem value="1">1.er semestre (ene a jun)</SelectItem>
+                <SelectItem value="2">2.º semestre (jul a dic)</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </FiltrosFila>
 
         {cargando ? (
-          <Card>
-            <CardContent className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              Cargando períodos...
-            </CardContent>
+          <Card className="flex-row items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Cargando períodos...
           </Card>
         ) : periodosFiltrados.length > 0 ? (
-          <Card className="overflow-hidden">
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/30">
-                      <th className="text-left p-4 text-[13px] font-semibold text-muted-foreground">Período</th>
-                      <th className="text-left p-4 text-[13px] font-semibold text-muted-foreground">Estado</th>
-                      {esPrima && (
-                        <th className="text-left p-4 text-[13px] font-semibold text-muted-foreground">Semestre</th>
-                      )}
-                      <th className="text-right p-4 text-[13px] font-semibold text-muted-foreground">Colaboradores</th>
-                      {esPrima && (
-                        <th className="text-right p-4 text-[13px] font-semibold text-muted-foreground">Días prom.</th>
-                      )}
-                      <th className="text-right p-4 text-[13px] font-semibold text-muted-foreground">{txt.colTotal}</th>
-                      <th className="text-right p-4 text-[13px] font-semibold text-muted-foreground">{txt.colPagado}</th>
-                      <th className="text-right p-4 text-[13px] font-semibold text-muted-foreground">Fecha Límite</th>
-                      <th className="text-right p-4 text-[13px] font-semibold text-muted-foreground">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {periodosFiltrados.map((periodo, index) => (
-                      <tr
-                        key={periodo.id}
-                        className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${index % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}
-                      >
-                        <td className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
-                              <FileText className="h-5 w-5" />
-                            </div>
-                            <div>
-                              <p className="font-semibold text-sm">{periodo.descripcion}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {formatFecha(periodo.fecha_inicio)} — {formatFecha(periodo.fecha_fin)}
-                              </p>
-                            </div>
-                          </div>
+          <Card className="gap-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/60 text-[13px] font-medium text-muted-foreground">
+                  <tr>
+                    <th className="px-5 py-2.5 text-left font-semibold">Período</th>
+                    <th className={`${th} text-left`}>Estado</th>
+                    {esPrima && <th className={`hidden ${th} text-left sm:table-cell`}>Semestre</th>}
+                    <th className={`hidden ${th} text-right md:table-cell`}>Colaboradores</th>
+                    {esPrima && <th className={`hidden ${th} text-right lg:table-cell`}>Días prom.</th>}
+                    <th className={`${th} text-right`}>{txt.colTotal}</th>
+                    <th className={`hidden ${th} text-right lg:table-cell`}>{txt.colPagado}</th>
+                    <th className={`hidden ${th} text-right sm:table-cell`}>Fecha límite</th>
+                    <th className="px-4 py-2.5"><span className="sr-only">Acciones</span></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {periodosFiltrados.map((periodo) => {
+                    const borrador = periodo.estado === 'BORRADOR';
+                    const historico = periodo.origen === 'HISTORICO';
+                    const to = `${txt.ruta}/${periodo.id}`;
+                    return (
+                      <tr key={periodo.id} className="transition-colors hover:bg-muted/40">
+                        <td className="px-5 py-3">
+                          <Link to={to} className="font-semibold text-foreground hover:text-primary">
+                            {periodo.descripcion}
+                          </Link>
+                          <span className="block text-xs text-muted-foreground">
+                            {formatFecha(periodo.fecha_inicio)} a {formatFecha(periodo.fecha_fin)}
+                          </span>
                         </td>
-                        <td className="p-4">
-                          <div className="flex items-center gap-2">
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap items-center gap-1.5">
                             <StatusBadge status={periodo.estado} />
-                            {periodo.origen === 'HISTORICO' && (
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] bg-muted/50 text-muted-foreground border-border"
-                                title="Cargado desde un archivo de Excel: no se liquida ni se reabre"
-                              >
+                            {historico && (
+                              <Badge variant="secondary" title="Cargado desde un archivo de Excel: no se liquida ni se reabre">
                                 Histórico
                               </Badge>
                             )}
-                            {periodo.vencida && (
-                              <Badge variant="destructive" className="text-[10px]">Vencida</Badge>
-                            )}
+                            {periodo.vencida && <Badge variant="destructive">Vencida</Badge>}
                           </div>
                         </td>
                         {esPrima && (
-                          <td className="p-4">
-                            <span className="text-sm">
-                              {periodo.semestre === 1 ? '1° Semestre' : periodo.semestre === 2 ? '2° Semestre' : '—'}
-                            </span>
+                          <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
+                            {periodo.semestre === 1 ? '1.er semestre' : periodo.semestre === 2 ? '2.º semestre' : '—'}
                           </td>
                         )}
-                        <td className="p-4 text-right">
-                          <span className="text-sm font-semibold">
-                            {periodo.total_colaboradores > 0
-                              ? periodo.total_colaboradores
-                              : <span className="text-muted-foreground">—</span>}
-                          </span>
+                        <td className="hidden px-4 py-3 text-right tabular-nums text-foreground md:table-cell">
+                          {periodo.total_colaboradores > 0
+                            ? periodo.total_colaboradores
+                            : <span className="text-muted-foreground">—</span>}
                         </td>
                         {esPrima && (
-                          <td className="p-4 text-right">
-                            <span className="text-sm">
-                              {periodo.dias_promedio != null
-                                ? periodo.dias_promedio.toLocaleString('es-CO', { maximumFractionDigits: 1 })
-                                : <span className="text-muted-foreground">—</span>}
-                            </span>
+                          <td className="hidden px-4 py-3 text-right tabular-nums text-muted-foreground lg:table-cell">
+                            {periodo.dias_promedio != null
+                              ? periodo.dias_promedio.toLocaleString('es-CO', { maximumFractionDigits: 1 })
+                              : '—'}
                           </td>
                         )}
-                        <td className="p-4 text-right">
-                          {periodo.estado === 'BORRADOR'
-                            ? <span className="text-sm text-muted-foreground">—</span>
-                            : <span className="text-sm font-bold text-primary">{fmtCOP(periodo.total_liquidado)}</span>}
+                        <td className="px-4 py-3 text-right font-semibold tabular-nums text-foreground">
+                          {borrador ? <span className="font-normal text-muted-foreground">—</span> : fmtCOP(periodo.total_liquidado)}
                         </td>
-                        <td className="p-4 text-right">
-                          <span className={`text-sm font-semibold ${periodo.total_consignado > 0 ? 'text-success' : 'text-muted-foreground'}`}>
-                            {periodo.total_consignado > 0 ? fmtCOP(periodo.total_consignado) : '—'}
-                          </span>
+                        <td className="hidden px-4 py-3 text-right tabular-nums text-foreground lg:table-cell">
+                          {periodo.total_consignado > 0
+                            ? fmtCOP(periodo.total_consignado)
+                            : <span className="text-muted-foreground">—</span>}
                         </td>
-                        <td className="p-4 text-right">
+                        <td className="hidden px-4 py-3 text-right tabular-nums sm:table-cell">
                           {/* Operativa (último día hábil); la legal va en el tooltip. */}
                           <span
-                            className={`text-sm ${periodo.vencida && periodo.monto_pendiente > 0 ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}
+                            className={periodo.vencida && periodo.monto_pendiente > 0 ? 'font-semibold text-destructive' : 'text-muted-foreground'}
                             title={`Fecha legal: ${formatFecha(periodo.fecha_limite_legal)} (${txt.tooltipLegal}). Operativa: último día hábil.`}
                           >
                             {formatFecha(periodo.fecha_limite_operativa)}
                           </span>
                         </td>
-                        <td className="p-4">
-                          <div className="flex gap-2 justify-end">
-                            {periodo.origen === 'HISTORICO' ? (
-                              /* Un histórico solo se ve y se elimina; liquidar,
-                                 reabrir o pagar responden 409 PERIODO_HISTORICO. */
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => navigate(`${txt.ruta}/${periodo.id}`)}
-                                  className="hover:bg-primary/10 hover:text-primary hover:border-primary"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                  Ver
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => setAEliminar(periodo)}
-                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  title="Eliminar el histórico de este año"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </>
-                            ) : periodo.estado === 'BORRADOR' ? (
-                              <>
-                                <Button
-                                  size="sm"
-                                  onClick={() => navigate(`${txt.ruta}/${periodo.id}`)}
-                                 
-                                >
-                                  <Calculator className="h-4 w-4" />
-                                  Liquidar
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => setAEliminar(periodo)}
-                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  title="Eliminar borrador"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </>
-                            ) : (
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-1">
+                            {/* Un histórico solo se ve y se elimina; liquidar,
+                                reabrir o pagar responden 409 PERIODO_HISTORICO. */}
+                            <PeriodoAccion to={to} borrador={borrador && !historico} nombre={periodo.descripcion} />
+                            {(borrador || historico) && (
                               <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => navigate(`${txt.ruta}/${periodo.id}`)}
-                                className="hover:bg-primary/10 hover:text-primary hover:border-primary"
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => setAEliminar(periodo)}
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                aria-label={historico ? 'Eliminar el histórico de este año' : 'Eliminar borrador'}
+                                title={historico ? 'Eliminar el histórico de este año' : 'Eliminar borrador'}
                               >
-                                <Eye className="h-4 w-4" />
-                                Ver
+                                <Trash2 className="h-4 w-4" strokeWidth={2} />
                               </Button>
                             )}
                           </div>
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </Card>
         ) : periodos.length === 0 ? (
-          <Card className="border-dashed border-2">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <IconoTab className="h-16 w-16 text-muted-foreground mb-4" />
-              <p className="text-lg font-semibold mb-2">{txt.emptyTitulo}</p>
-              <p className="text-sm text-muted-foreground mb-4">Crea el primer período para comenzar</p>
-              <Button onClick={() => navigate(`${txt.ruta}/nueva`)} >
-                <Plus className="h-4 w-4" />
-                {txt.botonNuevo}
-              </Button>
-            </CardContent>
-          </Card>
+          <VacioCard
+            icon={IconoTab}
+            title={txt.emptyTitulo}
+            description="Crea el primer período para empezar."
+            action={nuevo}
+          />
         ) : (
-          <Card className="border-dashed border-2">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Search className="h-16 w-16 text-muted-foreground mb-4" />
-              <p className="text-lg font-semibold mb-2">No se encontraron resultados</p>
-              <p className="text-sm text-muted-foreground mb-4">Intenta ajustar los filtros</p>
-              <Button variant="outline" onClick={limpiarFiltros}>
-                Limpiar filtros
-              </Button>
-            </CardContent>
-          </Card>
+          <VacioCard
+            icon={Search}
+            title="Sin resultados"
+            description="Ningún período coincide con los filtros."
+            action={<Button variant="outline" onClick={limpiarFiltros}>Limpiar filtros</Button>}
+          />
         )}
       </div>
 
@@ -582,9 +424,9 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
             <AlertDialogAction
               onClick={confirmarEliminar}
               disabled={eliminando}
-              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {eliminando && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              {eliminando && <Loader2 className="h-4 w-4 animate-spin" />}
               Eliminar
             </AlertDialogAction>
           </AlertDialogFooter>

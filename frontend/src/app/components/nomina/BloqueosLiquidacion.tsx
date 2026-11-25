@@ -27,7 +27,7 @@ function rango(desde: string, hasta: string): string {
 
 function FilaAusencia({ ausencia }: { ausencia: AusenciaBloqueante }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/20 bg-background/60 p-3">
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-card p-3">
       <div className="min-w-0">
         <p className="truncate text-sm font-medium">
           {ausencia.motivo?.nombre ?? ausencia.tipo}
@@ -49,7 +49,7 @@ function FilaAusencia({ ausencia }: { ausencia: AusenciaBloqueante }) {
 
 function FilaVacacion({ vacacion }: { vacacion: VacacionBloqueante }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/20 bg-background/60 p-3">
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-card p-3">
       <div className="min-w-0">
         <p className="truncate text-sm font-medium">
           Solicitud de vacaciones {vacacion.numero_comprobante}
@@ -73,7 +73,7 @@ function Bloqueo({ bloqueo }: { bloqueo: BloqueoLiquidacion }) {
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-destructive">
+      <p className="text-sm text-foreground">
         {bloqueo.mensaje ?? bloqueo.message ?? bloqueo.code}
       </p>
       {ausencias.map((a) => (
@@ -90,20 +90,20 @@ export function BloqueosLiquidacion({ bloqueos }: { bloqueos?: BloqueoLiquidacio
   if (!bloqueos || bloqueos.length === 0) return null;
 
   return (
-    <div className="space-y-4 rounded-lg border border-destructive/40 bg-destructive/5 p-4">
-      <div className="flex items-start gap-3">
-        <Ban className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+    <div className="flex gap-2 rounded-lg bg-destructive-soft p-3">
+      <Ban className="mt-0.5 h-4 w-4 shrink-0 text-destructive" strokeWidth={2} />
+      <div className="min-w-0 flex-1 space-y-3 text-sm text-foreground">
         <div>
-          <p className="font-semibold text-destructive">No se puede liquidar todavía</p>
-          <p className="mt-0.5 text-sm text-muted-foreground">
+          <p className="font-medium">No se puede liquidar todavía</p>
+          <p className="mt-0.5 text-muted-foreground">
             Una novedad sin aprobar no entra al cálculo, y ese día se pagaría como falta
             injustificada. Decídala y vuelva a esta pantalla.
           </p>
         </div>
+        {bloqueos.map((b, i) => (
+          <Bloqueo key={`${b.code}-${i}`} bloqueo={b} />
+        ))}
       </div>
-      {bloqueos.map((b, i) => (
-        <Bloqueo key={`${b.code}-${i}`} bloqueo={b} />
-      ))}
     </div>
   );
 }

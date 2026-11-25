@@ -16,31 +16,26 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
-import { Card, CardContent } from '../../components/ui/card';
+import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
 import { Checkbox } from '../../components/ui/checkbox';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '../../components/ui/select';
-import { Badge } from '../../components/ui/badge';
-import {
   AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
-import {
-  ArrowLeft, Plane, Info, AlertCircle, AlertTriangle, Check, Loader2, CalendarDays, DollarSign,
-  Pencil,
-} from 'lucide-react';
+import { Plane, Info, AlertCircle, AlertTriangle, Check, Loader2 } from 'lucide-react';
+import PageHeader from '../../components/common/PageHeader';
+import SeccionCard from '../../components/liquidaciones/SeccionCard';
+import VacioCard from '../../components/liquidaciones/VacioCard';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'sonner';
 import {
   vacacionesApi,
   VacacionesErrorCodes,
   NO_ELEGIBLE_LABEL,
-  DIA_NO_HABIL_LABEL,
   ADVERTENCIA_PAGO_NOMINA_LABEL,
   type CalendarioVacaciones,
   type ComprobanteVacaciones,
@@ -52,8 +47,14 @@ import {
 } from '../../../api/vacaciones';
 import { BLOQUEANTE_LABEL } from '../../../api/liquidaciones';
 import type { ApiError } from '../../../api/client';
-import { formatFecha } from '../../utils/fecha';
-import { fmtCOP, fmtDias, getIniciales } from './vacaciones/comunes';
+import { fmtCOP, fmtDias } from './vacaciones/comunes';
+import FichaColaboradorVacacion, { AjusteBase } from './vacaciones/FichaColaboradorVacacion';
+import {
+  Aviso, ConsumoSaldo, DatosPagoAnticipado, PlanDePago, RangoCalendario, Segmentado,
+} from './vacaciones/PiezasNuevaVacacion';
+import { ResumenVacacion, SaldoVacacion } from './vacaciones/ResumenNuevaVacacion';
+
+const VOLVER = '/liquidaciones?tab=vacaciones';
 
 /** Solo la cobertura incompleta se puede forzar, y con motivo. */
 const FORZABLE = VacacionesErrorCodes.LIQUIDACION_COBERTURA_INCOMPLETA;
@@ -67,10 +68,6 @@ const RESUELVE_AJUSTE = new Set<string>([
   'SIN_DEVENGADO',
   VacacionesErrorCodes.LIQUIDACION_COBERTURA_INCOMPLETA,
 ]);
-
-/** El campo de dinero guarda dígitos y se pinta con punto de miles. */
-const soloDigitos = (v: string) => v.replace(/[^0-9]/g, '');
-const conMiles = (v: string) => (v ? Number(v).toLocaleString('es-CO') : '');
 
 export default function NuevaVacaciones() {
   const navigate = useNavigate();
@@ -357,27 +354,31 @@ export default function NuevaVacaciones() {
   // ── Estados de carga y guardas ─────────────────────────────────────────────
   if (cargando) {
     return (
-      <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" />
+      <Card className="flex-row items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
         Cargando colaborador...
-      </div>
+      </Card>
     );
   }
 
   if (!empleadoId || !detalle) {
     return (
-      <div className="space-y-4">
-        <Button variant="ghost" size="sm" asChild>
-          <Link to="/liquidaciones?tab=vacaciones"><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
-        </Button>
-        <p className="text-muted-foreground">
-          Elige un colaborador desde la lista de turnos pendientes para liquidar sus vacaciones.
-        </p>
+      <div className="space-y-6">
+        <PageHeader eyebrow="Vacaciones" title="Liquidación de vacaciones" backTo={VOLVER} />
+        <VacioCard
+          icon={Plane}
+          title="Sin colaborador"
+          description="Elige un colaborador desde la lista de turnos pendientes para liquidar sus vacaciones."
+          action={
+            <Button variant="outline" asChild>
+              <Link to={VOLVER}>Volver a liquidaciones</Link>
+            </Button>
+          }
+        />
       </div>
     );
   }
 
-  const emp = detalle.empleado;
   const maxDisfrute = detalle.causacion.dias_disponibles_exigibles;
   const maxDinero = detalle.dias_dinero_max;
   const totalPedido = nDisfrute + nDinero;
@@ -443,18 +444,6 @@ export default function NuevaVacaciones() {
   // los manda (una liquidación anterior a v1.10 pagaba los calendario).
   const diasPago = preview?.resultado.dias_pago ?? null;
 
-  /*
-   * v1.11 (ajuste A) — En DIRECTO el comprobante ya no paga el bruto: descuenta
-   * salud, pensión y FSP sobre el disfrute, igual que haría la nómina, y gira
-   * el neto. `valor_total` sigue siendo el bruto, que es lo que entra a nómina,
-   * cesantías, prima y liquidación final. En NOMINA las deducciones llegan en
-   * cero porque las aplica la nómina que paga cada tramo.
-   */
-  const deducciones = preview?.resultado.deducciones ?? null;
-  const totalDeducciones = deducciones?.total ?? 0;
-  const valorNeto = preview?.resultado.valor_neto ?? preview?.resultado.valor_total ?? 0;
-  const tasas = preview?.seguridad_social?.tasas ?? null;
-
   /**
    * Fuerza el recálculo con la base capturada. El preview ya sale solo al
    * teclear, pero sin botón no había nada que oprimir ni nada que dijera
@@ -484,6 +473,19 @@ export default function NuevaVacaciones() {
     void cargarPreview();
   };
 
+  const alternarBaseManual = () => {
+    const abriendo = !modoBaseManual;
+    setModoBaseManual(abriendo);
+    setBaseManual(abriendo && baseSistema > 0 ? String(Math.round(baseSistema)) : '');
+    setMotivoAjuste('');
+  };
+
+  /** En NOMINA no hay giro que registrar: lo pagan las nóminas. */
+  const cambiarModoPago = (modo: ModoPagoVacacion) => {
+    setModoPago(modo);
+    if (modo === 'NOMINA') setTipoPago('pendiente');
+  };
+
   const puedeConfirmar =
     !bloqueado && !!preview && !calculandoPreview && totalPedido > 0 &&
     !excedeSaldo && !excedeDinero && !faltaAcuerdo &&
@@ -496,359 +498,166 @@ export default function NuevaVacaciones() {
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" size="sm" asChild>
-        <Link to="/liquidaciones?tab=vacaciones"><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
-      </Button>
-
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-primary">
-          {solicitud ? 'Aprobar solicitud de vacaciones' : 'Liquidación de Vacaciones'}
-        </h1>
-        <p className="mt-1 text-muted-foreground">
-          {solicitud
-            ? 'Al liquidar queda aprobada la solicitud que el colaborador pidió desde Novedades'
-            : 'Registra los días de disfrute y la compensación en dinero'}
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Vacaciones"
+        title={solicitud ? 'Aprobar solicitud de vacaciones' : 'Liquidación de vacaciones'}
+        description={solicitud
+          ? 'Al liquidar queda aprobada la solicitud que el colaborador pidió desde Novedades.'
+          : 'Registra el disfrute y la compensación en dinero de las vacaciones.'}
+        backTo={VOLVER}
+      />
 
       {/* PR-N4 — Lo que pidió el colaborador, para que el liquidador vea de
           dónde salen los campos prellenados y qué cambió si los ajusta. */}
       {solicitud && (
-        <div className="flex items-start gap-3 rounded-xl border border-warning/20 bg-warning-soft p-4 text-sm">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-          <div className="space-y-1">
-            <p className="font-semibold text-warning">
-              Solicitud {solicitud.numero_comprobante}
-            </p>
-            <p className="text-warning">
-              Pidió {solicitud.dias_habiles} días hábiles
-              {solicitud.fecha_inicio && ` desde el ${String(solicitud.fecha_inicio).slice(0, 10)}`}.
-              Puedes ajustar los días antes de liquidar; lo que guardes es lo que queda.
-            </p>
-            {solicitud.observacion && (
-              <p className="text-xs text-foreground">
-                Observación: {solicitud.observacion}
-              </p>
-            )}
-          </div>
-        </div>
+        <Aviso tono="warning" icono={Info}>
+          <p className="font-semibold">Solicitud {solicitud.numero_comprobante}</p>
+          <p>
+            Pidió {solicitud.dias_habiles} días hábiles
+            {solicitud.fecha_inicio && ` desde el ${String(solicitud.fecha_inicio).slice(0, 10)}`}.
+            Puedes ajustar los días antes de liquidar; lo que guardes es lo que queda.
+          </p>
+          {solicitud.observacion && (
+            <p className="text-xs text-muted-foreground">Observación: {solicitud.observacion}</p>
+          )}
+        </Aviso>
       )}
 
-      {/* ── Colaborador ──────────────────────────────────────────────────
-          Una sola tarjeta con tres franjas: identidad, causación y base. Todo
-          sale del detalle del backend; aquí no se recalcula nada. */}
-      <Card className="overflow-hidden">
-        <div className="flex flex-wrap items-center gap-4 border-b border-border bg-muted/10 px-5 py-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-sm font-bold text-primary">
-            {getIniciales(emp.nombre_completo)}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-base font-semibold text-foreground">{emp.nombre_completo}</p>
-            <p className="truncate text-sm text-muted-foreground">
-              {emp.cargo ?? 'Sin cargo'} · CC {emp.documento}
-            </p>
-          </div>
-          {emp.fecha_ingreso && (
-            <div className="shrink-0 text-right">
-              <p className="text-xs text-muted-foreground">Fecha de ingreso</p>
-              <p className="text-sm font-semibold text-foreground">{formatFecha(emp.fecha_ingreso)}</p>
-            </div>
-          )}
-        </div>
-
-        <div className="grid grid-cols-2 divide-border border-b border-border sm:grid-cols-4 sm:divide-x">
-          <div className="px-5 py-2.5">
-            <p className="text-xs text-muted-foreground">Período que se liquida</p>
-            <p className="text-sm font-medium text-foreground">
-              {periodoALiquidar
-                ? `${formatFecha(periodoALiquidar.inicio)} – ${formatFecha(periodoALiquidar.fin)}`
-                : '—'}
-            </p>
-          </div>
-          <div className="px-5 py-2.5">
-            <p className="text-xs text-muted-foreground">Días causados</p>
-            <p className="text-xl font-bold text-foreground">{fmtDias(detalle.causacion.dias_generados)}</p>
-          </div>
-          <div className="px-5 py-2.5">
-            <p className="text-xs text-muted-foreground">Días disfrutados</p>
-            <p className="text-xl font-bold text-muted-foreground">{fmtDias(detalle.causacion.dias_disfrutados)}</p>
-          </div>
-          <div className="px-5 py-2.5">
-            <p className="text-xs text-muted-foreground">Días a liquidar</p>
-            <p className="text-xl font-bold text-primary">{fmtDias(maxDisfrute)}</p>
-            {detalle.causacion.dias_causados_periodo_actual > 0 && (
-              <p className="text-xs text-muted-foreground">
-                +{fmtDias(detalle.causacion.dias_causados_periodo_actual)} en curso
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* La base manda sobre todo lo demás, así que se pinta con el nombre
-            que le corresponde: un PRODUCCION no tiene "salario básico" sino el
-            promedio del año, y con ajuste es una base capturada a mano. */}
-        <div className="grid grid-cols-1 divide-border sm:grid-cols-3 sm:divide-x">
-          <div className="px-5 py-3">
-            <p className="text-xs text-muted-foreground">{etiquetaBase}</p>
-            <p className="text-sm font-semibold text-foreground">{fmtCOP(baseMensual)}</p>
-            {subtextoBase && (
-              <p className="text-xs text-muted-foreground">{subtextoBase}</p>
-            )}
-          </div>
-          <div className="px-5 py-3">
-            {/* El auxilio no entra en la base del art. 192, y lo que llega es
-                la SUMA de la ventana de 12 meses: al lado de una base mensual
-                parecía un auxilio de un millón al mes. */}
-            <p className="text-xs text-muted-foreground">
-              Auxilio excluido en la ventana{mesesBase ? ` (Σ ${mesesBase} meses)` : ''}
-            </p>
-            <p className="text-sm font-semibold text-foreground">
-              {auxilio > 0
-                ? <>{fmtCOP(auxilio)} <span className="font-normal text-muted-foreground">(no entra en la base)</span></>
-                : <span className="font-normal text-muted-foreground">No aplica</span>}
-            </p>
-          </div>
-          <div className="px-5 py-3">
-            <p className="text-xs text-muted-foreground">
-              Valor día (base / {baseVigente.dias_mes})
-            </p>
-            <p className="text-sm font-bold text-primary">{fmtCOP(valorDiaVigente)}</p>
-          </div>
-        </div>
-
-        {/* v1.13 — Reemplaza la base del art. 192 cuando el año anterior se
-            pagó fuera del sistema y el promedio sale corto. Solo con permiso:
-            es administrativo y se asigna aparte. */}
+      <FichaColaboradorVacacion
+        detalle={detalle}
+        periodo={periodoALiquidar}
+        maxDisfrute={maxDisfrute}
+        base={{
+          etiqueta: etiquetaBase,
+          subtexto: subtextoBase,
+          mensual: baseMensual,
+          valorDia: valorDiaVigente,
+          diasMes: baseVigente.dias_mes,
+          mesesBase,
+          auxilio,
+        }}
+      >
         {puedeAjustarBase && (
-          <div className="border-t border-border px-5 py-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">
-                Reemplaza la base del art. 192 que calcula el sistema. Queda registrada
-                con su motivo en el comprobante.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                
-                onClick={() => {
-                  const abriendo = !modoBaseManual;
-                  setModoBaseManual(abriendo);
-                  setBaseManual(abriendo && baseSistema > 0 ? String(Math.round(baseSistema)) : '');
-                  setMotivoAjuste('');
-                }}
-              >
-                <Pencil className="h-3.5 w-3.5" />
-                {modoBaseManual ? 'Usar base del sistema' : 'Ajustar base'}
-              </Button>
-            </div>
-
-            {modoBaseManual && (
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="base-manual">Base mensual</Label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">$</span>
-                    <Input
-                      id="base-manual"
-                      type="text"
-                      inputMode="numeric"
-                      className="pl-7"
-                      value={conMiles(baseManual)}
-                      onChange={(e) => setBaseManual(soloDigitos(e.target.value))}
-                      placeholder={baseSistema > 0 ? conMiles(String(Math.round(baseSistema))) : '0'}
-                    />
-                  </div>
-                  {nBaseManual > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      Valor día {fmtCOP(nBaseManual / baseVigente.dias_mes)}
-                      {' · '}base del sistema {fmtCOP(baseSistema)}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="motivo-ajuste">Motivo del ajuste</Label>
-                  <Input
-                    id="motivo-ajuste"
-                    value={motivoAjuste}
-                    onChange={(e) => setMotivoAjuste(e.target.value)}
-                    maxLength={500}
-                    placeholder="Por ejemplo: nóminas de 2025 en el sistema anterior"
-                  />
-                  {ajusteActivo && !motivoAjuste.trim() && (
-                    <p className="text-xs text-destructive">
-                      Indique el motivo del ajuste de la base.
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {modoBaseManual && (
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0 space-y-1">
-                  {ajusteLevantaBloqueo && !ajusteAplicado && (
-                    <p className="text-xs text-success">
-                      Con esta base ya no aplica el bloqueo por falta de nóminas cerradas.
-                    </p>
-                  )}
-                  {ajusteActivo && <EstadoAjuste
-                    calculando={calculandoPreview}
-                    aplicado={ajusteAplicado}
-                    sinDias={totalPedido <= 0}
-                    conError={!!errorPreview}
-                  />}
-                </div>
-                <Button
-                  size="sm"
-                  
-                  disabled={calculandoPreview}
-                  onClick={aplicarBaseManual}
-                >
-                  {calculandoPreview
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    : <Check className="h-3.5 w-3.5" />}
-                  Aplicar base
-                </Button>
-              </div>
-            )}
-          </div>
+          <AjusteBase
+            abierto={modoBaseManual}
+            onAlternar={alternarBaseManual}
+            base={baseManual}
+            onBase={setBaseManual}
+            motivo={motivoAjuste}
+            onMotivo={setMotivoAjuste}
+            baseSistema={baseSistema}
+            diasMes={baseVigente.dias_mes}
+            activo={ajusteActivo}
+            aplicado={ajusteAplicado}
+            levantaBloqueo={ajusteLevantaBloqueo}
+            calculando={calculandoPreview}
+            sinDias={totalPedido <= 0}
+            conError={!!errorPreview}
+            onAplicar={aplicarBaseManual}
+          />
         )}
-      </Card>
+      </FichaColaboradorVacacion>
 
       {/* ── Bloqueos ─────────────────────────────────────────────────────── */}
       {!detalle.elegible && (
-        <div className="flex gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+        <Aviso tono="destructive" icono={AlertCircle}>
           <p>
             {detalle.motivo_no_elegible
               ? NO_ELEGIBLE_LABEL[detalle.motivo_no_elegible]
               : 'Este colaborador no puede liquidar vacaciones.'}
           </p>
-        </div>
+        </Aviso>
       )}
 
       {bloqueantesBaseVigentes.length > 0 && (
-        <div className="space-y-1 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+        <Aviso tono="destructive" icono={AlertCircle}>
           {bloqueantesBaseVigentes.map((b, i) => (
-            <p key={`${b.code}-${i}`} className="flex gap-2">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{b.mensaje ?? BLOQUEANTE_LABEL[b.code] ?? b.code}</span>
-            </p>
+            <p key={`${b.code}-${i}`}>{b.mensaje ?? BLOQUEANTE_LABEL[b.code] ?? b.code}</p>
           ))}
-        </div>
+        </Aviso>
       )}
 
       {/* ── Formulario ───────────────────────────────────────────────────── */}
-      <Card>
-        <CardContent className="space-y-6 p-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-              <Plane className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold">Datos de la liquidación</h2>
-              <p className="text-sm text-muted-foreground">Ingresa las fechas y días a liquidar</p>
-            </div>
-          </div>
-
+      <SeccionCard title="Datos de la liquidación" description="Ingresa las fechas y los días a liquidar.">
+        <div className="space-y-6">
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>Fecha inicio de vacaciones <span className="text-destructive">*</span></Label>
+            <div className="space-y-2">
+              <Label htmlFor="fechaInicioVac">Fecha de inicio de vacaciones *</Label>
               <Input
+                id="fechaInicioVac"
                 type="date"
                 value={fechaInicio}
                 onChange={(e) => setFechaInicio(e.target.value)}
                 disabled={bloqueado}
               />
             </div>
-
-            <div className="space-y-1.5">
-              <Label>Fecha fin de vacaciones</Label>
+            <div className="space-y-2">
+              <Label htmlFor="fechaFinVac">Fecha de fin de vacaciones</Label>
               {/* Solo lectura: la resuelve `/calendario` en el backend, que es
                   quien sabe qué días son festivos y si el sábado es hábil. */}
               <Input
+                id="fechaFinVac"
                 type="date"
                 value={calendario?.fecha_fin ?? ''}
                 readOnly
-                className="cursor-not-allowed bg-muted/40 text-muted-foreground"
+                className="cursor-not-allowed bg-muted/60 text-muted-foreground"
               />
               <p className="text-xs text-muted-foreground">
-                {calculandoCalendario
-                  ? 'Calculando…'
-                  : 'Calculada automáticamente según días de disfrute'}
+                {calculandoCalendario ? 'Calculando…' : 'Se calcula según los días de disfrute.'}
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>
-                <span className="font-semibold text-success">Días de disfrute</span>
-                <span className="ml-2 text-xs text-muted-foreground">(descanso efectivo, hábiles)</span>
+            <div className="space-y-2">
+              <Label htmlFor="diasDisfrute">
+                Días de disfrute <span className="font-normal text-muted-foreground">(descanso efectivo, hábiles)</span>
               </Label>
               <Input
+                id="diasDisfrute"
                 type="number" min={0} step={1} placeholder="0"
                 value={diasDisfrute}
                 onChange={(e) => setDiasDisfrute(e.target.value)}
                 disabled={bloqueado}
-                className={excedeSaldo ? 'border-destructive focus-visible:ring-destructive' : ''}
+                aria-invalid={excedeSaldo || undefined}
               />
-              <p className="text-xs text-muted-foreground">
-                Máximo: {fmtDias(maxDisfrute)} días disponibles
-              </p>
+              <p className="text-xs text-muted-foreground">Máximo: {fmtDias(maxDisfrute)} días disponibles</p>
             </div>
-
-            <div className="space-y-1.5">
-              <Label>
-                <span className="font-semibold text-warning">Días en dinero</span>
-                <span className="ml-2 text-xs text-muted-foreground">(compensación, opcional)</span>
+            <div className="space-y-2">
+              <Label htmlFor="diasDinero">
+                Días en dinero <span className="font-normal text-muted-foreground">(compensación, opcional)</span>
               </Label>
               <Input
+                id="diasDinero"
                 type="number" min={0} step={0.5} max={maxDinero} placeholder="0"
                 value={diasDinero}
                 onChange={(e) => setDiasDinero(e.target.value)}
                 disabled={bloqueado || maxDinero <= 0}
-                className={excedeDinero ? 'border-destructive focus-visible:ring-destructive' : ''}
+                aria-invalid={excedeDinero || undefined}
               />
               <p className="text-xs text-muted-foreground">
-                Máximo: {fmtDias(maxDinero)} días, la mitad del período causado (Art. 189 CST)
+                Máximo: {fmtDias(maxDinero)} días, la mitad del período causado (art. 189 CST)
               </p>
             </div>
           </div>
 
-          {/* Forma de pago (PR-L15). Hasta aquí este control decía "pago en
-              nómina" para algo que la nómina no pagaba: era solo "dejar
-              pendiente". Ahora son dos preguntas distintas: quién paga y
-              cuándo. */}
-          <div className="space-y-1.5">
-            <Label>Forma de pago <span className="text-destructive">*</span></Label>
-            <div className="flex overflow-hidden rounded-lg border border-input">
-              <button
-                type="button"
-                onClick={() => setModoPago('DIRECTO')}
-                disabled={bloqueado}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${
-                  modoPago === 'DIRECTO'
-                    ? 'bg-primary text-white'
-                    : 'bg-background text-muted-foreground hover:bg-muted'
-                }`}
-              >
-                Pago directo
-              </button>
-              <button
-                type="button"
-                onClick={() => { setModoPago('NOMINA'); setTipoPago('pendiente'); }}
-                disabled={bloqueado || nDisfrute <= 0}
-                title={nDisfrute <= 0 ? 'En nómina solo se puede pagar un disfrute, no una compensación suelta' : undefined}
-                className={`border-l border-input px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
-                  modoPago === 'NOMINA'
-                    ? 'bg-primary text-white'
-                    : 'bg-background text-muted-foreground hover:bg-muted'
-                }`}
-              >
-                En nómina
-              </button>
-            </div>
+          {/* Forma de pago (PR-L15): quién paga y, si es directo, cuándo. */}
+          <div className="space-y-2">
+            <Label>Forma de pago *</Label>
+            <Segmentado<ModoPagoVacacion>
+              ariaLabel="Forma de pago"
+              valor={modoPago}
+              onCambio={cambiarModoPago}
+              opciones={[
+                { valor: 'DIRECTO', label: 'Pago directo', disabled: bloqueado },
+                {
+                  valor: 'NOMINA',
+                  label: 'En nómina',
+                  disabled: bloqueado || nDisfrute <= 0,
+                  title: nDisfrute <= 0 ? 'En nómina solo se puede pagar un disfrute, no una compensación suelta' : undefined,
+                },
+              ]}
+            />
             <p className="text-xs text-muted-foreground">
               {modoPago === 'DIRECTO'
                 ? 'La paga este módulo, con su propio comprobante.'
@@ -856,40 +665,22 @@ export default function NuevaVacaciones() {
             </p>
           </div>
 
-          {/* En NOMINA no hay giro que registrar: lo pagan las nóminas. */}
           {modoPago === 'DIRECTO' && (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label>¿Cuándo se paga?</Label>
-              <div className="flex overflow-hidden rounded-lg border border-input">
-                <button
-                  type="button"
-                  onClick={() => setTipoPago('pendiente')}
-                  disabled={bloqueado}
-                  className={`px-4 py-2 text-sm font-medium transition-colors ${
-                    tipoPago === 'pendiente'
-                      ? 'bg-primary text-white'
-                      : 'bg-background text-muted-foreground hover:bg-muted'
-                  }`}
-                >
-                  Pagar después
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTipoPago('anticipado')}
-                  disabled={bloqueado}
-                  className={`border-l border-input px-4 py-2 text-sm font-medium transition-colors ${
-                    tipoPago === 'anticipado'
-                      ? 'bg-primary text-white'
-                      : 'bg-background text-muted-foreground hover:bg-muted'
-                  }`}
-                >
-                  Pago anticipado
-                </button>
-              </div>
+              <Segmentado<'pendiente' | 'anticipado'>
+                ariaLabel="Cuándo se paga"
+                valor={tipoPago}
+                onCambio={setTipoPago}
+                opciones={[
+                  { valor: 'pendiente', label: 'Pagar después', disabled: bloqueado },
+                  { valor: 'anticipado', label: 'Pago anticipado', disabled: bloqueado },
+                ]}
+              />
               <p className="text-xs text-muted-foreground">
                 {tipoPago === 'pendiente'
-                  ? 'Queda APROBADA y el pago se registra después desde el histórico.'
-                  : 'Se registra el pago de inmediato y la vacación queda PAGADA.'}
+                  ? 'Queda aprobada y el pago se registra después desde el histórico.'
+                  : 'Se registra el pago de inmediato y la vacación queda pagada.'}
               </p>
             </div>
           )}
@@ -897,99 +688,31 @@ export default function NuevaVacaciones() {
           {modoPago === 'NOMINA' && <PlanDePago preview={preview} />}
 
           {modoPago === 'DIRECTO' && tipoPago === 'anticipado' && (
-            <div className="grid grid-cols-1 gap-5 rounded-xl border border-border bg-muted/20 p-4 sm:grid-cols-3">
-              <div className="space-y-1.5">
-                <Label>Fecha de pago <span className="text-destructive">*</span></Label>
-                <Input
-                  type="date"
-                  value={fechaPago}
-                  onChange={(e) => setFechaPago(e.target.value)}
-                  disabled={bloqueado}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Método <span className="text-destructive">*</span></Label>
-                <Select
-                  value={metodoPago}
-                  onValueChange={(v) => setMetodoPago(v as MetodoPagoVacacion)}
-                  disabled={bloqueado}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="TRANSFERENCIA">Transferencia</SelectItem>
-                    <SelectItem value="EFECTIVO">Efectivo</SelectItem>
-                    <SelectItem value="CHEQUE">Cheque</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Referencia <span className="font-normal text-muted-foreground">(opcional)</span></Label>
-                <Input
-                  placeholder="No. de comprobante"
-                  value={referenciaPago}
-                  onChange={(e) => setReferenciaPago(e.target.value)}
-                  disabled={bloqueado}
-                />
-              </div>
-            </div>
+            <DatosPagoAnticipado
+              fecha={fechaPago}
+              onFecha={setFechaPago}
+              metodo={metodoPago}
+              onMetodo={setMetodoPago}
+              referencia={referenciaPago}
+              onReferencia={setReferenciaPago}
+              disabled={bloqueado}
+            />
           )}
 
-          {/* Calendario resuelto por el backend */}
           {nDisfrute > 0 && fechaInicio && (
-            <div className="rounded-xl border border-border bg-muted/20 px-4 py-3">
-              {calculandoCalendario ? (
-                <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Calculando el rango
-                </p>
-              ) : calendario ? (
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
-                    <span className="flex items-center gap-2 font-medium text-foreground">
-                      <CalendarDays className="h-4 w-4 text-primary" />
-                      {formatFecha(calendario.fecha_inicio)} al {formatFecha(calendario.fecha_fin)}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {fmtDias(calendario.dias_habiles)} días hábiles
-                    </span>
-                    <span className="font-semibold text-foreground">
-                      {diasPago != null && diasPago !== calendario.dias_calendario
-                        ? `${fmtDias(diasPago)} días a pagar (${fmtDias(calendario.dias_calendario)} calendario)`
-                        : `${fmtDias(calendario.dias_calendario)} días calendario a pagar`}
-                    </span>
-                  </div>
-                  {calendario.dias_no_habiles.length > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      No hábiles dentro del rango:{' '}
-                      {calendario.dias_no_habiles
-                        .map((d) => `${formatFecha(d.fecha)} (${DIA_NO_HABIL_LABEL[d.motivo]})`)
-                        .join(', ')}
-                    </p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    Se regresa a trabajar el día hábil siguiente al {formatFecha(calendario.fecha_fin)}.
-                  </p>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No se pudo resolver el rango. Revisa la fecha de inicio.
-                </p>
-              )}
-            </div>
+            <RangoCalendario calendario={calendario} calculando={calculandoCalendario} diasPago={diasPago} />
           )}
 
           {/* Acuerdo escrito: sin él la compensación no es válida */}
           {nDinero > 0 && (
-            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-warning/20 bg-warning-soft px-4 py-3">
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg bg-warning-soft px-4 py-3">
               <Checkbox
                 checked={acuerdoEscrito}
                 onCheckedChange={(v) => setAcuerdoEscrito(v === true)}
                 className="mt-0.5"
               />
               <span className="text-sm">
-                <span className="font-semibold text-warning">
-                  Hay acuerdo escrito con el trabajador
-                </span>
+                <span className="font-semibold text-foreground">Hay acuerdo escrito con el trabajador</span>
                 <span className="mt-0.5 block text-muted-foreground">
                   El artículo 189 del CST exige que la compensación en dinero se pacte por escrito.
                   Sin el documento firmado la liquidación no se puede confirmar.
@@ -998,67 +721,32 @@ export default function NuevaVacaciones() {
             </label>
           )}
 
-          {/* Cuánto del saldo se está consumiendo. */}
           {totalPedido > 0 && maxDisfrute > 0 && (
-            <div className="space-y-2 rounded-xl border border-border bg-muted/20 p-4">
-              <div className="flex flex-wrap justify-between gap-2 text-sm">
-                <span className="text-muted-foreground">
-                  Días a liquidar: <strong className="text-foreground">{fmtDias(totalPedido)}</strong> de{' '}
-                  <strong className="text-foreground">{fmtDias(maxDisfrute)}</strong> disponibles
-                </span>
-                <span className={`font-semibold ${excedeSaldo ? 'text-destructive' : 'text-foreground'}`}>
-                  {Math.round((totalPedido / maxDisfrute) * 100)}%
-                </span>
-              </div>
-              <div className="h-2.5 overflow-hidden rounded-full bg-border">
-                <div
-                  className={`h-full rounded-full transition ${
-                    excedeSaldo ? 'bg-destructive'
-                      : totalPedido / maxDisfrute > 0.75 ? 'bg-warning'
-                      : 'bg-success'
-                  }`}
-                  style={{ width: `${Math.min((totalPedido / maxDisfrute) * 100, 100)}%` }}
-                />
-              </div>
-              <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-block h-2 w-2 rounded-full bg-success" />
-                  Disfrute: {fmtDias(nDisfrute)} días
-                </span>
-                {nDinero > 0 && (
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block h-2 w-2 rounded-full bg-warning" />
-                    Dinero: {fmtDias(nDinero)} días
-                  </span>
-                )}
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-block h-2 w-2 rounded-full bg-border" />
-                  Quedan: {fmtDias(Math.max(maxDisfrute - totalPedido, 0))}
-                </span>
-              </div>
-            </div>
+            <ConsumoSaldo disfrute={nDisfrute} dinero={nDinero} disponibles={maxDisfrute} />
           )}
 
-          {/* Errores de captura */}
           {(excedeSaldo || excedeDinero) && (
-            <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              {excedeSaldo
-                ? `El total (${fmtDias(totalPedido)} días) supera el saldo disponible (${fmtDias(maxDisfrute)}).`
-                : `Los días en dinero (${fmtDias(nDinero)}) superan el máximo permitido (${fmtDias(maxDinero)}).`}
-            </div>
+            <Aviso tono="destructive" icono={AlertCircle}>
+              <p>
+                {excedeSaldo
+                  ? `El total (${fmtDias(totalPedido)} días) supera el saldo disponible (${fmtDias(maxDisfrute)}).`
+                  : `Los días en dinero (${fmtDias(nDinero)}) superan el máximo permitido (${fmtDias(maxDinero)}).`}
+              </p>
+            </Aviso>
           )}
 
-          <div className="space-y-1.5">
-            <Label>Observación <span className="font-normal text-muted-foreground">(opcional)</span></Label>
+          <div className="space-y-2">
+            <Label htmlFor="observacionVac">
+              Observación <span className="font-normal text-muted-foreground">(opcional)</span>
+            </Label>
             <Textarea
+              id="observacionVac"
               rows={2} placeholder="Notas internas de esta liquidación."
               value={observacion} onChange={(e) => setObservacion(e.target.value)}
             />
           </div>
 
-          <div className="flex gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          <Aviso tono="muted" icono={Info}>
             <p className="text-muted-foreground">
               <strong className="text-foreground">Art. 186 CST:</strong> 15 días hábiles por año de
               servicio. <strong className="text-foreground">Art. 189 CST:</strong> los días compensados
@@ -1066,276 +754,62 @@ export default function NuevaVacaciones() {
               <strong className="text-foreground">Art. 192 CST:</strong> el disfrute se paga por días
               calendario. El sistema aplica los tres topes.
             </p>
-          </div>
-        </CardContent>
-      </Card>
+          </Aviso>
+        </div>
+      </SeccionCard>
 
       {/* ── Resultado del preview ────────────────────────────────────────── */}
       {calculandoPreview && (
-        <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
+        <Card className="flex-row items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
           Calculando la liquidación
-        </div>
+        </Card>
       )}
 
       {!calculandoPreview && errorPreview && totalPedido > 0 && (
-        <div className="flex gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+        <Aviso tono="destructive" icono={AlertCircle}>
           <p>{errorPreview}</p>
-        </div>
+        </Aviso>
       )}
 
       {!calculandoPreview && preview && (
         <>
           {bloqueantesPreview.length > 0 && (
-            <div className="space-y-1 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+            <Aviso tono="destructive" icono={AlertCircle}>
               {bloqueantesPreview.map((b, i) => (
-                <p key={`${b.code}-${i}`} className="flex gap-2">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>
-                    {b.mensaje ?? BLOQUEANTE_LABEL[b.code] ?? b.code}
-                    {b.forzable === true && (
-                      <span className="ml-1 text-muted-foreground">
-                        Se puede liquidar igual dejando el motivo por escrito.
-                      </span>
-                    )}
-                  </span>
+                <p key={`${b.code}-${i}`}>
+                  {b.mensaje ?? BLOQUEANTE_LABEL[b.code] ?? b.code}
+                  {b.forzable === true && (
+                    <span className="ml-1 text-muted-foreground">
+                      Se puede liquidar igual dejando el motivo por escrito.
+                    </span>
+                  )}
                 </p>
               ))}
-            </div>
+            </Aviso>
           )}
 
           {preview.advertencias.length > 0 && (
-            <div className="space-y-1 rounded-xl border border-warning/20 bg-warning-soft px-4 py-3 text-sm">
+            <Aviso tono="warning" icono={AlertTriangle}>
               {preview.advertencias.map((a, i) => (
-                <p key={`${a.code}-${i}`} className="flex gap-2 text-warning">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  {a.mensaje ?? ADVERTENCIA_PAGO_NOMINA_LABEL[a.code] ?? a.code}
-                </p>
+                <p key={`${a.code}-${i}`}>{a.mensaje ?? ADVERTENCIA_PAGO_NOMINA_LABEL[a.code] ?? a.code}</p>
               ))}
-            </div>
+            </Aviso>
           )}
 
-          <Card className="overflow-hidden">
-            <div className="flex flex-wrap items-center gap-3 border-b border-border bg-muted/20 px-5 py-3">
-              <DollarSign className="h-4 w-4 shrink-0 text-primary" />
-              <p className="text-sm font-semibold">Resumen de liquidación</p>
-              {puedeConfirmar && (
-                <Badge variant="outline" className="ml-auto border-success/30 bg-success/10 text-xs text-success">
-                  Listo para confirmar
-                </Badge>
-              )}
-            </div>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[560px]">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="px-5 py-2.5 text-left text-[13px] font-semibold text-muted-foreground">Concepto</th>
-                      <th className="px-5 py-2.5 text-center text-[13px] font-semibold text-muted-foreground">Días</th>
-                      <th className="px-5 py-2.5 text-center text-[13px] font-semibold text-muted-foreground">Valor día</th>
-                      <th className="px-5 py-2.5 text-right text-[13px] font-semibold text-muted-foreground">Valor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.resultado.dias_calendario > 0 && (
-                      <tr className="border-b border-border bg-success/5">
-                        <td className="px-5 py-3">
-                          <p className="text-sm font-medium text-success">Días de disfrute</p>
-                          {/* Se pagan calendario, no hábiles: por eso van los dos.
-                              PR-L15 (D1): desde v1.10 lo que se paga son los días
-                              comerciales, que en meses de 31 y en febrero no son
-                              los calendario. Se muestran los dos cuando difieren. */}
-                          <p className="text-xs text-muted-foreground">
-                            Equivalen a {fmtDias(preview.resultado.dias_disfrute)} días hábiles
-                            {diasPago != null && diasPago !== preview.resultado.dias_calendario
-                              && ` · ${fmtDias(preview.resultado.dias_calendario)} calendario`}
-                          </p>
-                        </td>
-                        <td className="px-5 py-3 text-center text-sm text-foreground">
-                          {fmtDias(diasPago ?? preview.resultado.dias_calendario)}
-                        </td>
-                        <td className="px-5 py-3 text-center text-sm text-foreground">
-                          {fmtCOP(preview.resultado.valor_dia)}
-                        </td>
-                        <td className="px-5 py-3 text-right text-sm font-semibold text-success">
-                          {fmtCOP(preview.resultado.valor_disfrute)}
-                        </td>
-                      </tr>
-                    )}
-                    {preview.resultado.dias_dinero > 0 && (
-                      <tr className="border-b border-border bg-warning-soft">
-                        <td className="px-5 py-3 text-sm font-medium text-warning">
-                          Días en dinero (Art. 189 CST)
-                        </td>
-                        <td className="px-5 py-3 text-center text-sm text-foreground">
-                          {fmtDias(preview.resultado.dias_dinero)}
-                        </td>
-                        <td className="px-5 py-3 text-center text-sm text-foreground">
-                          {fmtCOP(preview.resultado.valor_dia)}
-                        </td>
-                        <td className="px-5 py-3 text-right text-sm font-semibold text-warning">
-                          {fmtCOP(preview.resultado.valor_dinero)}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                  <tfoot>
-                    {/* Sin deducciones el pie es el de siempre: una sola fila
-                        con el total. Con ellas se abre en devengado, lo que se
-                        le descuenta al trabajador y lo que se le gira. */}
-                    <tr className="border-t-2 border-border">
-                      <td colSpan={3} className="px-5 py-4">
-                        <p className={totalDeducciones > 0 ? 'text-sm font-semibold' : 'text-base font-bold'}>
-                          {totalDeducciones > 0 ? 'Total devengado' : 'Total a pagar'}
-                        </p>
-                        <p className="text-xs font-normal text-muted-foreground">
-                          {preview.resultado.formula_aplicada}
-                        </p>
-                      </td>
-                      <td className={`px-5 py-4 text-right font-bold ${totalDeducciones > 0 ? 'text-base text-foreground' : 'text-2xl text-primary'}`}>
-                        {fmtCOP(preview.resultado.valor_total)}
-                      </td>
-                    </tr>
-                    {deducciones && totalDeducciones > 0 && (
-                      <>
-                        {deducciones.salud > 0 && (
-                          <tr className="border-t border-border">
-                            <td colSpan={3} className="px-5 py-2 text-sm text-muted-foreground">
-                              Salud del trabajador{tasas ? ` (${tasas.salud} %)` : ''}
-                            </td>
-                            <td className="px-5 py-2 text-right text-sm text-destructive">
-                              −{fmtCOP(deducciones.salud)}
-                            </td>
-                          </tr>
-                        )}
-                        {deducciones.pension > 0 && (
-                          <tr className="border-t border-border">
-                            <td colSpan={3} className="px-5 py-2 text-sm text-muted-foreground">
-                              Pensión del trabajador{tasas ? ` (${tasas.pension} %)` : ''}
-                            </td>
-                            <td className="px-5 py-2 text-right text-sm text-destructive">
-                              −{fmtCOP(deducciones.pension)}
-                            </td>
-                          </tr>
-                        )}
-                        {deducciones.fsp > 0 && (
-                          <tr className="border-t border-border">
-                            <td colSpan={3} className="px-5 py-2 text-sm text-muted-foreground">
-                              Fondo de Solidaridad Pensional{tasas?.fsp ? ` (${tasas.fsp} %)` : ''}
-                            </td>
-                            <td className="px-5 py-2 text-right text-sm text-destructive">
-                              −{fmtCOP(deducciones.fsp)}
-                            </td>
-                          </tr>
-                        )}
-                        <tr className="border-t-2 border-border">
-                          <td colSpan={3} className="px-5 py-4">
-                            <p className="text-base font-bold">Neto a pagar</p>
-                            <p className="text-xs font-normal text-muted-foreground">
-                              La compensación en dinero no cotiza (CST art. 189)
-                            </p>
-                          </td>
-                          <td className="px-5 py-4 text-right text-2xl font-bold text-primary">
-                            {fmtCOP(valorNeto)}
-                          </td>
-                        </tr>
-                      </>
-                    )}
-                  </tfoot>
-                </table>
-              </div>
-
-              <div className="grid grid-cols-1 divide-border border-t border-border sm:grid-cols-3 sm:divide-x">
-                <div className="px-5 py-3">
-                  <p className="text-xs text-muted-foreground">Inicio de vacaciones</p>
-                  <p className="text-sm font-medium">
-                    {calendario ? formatFecha(calendario.fecha_inicio) : '—'}
-                  </p>
-                </div>
-                <div className="px-5 py-3">
-                  <p className="text-xs text-muted-foreground">Fin de vacaciones</p>
-                  <p className="text-sm font-medium">
-                    {calendario ? formatFecha(calendario.fecha_fin) : '—'}
-                  </p>
-                </div>
-                <div className="px-5 py-3">
-                  <p className="text-xs text-muted-foreground">Regreso a trabajar</p>
-                  <p className="text-sm font-medium text-primary">
-                    {calendario ? 'El día hábil siguiente' : '—'}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Saldo después y períodos que se consumen */}
-          {preview.saldo && (
-            <Card>
-              <CardContent className="space-y-4 p-5">
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Saldo antes</p>
-                    <p className="font-semibold text-foreground">
-                      {fmtDias(preview.saldo.dias_disponibles_exigibles_antes)} días
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Saldo después</p>
-                    <p className="font-semibold text-foreground">
-                      {fmtDias(preview.saldo.dias_disponibles_exigibles_despues)} días
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Próximo vencimiento</p>
-                    <p className="font-semibold text-foreground">
-                      {formatFecha(preview.saldo.fecha_vencimiento_despues)}
-                    </p>
-                  </div>
-                </div>
-
-                {preview.periodos_afectados.length > 0 && (
-                  <div className="space-y-2 border-t border-border pt-4">
-                    <p className="text-xs font-semibold text-muted-foreground">Períodos que se consumen</p>
-                    {preview.periodos_afectados.map((p) => (
-                      <div key={p.periodo} className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                        <Badge variant="outline">Período {p.periodo}</Badge>
-                        <span className="text-muted-foreground">
-                          {formatFecha(p.inicio)} al {formatFecha(p.fin)}
-                        </span>
-                        <span className="text-foreground">
-                          {fmtDias(p.dias_disfrute)} disfrute · {fmtDias(p.dias_dinero)} dinero
-                        </span>
-                        <span className="text-muted-foreground">Queda {fmtDias(p.saldo_restante)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {preview.saldo.usa_periodo_en_curso && (
-                  <p className="rounded-lg border border-warning/20 bg-warning-soft px-3 py-2 text-xs text-warning">
-                    Se están usando días del año en curso. Si el trabajador se retira antes de
-                    cumplirlo, esos días no se le pueden cobrar.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          )}
+          <ResumenVacacion preview={preview} calendario={calendario} listo={puedeConfirmar} />
+          <SaldoVacacion preview={preview} />
         </>
       )}
 
       {/* ── Acciones ─────────────────────────────────────────────────────── */}
-      <div className="barra-acciones flex justify-between">
+      <div className="barra-acciones flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button variant="outline" asChild>
-          <Link to="/liquidaciones?tab=vacaciones"><ArrowLeft className="h-4 w-4" />Cancelar</Link>
+          <Link to={VOLVER}>Cancelar</Link>
         </Button>
-        <Button
-          onClick={() => confirmar(false)}
-          disabled={!puedeConfirmar || confirmando}
-          className="bg-success hover:bg-success/90"
-        >
-          {confirmando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-          Confirmar Liquidación
+        <Button onClick={() => confirmar(false)} disabled={!puedeConfirmar || confirmando}>
+          {confirmando ? <Loader2 className="animate-spin" /> : <Check strokeWidth={2} />}
+          Confirmar liquidación
         </Button>
       </div>
 
@@ -1348,7 +822,7 @@ export default function NuevaVacaciones() {
               {forzarDialog} Puedes liquidar igual, pero queda registrado quién lo autorizó y por qué.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <Label htmlFor="nuevavacac-motivo">Motivo</Label>
             <Textarea id="nuevavacac-motivo"
               rows={3} placeholder="Explica por qué se liquida con la información disponible."
@@ -1357,8 +831,8 @@ export default function NuevaVacaciones() {
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={confirmando}>Cancelar</AlertDialogCancel>
-            <Button onClick={() => confirmar(true)} disabled={confirmando} >
-              {confirmando && <Loader2 className="h-4 w-4 animate-spin" />}
+            <Button onClick={() => confirmar(true)} disabled={confirmando}>
+              {confirmando && <Loader2 className="animate-spin" />}
               Liquidar de todos modos
             </Button>
           </AlertDialogFooter>
@@ -1369,116 +843,6 @@ export default function NuevaVacaciones() {
 }
 
 /** Traduce los códigos del contrato a algo que el usuario pueda accionar. */
-/**
- * Qué nómina va a pagar cada tramo del disfrute (§10.4, `nomina.plan_pago`).
- *
- * Es una previsión, no un hecho: las nóminas pueden estar en BORRADOR y
- * algunos tramos no tener todavía una fila del colaborador. Eso último es lo
- * que importa mostrar, porque esos días solo se podrán pagar a mano.
- */
-/**
- * En qué va el ajuste de base. Sin esto no había señal de que el backend
- * hubiera recalculado, ni de qué faltaba para poder confirmar.
- */
-function EstadoAjuste({ calculando, aplicado, sinDias, conError }: {
-  calculando: boolean;
-  aplicado: boolean;
-  sinDias: boolean;
-  conError: boolean;
-}) {
-  if (calculando) {
-    return (
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        Recalculando con la base manual
-      </p>
-    );
-  }
-  if (aplicado) {
-    return (
-      <p className="flex items-center gap-1.5 text-xs text-success">
-        <Check className="h-3.5 w-3.5" />
-        El cálculo de abajo ya usa esta base. Confirme para guardarla con su motivo.
-      </p>
-    );
-  }
-  if (sinDias) {
-    return (
-      <p className="flex items-center gap-1.5 text-xs text-warning">
-        <AlertTriangle className="h-3.5 w-3.5" />
-        Capture los días a liquidar: el recálculo sale con ellos.
-      </p>
-    );
-  }
-  if (conError) return null;
-  return (
-    <p className="flex items-center gap-1.5 text-xs text-warning">
-      <AlertTriangle className="h-3.5 w-3.5" />
-      El cálculo todavía no trae la base manual. Revise el motivo y los días.
-    </p>
-  );
-}
-
-function PlanDePago({ preview }: { preview: ComprobanteVacaciones | null }) {
-  const plan = preview?.nomina?.plan_pago ?? [];
-  const sinNomina = preview?.nomina?.sin_nomina ?? null;
-  const sinCubrir = (sinNomina?.dias ?? 0) > 0 || !!sinNomina?.paga_dinero;
-
-  if (!preview) {
-    return (
-      <p className="rounded-xl border border-border bg-muted/20 p-4 text-xs text-muted-foreground">
-        Completa las fechas para ver qué nómina paga cada tramo.
-      </p>
-    );
-  }
-
-  return (
-    <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-4">
-      <p className="text-sm font-medium">Plan de pago</p>
-
-      {plan.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          Ninguna nómina del colaborador cubre todavía estas fechas.
-        </p>
-      ) : (
-        <div className="space-y-2">
-          {plan.map((t) => (
-            <div
-              key={`${t.nomina_id}-${t.fecha_desde}`}
-              className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border/60 pb-2 last:border-0 last:pb-0"
-            >
-              <div className="min-w-0">
-                <p className="text-sm">
-                  {t.etiqueta || `Nómina ${t.nomina_id}`}
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    {formatFecha(t.fecha_desde)} al {formatFecha(t.fecha_hasta)} · {fmtDias(t.dias)} días
-                  </span>
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t.estado_nomina === 'CERRADA' ? 'Cerrada' : 'En borrador'}
-                  {t.paga_dinero && ` · paga además ${fmtCOP(t.valor_dinero)} de compensación`}
-                </p>
-              </div>
-              <p className="text-sm font-semibold tabular-nums">{fmtCOP(t.valor_tramo)}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {sinCubrir && (
-        <p className="flex items-start gap-2 rounded-lg border border-warning/20 bg-warning-soft p-3 text-xs text-warning">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>
-            Quedan {fmtDias(sinNomina?.dias ?? 0)} días ({fmtCOP(sinNomina?.valor ?? 0)}) que
-            ninguna nómina cubre todavía. Si la nómina de ese tramo ya cerró sin el colaborador,
-            ese saldo habrá que pagarlo a mano desde el histórico.
-          </span>
-        </p>
-      )}
-    </div>
-  );
-}
-
 function mensajeError(e: ApiError): string {
   switch (e.code) {
     case VacacionesErrorCodes.VACACIONES_SALDO_INSUFICIENTE:

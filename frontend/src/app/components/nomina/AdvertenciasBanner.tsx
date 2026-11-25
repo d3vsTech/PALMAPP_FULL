@@ -50,7 +50,7 @@ const mensajeDe = (a: AdvertenciaItem) => a.mensaje ?? a.message ?? '';
 
 interface Props {
   items?: AdvertenciaItem[];
-  /** `sm` para dentro del preview, `md` para el header del detalle. */
+  /** Ya no cambia nada: todos los avisos van en `text-sm`. */
   size?: 'sm' | 'md';
   /**
    * PR-V2 — Con esto, la advertencia de trabajo en días de vacaciones ofrece
@@ -62,35 +62,33 @@ interface Props {
 
 const ESTILO: Record<SeveridadAdvertencia, { caja: string; texto: string; icono: string }> = {
   critica: {
-    caja: 'border-2 border-destructive/40 bg-destructive/5',
-    texto: 'text-destructive',
+    caja: 'bg-destructive-soft',
+    texto: 'text-foreground',
     icono: 'text-destructive',
   },
   informativa: {
-    caja: 'border border-warning/20 bg-warning-soft',
-    texto: 'text-warning',
+    caja: 'bg-warning-soft',
+    texto: 'text-foreground',
     icono: 'text-warning',
   },
 };
 
-export function AdvertenciasBanner({ items, size = 'md', onInterrumpirVacacion }: Props) {
+export function AdvertenciasBanner({ items, onInterrumpirVacacion }: Props) {
   if (!items || items.length === 0) return null;
 
   const criticas = items.filter((a) => severidadAdvertencia(codigoDe(a)) === 'critica');
   const informativas = items.filter((a) => severidadAdvertencia(codigoDe(a)) !== 'critica');
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <Bloque
         items={criticas}
         severidad="critica"
-        size={size}
         onInterrumpirVacacion={onInterrumpirVacacion}
       />
       <Bloque
         items={informativas}
         severidad="informativa"
-        size={size}
         onInterrumpirVacacion={onInterrumpirVacacion}
       />
     </div>
@@ -132,46 +130,42 @@ function AccionesVacacion({
 function Bloque({
   items,
   severidad,
-  size,
   onInterrumpirVacacion,
 }: {
   items: AdvertenciaItem[];
   severidad: SeveridadAdvertencia;
-  size: 'sm' | 'md';
   onInterrumpirVacacion?: (v: VacacionTrabajadaEnNomina) => void;
 }) {
   if (items.length === 0) return null;
 
   const estilo = ESTILO[severidad];
-  const textSize = size === 'sm' ? 'text-xs' : 'text-sm';
   const Icono = severidad === 'critica' ? AlertTriangle : AlertCircle;
 
+  // Un recuadro corto por aviso, como los avisos del diseño.
   return (
-    <div className={`rounded-lg p-4 ${estilo.caja}`}>
-      <div className="flex items-start gap-3">
-        <Icono className={`mt-0.5 h-5 w-5 shrink-0 ${estilo.icono}`} />
-        <div className="flex-1 space-y-2">
-          {items.map((a, i) => {
-            const codigo = codigoDe(a);
-            const titulo = tituloAdvertencia(codigo);
-            const mensaje = mensajeDe(a);
-            return (
-              <div key={`${codigo}-${i}`} className={`${textSize} ${estilo.texto}`}>
-                {titulo && <p className="font-semibold">{titulo}</p>}
-                {/* Sin título ni mensaje queda el código crudo: feo, pero
-                    menos inútil que un recuadro vacío. */}
-                <p className={titulo ? 'opacity-90' : undefined}>
-                  {mensaje || (titulo ? '' : codigo)}
-                </p>
-                {onInterrumpirVacacion && (a.vacaciones?.length ?? 0) > 0 && (
-                  <AccionesVacacion item={a} onInterrumpir={onInterrumpirVacacion} />
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
+    <>
+      {items.map((a, i) => {
+        const codigo = codigoDe(a);
+        const titulo = tituloAdvertencia(codigo);
+        const mensaje = mensajeDe(a);
+        return (
+          <div key={`${codigo}-${i}`} className={`flex gap-2 rounded-lg p-3 ${estilo.caja}`}>
+            <Icono className={`mt-0.5 h-4 w-4 shrink-0 ${estilo.icono}`} strokeWidth={2} />
+            <div className={`min-w-0 flex-1 text-sm ${estilo.texto}`}>
+              {titulo && <p className="font-medium">{titulo}</p>}
+              {/* Sin título ni mensaje queda el código crudo: feo, pero
+                  menos inútil que un recuadro vacío. */}
+              <p className={titulo ? 'mt-0.5 text-muted-foreground' : undefined}>
+                {mensaje || (titulo ? '' : codigo)}
+              </p>
+              {onInterrumpirVacacion && (a.vacaciones?.length ?? 0) > 0 && (
+                <AccionesVacacion item={a} onInterrumpir={onInterrumpirVacacion} />
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </>
   );
 }
 
@@ -184,8 +178,8 @@ export function NotaAntesDeConfirmar({ items }: { items?: AdvertenciaItem[] }) {
   if (criticas.length === 0) return null;
 
   return (
-    <p className="flex items-start gap-2 text-xs text-destructive">
-      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+    <p className="flex items-start gap-2 text-sm text-muted-foreground sm:justify-end">
+      <Info className="mt-0.5 h-4 w-4 shrink-0 text-destructive" strokeWidth={2} />
       Revise {criticas.length === 1 ? 'la advertencia' : `las ${criticas.length} advertencias`} de
       arriba antes de confirmar.
     </p>

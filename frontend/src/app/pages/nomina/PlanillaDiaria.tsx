@@ -1,5 +1,5 @@
 /**
- * Planilla Diaria de Trabajo — diseño V.18 con conexiones a la API real.
+ * Planilla Diaria de Trabajo, diseño V.18 con conexiones a la API real.
  *
  * Endpoints (doc `API_PLANILLA_DIARIA.md`):
  *  - GET /nominas/{id}/planilla-diaria         → bundle completo del reporte
@@ -9,22 +9,18 @@
  * Ruta: `/nomina/planilla-diaria` (opcionalmente `?nomina_id=N`).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router';
+import { useSearchParams } from 'react-router';
 import { sortByFirstName } from '../../utils/personas';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent, CardHeader } from '../../components/ui/card';
+import PageHeader from '../../components/common/PageHeader';
+import StatStrip from '../../components/common/StatStrip';
+import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
-import {
-  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
-  BreadcrumbPage, BreadcrumbSeparator,
-} from '../../components/ui/breadcrumb';
 import { Badge } from '../../components/ui/badge';
-import {
-  ArrowLeft, FileText, Filter, Download, Loader2,
-} from 'lucide-react';
+import { Banknote, Download, Loader2, Scale, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   nominaApi,
@@ -38,8 +34,9 @@ import {
   PlanillaDiariaSecciones,
 } from '../../../api/nomina';
 import type { ApiError } from '../../../api/client';
-import { formatCOP } from '../../components/lib/format';
+import { cop } from '../../lib/formato';
 import { formatFecha } from '../../utils/fecha';
+import { thead } from '../../components/nomina/piezas';
 
 // ── Tipos locales para el render ─────────────────────────────────────────────
 type TipoLabor = 'Cosecha' | 'Plateo' | 'Poda' | 'Fertilización' | 'Sanidad' | 'Otros' | 'Auxiliares';
@@ -47,33 +44,6 @@ type TipoLabor = 'Cosecha' | 'Plateo' | 'Poda' | 'Fertilización' | 'Sanidad' | 
 const laboresOrden: TipoLabor[] = [
   'Cosecha', 'Plateo', 'Poda', 'Fertilización', 'Sanidad', 'Otros', 'Auxiliares',
 ];
-
-// Paleta V.19 por labor (usada también en LiquidarTerceros / NominaDetalle):
-//   Cosecha       → amber
-//   Poda / Plateo → verde oscuro (#1E5631)
-//   Fertilización → blue
-//   Sanidad       → rose
-//   Otros         → purple
-//   Auxiliares    → zinc
-const colorPorLabor: Record<TipoLabor, string> = {
-  Cosecha:       'bg-warning-soft text-warning border-warning/20',
-  Plateo:        'bg-[#1E5631]/10 text-[#1E5631] border-[#1E5631]/30',
-  Poda:          'bg-[#1E5631]/10 text-[#1E5631] border-[#1E5631]/30',
-  Fertilización: 'bg-info-soft text-info border-info/20',
-  Sanidad:       'bg-destructive-soft text-destructive border-destructive/20',
-  Otros:         'bg-primary-soft text-primary border-primary/20',
-  Auxiliares:    'bg-muted text-foreground border-border',
-};
-
-const bordesPorLabor: Record<TipoLabor, string> = {
-  Cosecha:       'border-l-4 border-l-amber-500',
-  Plateo:        'border-l-4 border-l-[#1E5631]',
-  Poda:          'border-l-4 border-l-[#1E5631]',
-  Fertilización: 'border-l-4 border-l-blue-500',
-  Sanidad:       'border-l-4 border-l-rose-500',
-  Otros:         'border-l-4 border-l-purple-500',
-  Auxiliares:    'border-l-4 border-l-zinc-400',
-};
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function toNumber(v: string | number | null | undefined): number {
@@ -83,7 +53,7 @@ function toNumber(v: string | number | null | undefined): number {
 }
 // Wrapper: aquí null se muestra como "$0", no como ''.
 function fmtMoney(v: string | number | null | undefined): string {
-  return formatCOP(toNumber(v));
+  return cop(toNumber(v));
 }
 function fmtNumero(v: string | number | null | undefined, decimals = 0): string {
   const n = toNumber(v);
@@ -109,17 +79,24 @@ function distribuirColaboradores(cols: PlanillaDiariaColaborador[]): {
   };
 }
 
-/** Etiqueta de una nómina para el dropdown. */
+const MESES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+];
+
+/** Etiqueta de una nómina para el dropdown, como el diseño: "Planilla 1 – 15 Abril 2026". */
 function labelNomina(n: Nomina): string {
-  const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-  const mes = meses[(n.mes ?? 1) - 1] ?? String(n.mes);
-  const q = n.quincena ? ` — Quincena ${n.quincena}` : '';
-  return `${mes} ${n.anio}${q}`;
+  const ini = n.fecha_inicio?.slice(0, 10);
+  const fin = n.fecha_fin?.slice(0, 10);
+  if (!ini || !fin) return `Planilla ${MESES[(n.mes ?? 1) - 1] ?? n.mes} ${n.anio}`;
+  const [, mesIni, diaIni] = ini.split('-').map(Number);
+  const [anioFin, mesFin, diaFin] = fin.split('-').map(Number);
+  const desde = mesIni === mesFin ? `${diaIni}` : `${diaIni} ${MESES[mesIni - 1]}`;
+  return `Planilla ${desde} – ${diaFin} ${MESES[mesFin - 1]} ${anioFin}`;
 }
 
 // ── Componente ───────────────────────────────────────────────────────────────
 export default function PlanillaDiaria() {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const nominaIdParam = searchParams.get('nomina_id');
   const [nominaId, setNominaId] = useState<number | null>(
@@ -262,182 +239,144 @@ export default function PlanillaDiaria() {
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link to="/nomina">Pagos</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>Planilla Diaria</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
-
-      {/* Header */}
-      <div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate('/nomina')}
-          className="mb-4"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Volver a Pagos
-        </Button>
-
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="space-y-1">
-            <h1 className="text-2xl sm:text-3xl font-bold text-primary">Planilla Diaria de Trabajo</h1>
-            <p className="text-muted-foreground">Registro diario de operaciones y cosecha</p>
-          </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* Selector de planilla */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Planilla:</span>
-              <Select
-                value={nominaId ? String(nominaId) : ''}
-                onValueChange={cambiarNomina}
-                disabled={cargandoNominas}
-              >
-                <SelectTrigger className="w-64 border-primary/40 text-primary font-semibold">
-                  <SelectValue placeholder={cargandoNominas ? 'Cargando...' : 'Seleccionar planilla'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {nominas.map((n) => (
-                    <SelectItem key={n.id} value={String(n.id)}>
-                      {labelNomina(n)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+      <PageHeader
+        backTo="/nomina"
+        eyebrow="Pagos"
+        title="Planilla diaria de trabajo"
+        description="Registro diario de operaciones y cosecha."
+        actions={
+          <>
+            <Select
+              value={nominaId ? String(nominaId) : ''}
+              onValueChange={cambiarNomina}
+              disabled={cargandoNominas}
+            >
+              <SelectTrigger aria-label="Planilla" className="w-full sm:w-64">
+                <SelectValue placeholder={cargandoNominas ? 'Cargando…' : 'Seleccionar planilla'} />
+              </SelectTrigger>
+              <SelectContent>
+                {nominas.map((n) => (
+                  <SelectItem key={n.id} value={String(n.id)}>
+                    {labelNomina(n)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               variant="outline"
-              
               onClick={exportar}
               disabled={!nominaId || !bundle || exportando}
             >
-              {exportando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              {exportando
+                ? <Loader2 className="animate-spin" strokeWidth={2} />
+                : <Download strokeWidth={2} />}
               Exportar
             </Button>
-          </div>
-        </div>
+          </>
+        }
+      />
 
-        {/* Identificador visual de planilla activa */}
-        {bundle?.periodo && (
-          <div className="mt-3 inline-flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2">
-            <FileText className="h-4 w-4 text-primary" />
-            <span className="text-sm font-medium text-primary">
-              Visualizando: {bundle.periodo.nombre}
-            </span>
-          </div>
-        )}
-      </div>
+      {/* Los totales del período, en la tira de indicadores. */}
+      {nominaId && bundle?.totales && (
+        <StatStrip
+          items={[
+            {
+              label: 'Total neto colaboradores',
+              value: fmtMoney(bundle.totales.total_neto_colaboradores),
+              note: bundle.periodo?.nombre,
+              icon: Wallet,
+              tone: 'green' as const,
+            },
+            { label: 'Total bruto', value: fmtMoney(bundle.totales.total_bruto), icon: Banknote, tone: 'green' as const },
+            ...(toNumber(bundle.totales.total_kilos) > 0
+              ? [{ label: 'Total kilos', value: fmtNumero(bundle.totales.total_kilos), icon: Scale, tone: 'lime' as const }]
+              : []),
+          ]}
+        />
+      )}
 
-      {/* Filtros */}
+      {/* Filtros, debajo de la tira como en el diseño. */}
       {nominaId && (
-        <Card>
-          <CardContent>
-            <div className="flex items-center gap-3 mb-4">
-              <Filter className="h-5 w-5 text-muted-foreground" />
-              <h3 className="font-semibold">Filtros</h3>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="planilladi-colaborador">Colaborador</label>
-                <Select value={filtroColaborador} onValueChange={setFiltroColaborador}>
-                  <SelectTrigger id="planilladi-colaborador">
-                    <SelectValue placeholder="Todos los colaboradores" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos los colaboradores</SelectItem>
-                    {colaboradoresPeriodo.map((c) => (
-                      <SelectItem key={`${c.tipo}-${c.id}`} value={c.nombre}>
-                        <span className="flex items-center gap-2">
-                          <span>{c.nombre}</span>
-                          {c.tipo === 'operario' && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning-soft text-warning border border-warning/20 font-medium">
-                              Tercero
-                            </span>
-                          )}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="planilladi-lote">Lote</label>
-                <Select value={filtroLote} onValueChange={setFiltroLote}>
-                  <SelectTrigger id="planilladi-lote"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos los lotes</SelectItem>
-                    {lotes.map((lote) => (
-                      <SelectItem key={lote.id} value={String(lote.id)}>{lote.nombre}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="planilladi-fecha">Fecha</label>
-                <Input id="planilladi-fecha"
-                  type="date"
-                  value={filtroFecha}
-                  onChange={(e) => setFiltroFecha(e.target.value)}
-                  min={bundle?.periodo.fecha_inicio}
-                  max={bundle?.periodo.fecha_fin}
-                />
-              </div>
-            </div>
-            {hayFiltros && (
-              <div className="mt-4">
-                <Button variant="ghost" size="sm" onClick={limpiarFiltros}>
-                  Limpiar filtros
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <Select value={filtroColaborador} onValueChange={setFiltroColaborador}>
+            <SelectTrigger id="planilladi-colaborador" aria-label="Colaborador" className="w-full sm:w-72">
+              <SelectValue placeholder="Todos los colaboradores" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos los colaboradores</SelectItem>
+              {colaboradoresPeriodo.map((c) => (
+                <SelectItem key={`${c.tipo}-${c.id}`} value={c.nombre}>
+                  <span className="flex items-center gap-2">
+                    <span>{c.nombre}</span>
+                    {c.tipo === 'operario' && (
+                      <Badge variant="warning">Tercero</Badge>
+                    )}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={filtroLote} onValueChange={setFiltroLote}>
+            <SelectTrigger id="planilladi-lote" aria-label="Lote" className="w-full sm:w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos los lotes</SelectItem>
+              {lotes.map((lote) => (
+                <SelectItem key={lote.id} value={String(lote.id)}>{lote.nombre}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            id="planilladi-fecha"
+            type="date"
+            aria-label="Fecha"
+            value={filtroFecha}
+            onChange={(e) => setFiltroFecha(e.target.value)}
+            min={bundle?.periodo.fecha_inicio}
+            max={bundle?.periodo.fecha_fin}
+            className="w-full sm:w-44"
+          />
+          {hayFiltros && (
+            <Button variant="ghost" onClick={limpiarFiltros}>Limpiar</Button>
+          )}
+        </div>
       )}
 
       {/* Sin nómina seleccionada */}
       {!nominaId && !cargandoNominas && (
-        <Card>
-          <CardContent className="space-y-1 py-12 text-center">
-            <h3 className="text-base font-semibold text-foreground">Selecciona un período de nómina</h3>
+        <Card className="items-center py-12 text-center">
+          <div className="space-y-1">
+            <p className="font-semibold text-foreground">Selecciona un período de nómina</p>
             <p className="text-sm text-muted-foreground">Elige una nómina para ver el reporte de planilla diaria.</p>
-          </CardContent>
+          </div>
         </Card>
       )}
 
       {/* Cargando */}
       {nominaId && cargando && !bundle && (
-        <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          Cargando planilla...
-        </div>
+        <Card className="flex-row items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Cargando planilla…
+        </Card>
       )}
 
       {/* Registros agrupados por labor */}
       {nominaId && bundle && (
         <>
           {registrosPorLabor.length === 0 ? (
-            <Card>
-              <CardContent className="space-y-1 py-12 text-center">
-                <h3 className="text-base font-semibold text-foreground">No hay registros</h3>
+            <Card className="items-center py-12 text-center">
+              <div className="space-y-1">
+                <p className="font-semibold text-foreground">No hay registros</p>
                 <p className="text-sm text-muted-foreground">
                   {hayFiltros
                     ? 'No se encontraron registros con los filtros aplicados.'
                     : 'No hay operaciones aprobadas para este período.'}
                 </p>
-              </CardContent>
+              </div>
             </Card>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-4">
               {registrosPorLabor.map(({ labor, meta }) => (
                 <SeccionLabor
                   key={labor}
@@ -449,38 +388,6 @@ export default function PlanillaDiaria() {
                 />
               ))}
 
-              {/* Gran total */}
-              {bundle.totales && (
-                <Card className="border-primary/30 bg-primary/5">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between flex-wrap gap-4">
-                      <span className="font-bold text-foreground">TOTALES GENERALES</span>
-                      <div className="flex gap-8 flex-wrap">
-                        {toNumber(bundle.totales.total_kilos) > 0 && (
-                          <div className="text-center">
-                            <p className="text-xs text-muted-foreground">Total Kilos</p>
-                            <p className="font-bold text-foreground">
-                              {fmtNumero(bundle.totales.total_kilos)}
-                            </p>
-                          </div>
-                        )}
-                        <div className="text-center">
-                          <p className="text-xs text-muted-foreground">Total Bruto</p>
-                          <p className="font-bold text-success">
-                            {fmtMoney(bundle.totales.total_bruto)}
-                          </p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs text-muted-foreground">Total Neto Colaboradores</p>
-                          <p className="font-bold text-primary">
-                            {fmtMoney(bundle.totales.total_neto_colaboradores)}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
             </div>
           )}
         </>
@@ -544,23 +451,18 @@ function SeccionLabor({
     toNumber(subtotal_col_neto) > 0 ? subtotal_col_neto : subtotalColNetoCalc;
 
   return (
-    <Card className={`overflow-hidden ${bordesPorLabor[labor]}`}>
-      <CardHeader className="py-3 px-5 bg-muted/20 border-b border-border">
-        <div className="flex items-center gap-3">
-          <Badge className={`${colorPorLabor[labor]} border text-xs font-semibold px-3 py-0.5`}>
-            {labor}
-          </Badge>
-          <span className="text-sm text-muted-foreground">
-            {count} registro{count !== 1 ? 's' : ''}
-          </span>
-        </div>
-      </CardHeader>
-      <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/10">
-                <Th>Fecha</Th>
+    <Card className="gap-0 overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-3.5">
+        <h3>{labor}</h3>
+        <Badge variant="secondary">
+          {count} registro{count !== 1 ? 's' : ''}
+        </Badge>
+      </div>
+      <div className="overflow-x-auto border-t border-border">
+        <table className="w-full text-[13px]">
+            <thead className={thead}>
+              <tr>
+                <Th className="pl-5">Fecha</Th>
                 <Th>Col. 1</Th>
                 <Th>Col. 2</Th>
                 <Th>Col. 3</Th>
@@ -568,55 +470,51 @@ function SeccionLabor({
                 <Th>Lote</Th>
                 {esCosecha && (
                   <>
-                    <Th className="text-right">Nº Gajos</Th>
+                    <Th className="text-right">N.° gajos</Th>
                     <Th className="text-right">Kilos</Th>
                     <Th className="text-right">Promedio</Th>
                   </>
                 )}
                 <Th className="text-right">Precio</Th>
                 <Th className="text-right">Total</Th>
-                <Th className="text-center">Colab.</Th>
-                <Th className="text-right">Pago x Colab.</Th>
-                <Th className="text-right bg-primary/5">$ Col Neto</Th>
+                <Th className="text-right">Colab.</Th>
+                <Th className="text-right">Pago por colab.</Th>
+                <Th className="pr-5 text-right">Neto colab.</Th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-border">
               {esCosecha
-                ? registrosCosecha.map((r, idx) => (
-                    <FilaCosecha key={r.id} r={r} idx={idx} />
-                  ))
-                : registrosJornal.map((r, idx) => (
-                    <FilaJornal key={r.id} r={r} idx={idx} />
-                  ))}
-              {/* Subtotal por labor */}
-              <tr className="border-t-2 border-dashed border-muted-foreground/20 bg-muted/10 font-semibold text-xs">
-                <td className="p-3 text-muted-foreground" colSpan={6}>Subtotal {labor}</td>
+                ? registrosCosecha.map((r) => <FilaCosecha key={r.id} r={r} />)
+                : registrosJornal.map((r) => <FilaJornal key={r.id} r={r} />)}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-border bg-muted/60 font-semibold text-foreground">
+                <td className={`${celda} pl-5`} colSpan={6}>Subtotal {labor.toLowerCase()}</td>
                 {esCosecha && (
                   <>
-                    <td className="p-3"></td>
-                    <td className="p-3 text-right">{fmtNumero(subtotalKilos)}</td>
-                    <td className="p-3"></td>
+                    <td className={celda}></td>
+                    <td className={`${celda} text-right tabular-nums`}>{fmtNumero(subtotalKilos)}</td>
+                    <td className={celda}></td>
                   </>
                 )}
-                <td className="p-3"></td>
-                <td className="p-3 text-right text-success">
+                <td className={celda}></td>
+                <td className={`${celda} text-right tabular-nums`}>
                   {fmtMoney(esCosecha ? subtotalTotalMostrar : subtotal_total)}
                 </td>
-                <td className="p-3"></td>
-                <td className="p-3"></td>
-                <td className="p-3 text-right text-primary bg-primary/5">
+                <td className={celda}></td>
+                <td className={celda}></td>
+                <td className={`${celda} pr-5 text-right tabular-nums`}>
                   {fmtMoney(esCosecha ? subtotalColNetoMostrar : subtotal_col_neto)}
                 </td>
               </tr>
-            </tbody>
+            </tfoot>
           </table>
         </div>
-      </CardContent>
     </Card>
   );
 }
 
-function FilaCosecha({ r, idx }: { r: PlanillaDiariaFilaCosecha; idx: number }) {
+function FilaCosecha({ r }: { r: PlanillaDiariaFilaCosecha }) {
   const cols = distribuirColaboradores(r.colaboradores);
   // Respaldo: si el backend no envía kilos/total/pagoxcolab pero manda promedio + precio,
   // los calculamos para que no aparezcan en 0 cuando la cosecha SÍ tiene datos.
@@ -629,67 +527,67 @@ function FilaCosecha({ r, idx }: { r: PlanillaDiariaFilaCosecha; idx: number }) 
   const pagoPorColab = toNumber(r.pago_por_colaborador) || (nColab > 0 ? total / nColab : 0);
   const colNeto = toNumber(r.col_neto) || pagoPorColab;
   return (
-    <tr className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}>
-      <td className="p-3 whitespace-nowrap">{fmtFecha(r.fecha)}</td>
+    <tr className="transition-colors hover:bg-muted/40">
+      <td className={`${celda} pl-5 text-muted-foreground`}>{fmtFecha(r.fecha)}</td>
       <TdColab nombre={cols.col1} c={r.colaboradores[0]} />
       <TdColab nombre={cols.col2} c={r.colaboradores[1]} />
       <TdColab nombre={cols.col3} c={r.colaboradores[2]} />
-      <td className="p-3 text-muted-foreground whitespace-nowrap max-w-[220px] truncate" title={cols.cuadrilla}>
-        {cols.cuadrilla || '-'}
+      <td className={`${celdaTexto} text-muted-foreground`} title={cols.cuadrilla}>
+        {cols.cuadrilla || '—'}
       </td>
-      <td className="p-3 font-semibold whitespace-nowrap">{r.lote}</td>
-      <td className="p-3 text-right whitespace-nowrap">{fmtNumero(gajos)}</td>
-      <td className="p-3 text-right font-semibold whitespace-nowrap">
+      <td className={`${celdaTexto} min-w-[7rem] font-medium text-foreground`}>{r.lote}</td>
+      <td className={`${celda} text-right tabular-nums`}>{fmtNumero(gajos)}</td>
+      <td className={`${celda} text-right tabular-nums`}>
         {kilos > 0 ? fmtNumero(kilos) : '—'}
       </td>
-      <td className="p-3 text-right whitespace-nowrap">
+      <td className={`${celda} text-right tabular-nums text-muted-foreground`}>
         {promedio > 0 ? fmtNumero(promedio, 2) : '—'}
       </td>
-      <td className="p-3 text-right whitespace-nowrap">{fmtMoney(precio)}</td>
-      <td className="p-3 text-right font-semibold text-success whitespace-nowrap">
+      <td className={`${celda} text-right tabular-nums text-muted-foreground`}>{fmtMoney(precio)}</td>
+      <td className={`${celda} text-right tabular-nums`}>
         {total > 0 ? fmtMoney(total) : '—'}
       </td>
-      <td className="p-3 text-center font-semibold whitespace-nowrap">{r.num_colaboradores}</td>
-      <td className="p-3 text-right font-medium whitespace-nowrap">
+      <td className={`${celda} text-right tabular-nums`}>{r.num_colaboradores}</td>
+      <td className={`${celda} text-right tabular-nums text-muted-foreground`}>
         {pagoPorColab > 0 ? fmtMoney(pagoPorColab) : '—'}
       </td>
-      <td className="p-3 text-right font-bold text-primary bg-primary/5 whitespace-nowrap">
+      <td className={`${celda} pr-5 text-right font-semibold tabular-nums text-foreground`}>
         {fmtMoney(colNeto)}
       </td>
     </tr>
   );
 }
 
-function FilaJornal({ r, idx }: { r: PlanillaDiariaFilaJornal; idx: number }) {
+function FilaJornal({ r }: { r: PlanillaDiariaFilaJornal }) {
   const cols = distribuirColaboradores(r.colaboradores);
   // Cuando el grupo mezcla precios (colaborador propio + operario con precio
   // pactado distinto), backend manda `precio` y `pago_por_colaborador` en null
   // y marca `precio_mixto=true`. La fuente de verdad queda en `total`.
   const esPrecioMixto = r.precio_mixto === true || r.precio == null;
   return (
-    <tr className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}>
-      <td className="p-3 whitespace-nowrap">{fmtFecha(r.fecha)}</td>
+    <tr className="transition-colors hover:bg-muted/40">
+      <td className={`${celda} pl-5 text-muted-foreground`}>{fmtFecha(r.fecha)}</td>
       <TdColab nombre={cols.col1} c={r.colaboradores[0]} />
       <TdColab nombre={cols.col2} c={r.colaboradores[1]} />
       <TdColab nombre={cols.col3} c={r.colaboradores[2]} />
-      <td className="p-3 text-muted-foreground whitespace-nowrap max-w-[220px] truncate" title={cols.cuadrilla}>
-        {cols.cuadrilla || '-'}
+      <td className={`${celdaTexto} text-muted-foreground`} title={cols.cuadrilla}>
+        {cols.cuadrilla || '—'}
       </td>
-      <td className="p-3 whitespace-nowrap">
-        <div className="font-semibold">{r.lote ?? '—'}</div>
+      <td className={`${celdaTexto} min-w-[7rem]`}>
+        <div className="font-medium text-foreground">{r.lote ?? '—'}</div>
         {r.sublabor && (
-          <div className="text-xs text-muted-foreground mt-0.5">{r.sublabor}</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">{r.sublabor}</div>
         )}
       </td>
-      <td className="p-3 text-right whitespace-nowrap">
-        {esPrecioMixto ? <span className="text-muted-foreground italic">Mixto</span> : fmtMoney(r.precio)}
+      <td className={`${celda} text-right tabular-nums text-muted-foreground`}>
+        {esPrecioMixto ? 'Mixto' : fmtMoney(r.precio)}
       </td>
-      <td className="p-3 text-right font-semibold text-success whitespace-nowrap">{fmtMoney(r.total)}</td>
-      <td className="p-3 text-center font-semibold whitespace-nowrap">{r.num_colaboradores}</td>
-      <td className="p-3 text-right font-medium whitespace-nowrap">
-        {esPrecioMixto ? <span className="text-muted-foreground italic">Mixto</span> : fmtMoney(r.pago_por_colaborador)}
+      <td className={`${celda} text-right tabular-nums`}>{fmtMoney(r.total)}</td>
+      <td className={`${celda} text-right tabular-nums`}>{r.num_colaboradores}</td>
+      <td className={`${celda} text-right tabular-nums text-muted-foreground`}>
+        {esPrecioMixto ? 'Mixto' : fmtMoney(r.pago_por_colaborador)}
       </td>
-      <td className="p-3 text-right font-bold text-primary bg-primary/5 whitespace-nowrap">
+      <td className={`${celda} pr-5 text-right font-semibold tabular-nums text-foreground`}>
         {fmtMoney(r.col_neto)}
       </td>
     </tr>
@@ -697,9 +595,23 @@ function FilaJornal({ r, idx }: { r: PlanillaDiariaFilaJornal; idx: number }) {
 }
 
 // ── Celdas reutilizables ─────────────────────────────────────────────────────
+/** Celda del diseño: una línea y sin cortar. Relleno corto para que quepa. */
+const celda = 'whitespace-nowrap px-2 py-2.5';
+/** Celda de texto: puede bajar de línea para no empujar la tabla. */
+const celdaTexto = 'px-2 py-2.5 leading-snug';
+
+/** Parte un nombre en nombres y apellidos para mostrarlo en dos líneas.
+ *  Con 3 palabras se asume un nombre y dos apellidos. */
+function partirNombre(nombre: string): [string, string] {
+  const partes = nombre.trim().split(/\s+/).filter(Boolean);
+  if (partes.length < 2) return [nombre, ''];
+  const corte = Math.max(1, Math.floor(partes.length / 2));
+  return [partes.slice(0, corte).join(' '), partes.slice(corte).join(' ')];
+}
+
 function Th({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <th className={`text-left p-3 font-semibold text-xs text-muted-foreground whitespace-nowrap ${className}`}>
+    <th className={`${celda} text-left font-semibold ${className}`}>
       {children}
     </th>
   );
@@ -707,18 +619,24 @@ function Th({ children, className = '' }: { children: React.ReactNode; className
 
 /** Celda de colaborador con badge "Tercero" (naranja) cuando el colaborador es operario. */
 function TdColab({ nombre, c }: { nombre: string; c?: PlanillaDiariaColaborador }) {
-  if (!nombre) return <td className="p-3 font-medium whitespace-nowrap">-</td>;
+  if (!nombre) return <td className={`${celdaTexto} font-medium text-foreground`}>—</td>;
+  const [nombres, apellidos] = partirNombre(nombre);
   return (
-    <td className="p-3 font-medium whitespace-nowrap">
+    <td className={`${celdaTexto} font-medium text-foreground`} title={nombre}>
       <div className="flex items-center gap-1.5">
-        <span>{nombre}</span>
+        <span className="whitespace-nowrap">
+          {nombres}
+          {apellidos && <br />}
+          {apellidos}
+        </span>
         {c?.tipo === 'operario' && (
-          <span
-            className="text-[10px] px-1.5 py-0.5 rounded-md bg-warning-soft text-warning border border-warning/20 font-medium whitespace-nowrap"
+          <Badge
+            variant="warning"
+            className="shrink-0"
             title={c.tercero_nombre ? `Tercero · ${c.tercero_nombre}` : 'Tercero'}
           >
             Tercero
-          </span>
+          </Badge>
         )}
       </div>
     </td>
@@ -748,19 +666,4 @@ function extraerColaboradores(bundle: PlanillaDiariaBundle): PlanillaDiariaColab
   });
   // Orden alfabetico por primer nombre (convencion del sistema).
   return sortByFirstName(Array.from(map.values()));
-}
-
-/**
- * Devuelve el primer apellido de un nombre completo.
- * Convención Colombia:
- *  - 4+ palabras (Nombre Nombre Apellido Apellido) → penúltima palabra
- *  - 3  palabras (Nombre Apellido Apellido)        → segunda palabra
- *  - 2  palabras (Nombre Apellido)                 → última palabra
- */
-function primerApellido(nombre: string): string {
-  const partes = nombre.trim().split(/\s+/).filter(Boolean);
-  if (partes.length >= 4) return partes[partes.length - 2].toLowerCase();
-  if (partes.length === 3) return partes[1].toLowerCase();
-  if (partes.length === 2) return partes[1].toLowerCase();
-  return nombre.toLowerCase();
 }

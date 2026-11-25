@@ -23,7 +23,7 @@ import { Textarea } from '../../../components/ui/textarea';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../../components/ui/select';
-import { Banknote, Loader2, Info } from 'lucide-react';
+import { Loader2, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   vacacionesApi,
@@ -107,10 +107,7 @@ export default function PagoVacacionDialog({ vacacion, onCerrar, onPagada }: Pro
     <Dialog open={vacacion !== null} onOpenChange={(v) => { if (!v && !guardando) onCerrar(); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Banknote className="h-5 w-5 text-primary" />
-            {porNomina ? 'Pagar el saldo' : 'Registrar pago'}
-          </DialogTitle>
+          <DialogTitle>{porNomina ? 'Pagar el saldo' : 'Registrar pago'}</DialogTitle>
           <DialogDescription>
             {vacacion
               ? `${vacacion.empleado.nombre_completo} · ${fmtCOP(aPagar)}`
@@ -120,46 +117,48 @@ export default function PagoVacacionDialog({ vacacion, onCerrar, onPagada }: Pro
 
         <div className="space-y-4">
           {totalDeducciones > 0 && vacacion && (
-            <div className="space-y-1 rounded-lg border border-border bg-muted/30 p-3 text-xs">
-              <p className="flex justify-between text-muted-foreground">
-                <span>Total devengado</span>
-                <span>{fmtCOP(vacacion.valor_total)}</span>
+            <div className="space-y-1.5 rounded-lg bg-muted/60 p-3 text-sm">
+              <p className="flex justify-between gap-4">
+                <span className="text-muted-foreground">Total devengado</span>
+                <span className="tabular-nums text-foreground">{fmtCOP(vacacion.valor_total)}</span>
               </p>
-              <p className="flex justify-between text-muted-foreground">
-                <span>Aportes del trabajador</span>
-                <span className="text-destructive">−{fmtCOP(totalDeducciones)}</span>
+              <p className="flex justify-between gap-4">
+                <span className="text-muted-foreground">Aportes del trabajador</span>
+                <span className="tabular-nums text-foreground">−{fmtCOP(totalDeducciones)}</span>
               </p>
-              <p className="flex justify-between border-t border-border pt-2 font-semibold text-foreground">
+              <p className="flex justify-between gap-4 border-t border-border pt-2 font-semibold text-foreground">
                 <span>Neto a girar</span>
-                <span>{fmtCOP(aPagar)}</span>
+                <span className="tabular-nums">{fmtCOP(aPagar)}</span>
               </p>
             </div>
           )}
 
           {porNomina && vacacion && (
-            <div className="space-y-2 rounded-lg border border-info/20 bg-info-soft p-3 text-xs">
-              <p className="flex items-start gap-2 text-info">
-                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                Esta vacación se paga en nómina. El giro cubre solo el saldo que
-                las nóminas cerradas no alcanzaron a pagar.
-              </p>
-              {tramos.map((t) => (
-                <p key={t.nomina_empleado_id} className="flex justify-between text-info">
-                  <span>
-                    {t.etiqueta ?? `NOM-${t.nomina_id}`}
-                    {' · '}
-                    {formatFecha(t.fecha_desde)} a {formatFecha(t.fecha_hasta)}
-                  </span>
-                  <span className="font-medium">{fmtCOP(t.total)}</span>
+            <div className="flex gap-2 rounded-lg bg-info-soft p-3">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-info" strokeWidth={2} />
+              <div className="min-w-0 flex-1 space-y-2 text-sm text-foreground">
+                <p>
+                  Esta vacación se paga en nómina. El giro cubre solo el saldo que
+                  las nóminas cerradas no alcanzaron a pagar.
                 </p>
-              ))}
-              <p className="flex justify-between border-t border-info/20 pt-2 font-semibold text-info">
-                <span>Saldo por girar</span>
-                <span>{fmtCOP(aPagar)}</span>
-              </p>
+                {tramos.map((t) => (
+                  <p key={t.nomina_empleado_id} className="flex justify-between gap-4 text-xs">
+                    <span className="text-muted-foreground">
+                      {t.etiqueta ?? `NOM-${t.nomina_id}`}
+                      {' · '}
+                      {formatFecha(t.fecha_desde)} a {formatFecha(t.fecha_hasta)}
+                    </span>
+                    <span className="font-medium tabular-nums">{fmtCOP(t.total)}</span>
+                  </p>
+                ))}
+                <p className="flex justify-between gap-4 border-t border-border pt-2 font-semibold">
+                  <span>Saldo por girar</span>
+                  <span className="tabular-nums">{fmtCOP(aPagar)}</span>
+                </p>
+              </div>
             </div>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="pagovacaci-fecha-de-pago">Fecha de pago</Label>
               <Input id="pagovacaci-fecha-de-pago" type="date" value={fechaPago} onChange={(e) => setFechaPago(e.target.value)} />
@@ -194,7 +193,7 @@ export default function PagoVacacionDialog({ vacacion, onCerrar, onPagada }: Pro
         <DialogFooter>
           <Button variant="outline" onClick={onCerrar} disabled={guardando}>Cancelar</Button>
           <Button onClick={guardar} disabled={guardando}>
-            {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
+            {guardando && <Loader2 className="animate-spin" />}
             {porNomina ? 'Pagar el saldo' : 'Registrar pago'}
           </Button>
         </DialogFooter>

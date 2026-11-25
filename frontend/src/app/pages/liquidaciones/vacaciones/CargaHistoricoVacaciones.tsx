@@ -10,8 +10,8 @@
  * anulación de §10.10 para corregir. Se puede ocultar cuando la carga termine.
  */
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router';
 import { Card, CardContent } from '../../../components/ui/card';
+import PageHeader from '../../../components/common/PageHeader';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
 import { Input } from '../../../components/ui/input';
@@ -22,7 +22,12 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../../components/ui/alert-dialog';
 import {
-  ArrowLeft, Search, Loader2, History, Info, AlertTriangle, Users, Ban, Check,
+  Search,
+  Loader2,
+  Info,
+  AlertTriangle,
+  Ban,
+  Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -50,6 +55,16 @@ type ErrorHistorico = ApiError & {
 };
 
 const HOY = () => new Date().toISOString().slice(0, 10);
+
+/** Variante del badge del semáforo de vencimiento. */
+const VARIANTE_SEMAFORO: Record<string, 'destructive' | 'warning' | 'success' | 'secondary'> = {
+  VENCIDA: 'destructive',
+  URGENTE: 'destructive',
+  PROXIMA: 'warning',
+  CON_TIEMPO: 'success',
+};
+
+const TH = 'px-4 py-2.5 text-left font-semibold';
 
 /** Días calendario del rango, ambos extremos incluidos. */
 function diasCalendario(inicio: string, fin: string): number {
@@ -224,25 +239,17 @@ export default function CargaHistoricoVacaciones() {
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" size="sm" asChild>
-        <Link to="/liquidaciones?tab=vacaciones"><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
-      </Button>
-
-      <div>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl sm:text-3xl font-bold text-primary">Cargar vacaciones anteriores</h1>
-          <Badge variant="outline">Puesta en marcha</Badge>
-        </div>
-        <p className="mt-1 text-muted-foreground">
-          Vacaciones que los colaboradores ya disfrutaron antes de usar PalmApp
-        </p>
-      </div>
+      <PageHeader
+        backTo="/liquidaciones?tab=vacaciones"
+        eyebrow="Vacaciones · Puesta en marcha"
+        title="Cargar vacaciones anteriores"
+        description="Vacaciones que los colaboradores ya disfrutaron antes de usar PalmApp."
+      />
 
       {/* ── Ayuda ───────────────────────────────────────────────────────────── */}
-      <Card className="border-primary/20 bg-primary/5">
-        <CardContent className="flex gap-3 p-5 text-sm">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-          <div className="space-y-1.5 text-muted-foreground">
+      <div className="flex gap-2 rounded-lg bg-info-soft p-4 text-sm">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-info" strokeWidth={2} />
+          <div className="space-y-1.5 text-foreground">
             <p>
               <strong className="text-foreground">Carga esto antes de liquidar vacaciones nuevas.</strong>{' '}
               Si liquidas primero unas de este año, el sistema las imputa al período más
@@ -258,12 +265,11 @@ export default function CargaHistoricoVacaciones() {
               Su saldo vencido es real, y el módulo lo muestra a propósito.
             </p>
           </div>
-        </CardContent>
-      </Card>
+      </div>
 
       {!puedeCargar && (
-        <div className="flex gap-3 rounded-xl border border-warning/20 bg-warning-soft px-4 py-3 text-sm text-warning">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <div className="flex gap-2 rounded-lg bg-warning-soft p-3 text-sm text-foreground">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
           <p>Puedes consultar, pero no registrar: hace falta el permiso de editar liquidaciones.</p>
         </div>
       )}
@@ -271,15 +277,16 @@ export default function CargaHistoricoVacaciones() {
       <div className="grid gap-6 lg:grid-cols-[22rem_1fr]">
 
         {/* ── Panel izquierdo: colaboradores ──────────────────────────────── */}
-        <Card>
+        <Card className="gap-0 overflow-hidden lg:self-start">
           <div className="border-b border-border p-4">
             <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
               <Input
-                placeholder="Buscar colaborador..."
+                type="search"
+                placeholder="Buscar colaborador"
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
-                className="h-9 pl-8"
+                className="pl-9"
               />
             </div>
           </div>
@@ -287,13 +294,10 @@ export default function CargaHistoricoVacaciones() {
             {cargandoLista ? (
               <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Cargando
+                Cargando colaboradores...
               </div>
             ) : filas.length === 0 ? (
-              <div className="py-12 text-center">
-                <Users className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-                <p className="text-sm text-muted-foreground">Sin colaboradores</p>
-              </div>
+              <p className="py-12 text-center text-sm text-muted-foreground">Sin colaboradores.</p>
             ) : (
               filas.map((f) => {
                 const activo = f.empleado.id === empleadoId;
@@ -303,11 +307,11 @@ export default function CargaHistoricoVacaciones() {
                     key={f.empleado.id}
                     type="button"
                     onClick={() => elegir(f.empleado.id)}
-                    className={`flex w-full items-center gap-3 border-b border-border p-3 text-left transition-colors last:border-0 ${
-                      activo ? 'bg-primary/10' : 'hover:bg-muted/40'
+                    className={`flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left transition-colors last:border-0 ${
+                      activo ? 'bg-primary-soft/60' : 'hover:bg-muted/40'
                     }`}
                   >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-xs font-bold text-primary">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
                       {getIniciales(f.empleado.nombre_completo)}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -319,10 +323,10 @@ export default function CargaHistoricoVacaciones() {
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-sm font-bold text-warning">
+                      <p className="text-sm font-semibold tabular-nums text-foreground">
                         {fmtDias(f.dias_disponibles_exigibles)}
                       </p>
-                      <Badge variant="outline" className={`${s.badge} mt-0.5 text-[10px]`}>
+                      <Badge variant={VARIANTE_SEMAFORO[f.estado_vencimiento] ?? 'secondary'} className="mt-0.5">
                         {s.label}
                       </Badge>
                     </div>
@@ -336,74 +340,69 @@ export default function CargaHistoricoVacaciones() {
         {/* ── Panel derecho: detalle y formulario ─────────────────────────── */}
         <div className="space-y-6">
           {!empleadoId ? (
-            <Card>
-              <CardContent className="py-20 text-center">
-                <History className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
-                <p className="font-medium text-foreground">Elige un colaborador</p>
-                <p className="mt-1 text-sm text-muted-foreground">
+            <Card className="items-center py-12 text-center">
+              <div className="max-w-md space-y-1 px-6">
+                <h3>Elige un colaborador</h3>
+                <p className="text-sm text-muted-foreground">
                   Los de saldo alto y estado Vencida son los candidatos a cargar.
                 </p>
-              </CardContent>
+              </div>
             </Card>
           ) : cargandoDetalle ? (
-            <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
+            <Card className="flex-row items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
               Cargando colaborador...
-            </div>
+            </Card>
           ) : !detalle ? (
-            <Card>
-              <CardContent className="py-20 text-center text-muted-foreground">
-                No se pudo cargar el colaborador.
-              </CardContent>
+            <Card className="items-center py-12 text-center text-sm text-muted-foreground">
+              No se pudo cargar el colaborador.
             </Card>
           ) : (
             <>
               {/* Períodos de causación */}
-              <Card className="overflow-hidden">
-                <div className="border-b border-border bg-muted/20 px-5 py-3">
-                  <p className="text-sm font-semibold">
-                    Períodos de {detalle.empleado.nombre_completo}
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
+              <Card className="gap-0 overflow-hidden">
+                <div className="space-y-0.5 border-b border-border px-5 py-4">
+                  <h3>Períodos de {detalle.empleado.nombre_completo}</h3>
+                  <p className="text-sm text-muted-foreground">
                     Cada registro se imputa al período más antiguo con saldo.
                   </p>
                 </div>
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-border bg-muted/30">
-                          <th className="p-3 text-left text-xs font-semibold text-muted-foreground">Período</th>
-                          <th className="p-3 text-left text-xs font-semibold text-muted-foreground">Rango</th>
-                          <th className="p-3 text-center text-xs font-semibold text-muted-foreground">Generados</th>
-                          <th className="p-3 text-center text-xs font-semibold text-muted-foreground">Disfrutados</th>
-                          <th className="p-3 text-center text-xs font-semibold text-muted-foreground">Compensados</th>
-                          <th className="p-3 text-center text-xs font-semibold text-muted-foreground">Saldo</th>
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/60 text-xs font-semibold text-muted-foreground">
+                        <tr>
+                          <th className={`${TH} pl-5`}>Período</th>
+                          <th className={TH}>Rango</th>
+                          <th className={`${TH} text-center`}>Generados</th>
+                          <th className={`${TH} text-center`}>Disfrutados</th>
+                          <th className={`${TH} text-center`}>Compensados</th>
+                          <th className={`${TH} pr-5 text-center`}>Saldo</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="divide-y divide-border">
                         {detalle.causacion.periodos.length === 0 ? (
                           <tr>
-                            <td colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                            <td colSpan={6} className="py-8 text-center text-muted-foreground">
                               Sin períodos causados
                             </td>
                           </tr>
                         ) : (
                           detalle.causacion.periodos.map((p) => (
-                            <tr key={p.periodo} className="border-b border-border last:border-0">
-                              <td className="p-3 text-sm">
+                            <tr key={p.periodo}>
+                              <td className="py-3 pl-5 pr-4 text-foreground">
                                 {p.periodo}
                                 {!p.completo && (
                                   <span className="ml-1.5 text-xs text-muted-foreground">en curso</span>
                                 )}
                               </td>
-                              <td className="p-3 text-sm text-muted-foreground">
-                                {formatFecha(p.inicio)} — {formatFecha(p.fin)}
+                              <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+                                {formatFecha(p.inicio)} a {formatFecha(p.fin)}
                               </td>
-                              <td className="p-3 text-center text-sm">{fmtDias(p.dias_generados)}</td>
-                              <td className="p-3 text-center text-sm">{fmtDias(p.dias_disfrutados)}</td>
-                              <td className="p-3 text-center text-sm">{fmtDias(p.dias_compensados)}</td>
-                              <td className={`p-3 text-center text-sm font-bold ${p.saldo > 0 ? 'text-warning' : 'text-muted-foreground'}`}>
+                              <td className="px-4 py-3 text-center tabular-nums text-foreground">{fmtDias(p.dias_generados)}</td>
+                              <td className="px-4 py-3 text-center tabular-nums text-foreground">{fmtDias(p.dias_disfrutados)}</td>
+                              <td className="px-4 py-3 text-center tabular-nums text-foreground">{fmtDias(p.dias_compensados)}</td>
+                              <td className={`py-3 pl-4 pr-5 text-center font-semibold tabular-nums ${p.saldo > 0 ? 'text-warning' : 'text-muted-foreground'}`}>
                                 {fmtDias(p.saldo)}
                               </td>
                             </tr>
@@ -416,14 +415,10 @@ export default function CargaHistoricoVacaciones() {
               </Card>
 
               {/* Ya cargado */}
-              <Card>
-                <div className="border-b border-border bg-muted/20 px-5 py-3">
-                  <p className="text-sm font-semibold">
-                    Ya cargado
-                    <span className="ml-1.5 font-normal text-muted-foreground">
-                      ({historicos.length})
-                    </span>
-                  </p>
+              <Card className="gap-0 overflow-hidden">
+                <div className="flex items-center gap-2 border-b border-border px-5 py-4">
+                  <h3>Ya cargado</h3>
+                  <Badge variant="secondary">{historicos.length}</Badge>
                 </div>
                 <CardContent className="p-0">
                   {historicos.length === 0 ? (
@@ -438,7 +433,7 @@ export default function CargaHistoricoVacaciones() {
                       >
                         <div className="min-w-0">
                           <p className="text-sm text-foreground">
-                            {formatFecha(v.fecha_inicio)} — {formatFecha(v.fecha_fin)}
+                            {formatFecha(v.fecha_inicio)} a {formatFecha(v.fecha_fin)}
                             <span className="ml-2 text-muted-foreground">
                               {fmtDias(v.dias_habiles)} hábiles
                               {v.dias_dinero > 0 && ` · ${fmtDias(v.dias_dinero)} en dinero`}
@@ -455,9 +450,9 @@ export default function CargaHistoricoVacaciones() {
                             size="sm"
                             variant="outline"
                             onClick={() => setAAnular(v)}
-                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            className="hover:text-destructive"
                           >
-                            <Ban className="h-3.5 w-3.5" />
+                            <Ban strokeWidth={2} />
                             Anular
                           </Button>
                         )}
@@ -468,11 +463,11 @@ export default function CargaHistoricoVacaciones() {
               </Card>
 
               {/* Formulario */}
-              <Card>
-                <div className="border-b border-border bg-muted/20 px-5 py-3">
-                  <p className="text-sm font-semibold">Agregar histórico</p>
+              <Card className="gap-0">
+                <div className="border-b border-border px-5 py-4">
+                  <h3>Agregar histórico</h3>
                 </div>
-                <CardContent className="space-y-5 p-5">
+                <CardContent className="space-y-5 px-5 py-5">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-1.5">
                       <Label htmlFor="cargahisto-fecha-inicio">Fecha inicio</Label>
@@ -556,17 +551,15 @@ export default function CargaHistoricoVacaciones() {
                       variant="outline"
                       disabled={!puedeCargar || guardando}
                       onClick={() => guardar(true)}
-                      
                     >
-                      {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
+                      {guardando && <Loader2 className="animate-spin" strokeWidth={2} />}
                       Guardar y agregar otro
                     </Button>
                     <Button
                       disabled={!puedeCargar || guardando}
                       onClick={() => guardar(false)}
-                      
                     >
-                      {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      {guardando ? <Loader2 className="animate-spin" strokeWidth={2} /> : <Check strokeWidth={2} />}
                       Guardar
                     </Button>
                   </div>
@@ -602,7 +595,7 @@ export default function CargaHistoricoVacaciones() {
               disabled={anulando}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {anulando && <Loader2 className="h-4 w-4 animate-spin" />}
+              {anulando && <Loader2 className="animate-spin" strokeWidth={2} />}
               Anular
             </Button>
           </AlertDialogFooter>

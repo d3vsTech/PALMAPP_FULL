@@ -1,23 +1,18 @@
 /**
- * Desprendible de pago — diseño portado de V.15.
+ * Desprendible de pago, con el diseño del 19 de noviembre: documento en
+ * una tarjeta, datos del colaborador en rejilla, conceptos en una tabla de
+ * dos columnas, total neto al pie, firmas y nota.
  *
- * Layout V.15:
- *  - Header del desprendible: grid 3 columnas con panel logo + título
- *  - Grid 3x2 mini-cards con info (Nombre, Cédula, Base, Fecha, Período, Días)
- *  - Detalle de días trabajados (tabla completa para VARIABLE) — pendiente API
- *  - Bloques DEVENGADO / DEDUCCIONES / BONIFICACIÓN con border-l-3 y colores
- *  - TOTAL NETO grande
- *  - Footer con firma y huella
- *
- * Acciones: Aceptar, Imprimir, WhatsApp, Descargar PDF.
+ * Acciones en la cabecera: Imprimir, WhatsApp, Descargar PDF. Abajo, Aceptar.
  * Conexiones API: `nominaApi.desprendible`, `desprendiblePdf`, `desprendibleWhatsapp`.
  */
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent } from '../../components/ui/card';
+import PageHeader from '../../components/common/PageHeader';
+import { Card } from '../../components/ui/card';
 import {
-  Check, Printer, Download, MessageCircle, ArrowLeft, Loader2,
+  Check, Printer, Download, MessageCircle, Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { nominaApi, DesprendibleData } from '../../../api/nomina';
@@ -129,24 +124,27 @@ export default function DesprendiblePago() {
 
   if (cargando) {
     return (
-      <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" />
+      <Card className="flex-row items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
         Cargando desprendible...
-      </div>
+      </Card>
     );
   }
 
   if (!data) {
     return (
-      <div className="text-center py-20 text-muted-foreground">
-        Desprendible no disponible.
+      <div className="space-y-6">
+        <PageHeader backTo={`/nomina/${nominaId}`} title="No encontrado" description="No se encontró la información." />
       </div>
     );
   }
 
   const { empleado, nomina, liquidacion } = data;
   const fechaActual = new Date().toLocaleDateString('es-CO', {
-    day: '2-digit', month: 'long', year: 'numeric',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
   });
   const totalBruto =
     liquidacion.total_jornales + liquidacion.total_cosecha +
@@ -178,69 +176,143 @@ export default function DesprendiblePago() {
   const pension = liquidacion.deducciones.find((d) => /pensi/i.test(d.nombre))?.valor ?? 0;
   const otras = liquidacion.total_deducciones - adelantos - ahorros - salud - pension;
 
+  const subsidioEtiqueta = liquidacion.dias_auxilio_transporte != null
+    ? `Subsidio de transporte (${liquidacion.dias_auxilio_transporte} día${liquidacion.dias_auxilio_transporte !== 1 ? 's' : ''})`
+    : 'Subsidio de transporte';
+  const recargoDominical =
+    (liquidacion.total_recargo_dominical ?? 0) + (liquidacion.total_recargo_festivo ?? 0);
+  const ausencias = liquidacion.total_incapacidades > 0
+    ? lineasAusenciasRemuneradas({
+      resumen: liquidacion.ausencias_remuneradas_resumen,
+      etiqueta: liquidacion.etiqueta_ausencias_remuneradas,
+      total: liquidacion.total_incapacidades,
+      motivos: motivosRemunerados(liquidacion.detalle_ausencias),
+    })
+    : [];
+  const datos: { label: string; value: string }[] = [
+    { label: 'Nombre', value: empleado.nombre_completo },
+    { label: 'Cédula', value: empleado.documento },
+    { label: 'Base', value: empleado.salario_tipo ?? '-' },
+    { label: 'Fecha', value: fechaActual },
+    { label: 'Período', value: nomina.periodo_label },
+    { label: 'Días cancelados', value: String(liquidacion.dias_trabajados) },
+  ];
+
   return (
     <div className="space-y-6 print:space-y-2">
-      {/* Header - NO SE IMPRIME */}
-      <div className="print:hidden">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate(`/nomina/${nominaId}`)}
-          className="mb-4"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Volver
-        </Button>
+      {/* La cabecera no se imprime: el papel arranca en el desprendible. */}
+      <PageHeader
+        className="print:hidden"
+        backTo={`/nomina/${nominaId}`}
+        eyebrow={nomina.periodo_label}
+        title="Desprendible generado"
+        description="Liquidación confirmada."
+        actions={
+          <>
+            <Button variant="outline" onClick={() => void pedirPdf('imprimir')} disabled={descargando}>
+              <Printer strokeWidth={2} />
+              Imprimir
+            </Button>
+            <Button variant="outline" onClick={enviarWhatsapp} disabled={generandoWa}>
+              {generandoWa
+                ? <Loader2 className="animate-spin" strokeWidth={2} />
+                : <MessageCircle strokeWidth={2} />}
+              Enviar por WhatsApp
+            </Button>
+            <Button variant="outline" onClick={() => void pedirPdf('descargar')} disabled={descargando}>
+              {descargando
+                ? <Loader2 className="animate-spin" strokeWidth={2} />
+                : <Download strokeWidth={2} />}
+              Descargar PDF
+            </Button>
+          </>
+        }
+      />
 
-        <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-primary">Desprendible Generado</h1>
-          <p className="text-muted-foreground mt-2">Liquidación confirmada exitosamente</p>
-        </div>
-      </div>
-
-      {/* DESPRENDIBLE - SE IMPRIME */}
-      <Card className="mx-auto max-w-4xl">
-        <CardContent className="p-8">
-          {/* Header del desprendible: grid 3 col con panel finca + título */}
-          <div className="mb-8">
-            <div className="grid grid-cols-1 sm:grid-cols-3 mb-6">
-              <div className="col-span-1 p-6 flex items-center justify-center bg-primary/5 rounded-l-lg">
-                <p className="font-bold text-primary text-center uppercase">{data.finca}</p>
-              </div>
-              <div className="col-span-2 p-6 flex items-center justify-center bg-muted/30 rounded-r-lg">
-                <h2 className="text-2xl font-bold text-center">DESPRENDIBLE DE NÓMINA</h2>
-              </div>
-            </div>
-
-            {/* Grid 3x2 de info — mini-cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-              <InfoMini label="Nombre" value={empleado.nombre_completo} />
-              <InfoMini label="Cédula" value={empleado.documento} />
-              <InfoMini label="Base" value={empleado.salario_tipo ?? '—'} />
-              <InfoMini label="Fecha" value={fechaActual} />
-              <InfoMini label="Período" value={nomina.periodo_label} />
-              <InfoMini label="Días Cancelados" value={String(liquidacion.dias_trabajados)} />
-            </div>
+      {/* Documento: se imprime */}
+      <Card className="mx-auto max-w-3xl gap-0 bg-card p-6 text-foreground sm:p-10 print:max-w-none print:border-0 print:p-0">
+        {/* Encabezado del documento */}
+        <div className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-base font-semibold text-foreground">{data.finca}</p>
+          <div className="sm:text-right">
+            <p className="text-lg font-bold tracking-wide text-foreground">Desprendible de nómina</p>
+            <p className="text-sm text-muted-foreground">{nomina.periodo_label}</p>
           </div>
+        </div>
 
-          {/* Bloques de liquidación */}
-          <div className="space-y-3 mt-4">
-            {/* DEVENGADO */}
-            <div className="bg-success/5 rounded-lg p-3 border-l-4 border-success">
-              <h3 className="font-bold text-xs text-success mb-2 uppercase">Devengado</h3>
-              <div className="space-y-1.5">
-                <RowSmall
-                  label={empleado.salario_tipo === 'VARIABLE' ? 'Base (Jornales)' : 'Sueldo Básico'}
-                  value={fmt(liquidacion.total_jornales)}
-                />
-                {liquidacion.total_cosecha > 0 && (
-                  <RowSmall label="Cosecha" value={fmt(liquidacion.total_cosecha)} />
-                )}
-                {/* §16 - En una nomina historica no hay planillas detras, asi
-                    que la unica traza de como se pago la cosecha es lo que
-                    trajo el archivo: los gajos y el promedio kg/gajo. */}
-                {liquidacion.cosecha_historica && (
-                  <p className="text-[10px] text-muted-foreground pl-1">
+        {/* Datos del colaborador */}
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-b border-border py-5 text-sm sm:grid-cols-3">
+          {datos.map((d) => (
+            <div key={d.label} className="min-w-0">
+              <dt className="text-xs text-muted-foreground">{d.label}</dt>
+              <dd className="font-medium text-foreground">{d.value}</dd>
+            </div>
+          ))}
+        </dl>
+
+        {/* Detalles día por día, donde el diseño pone el "Detalle de días
+            trabajados". Componentes compartidos con LiquidarColaborador, en
+            su variante compacta. Cada uno se esconde solo si no trae datos. */}
+        <div className="space-y-4 border-b border-border py-5 empty:hidden">
+          <DetalleAusencias
+            items={liquidacion.detalle_ausencias}
+            formatMoney={fmt}
+            variant="compact"
+            titulo="Detalle de ausencias"
+          />
+          <DetalleDescansos
+            items={liquidacion.detalle_descansos}
+            diasPerdidos={liquidacion.dias_descanso_perdidos}
+            totalDescansoPerdido={liquidacion.total_descanso_perdido}
+            formatMoney={fmt}
+            variant="compact"
+            titulo="Detalle de descansos"
+          />
+          {/* PLAN_AUSENCIAS_IMPLICITAS §1.6: días no laborados sin novedad
+              registrada. Legalmente no es lo mismo que una ausencia. */}
+          <FaltasInjustificadas
+            items={liquidacion.detalle_faltas_injustificadas}
+            total={liquidacion.dias_injustificados}
+            formatMoney={fmt}
+            variant="compact"
+            titulo="Días no laborados sin novedad registrada"
+          />
+          {/* PR-L8: los días del disfrute dentro del período. En `DIRECTO`
+              la línea va sin valor: los pagó Liquidaciones con su
+              comprobante VAC-n. En `NOMINA` el tramo lo paga esta nómina. */}
+          <DiasVacaciones
+            items={liquidacion.detalle_vacaciones}
+            total={liquidacion.dias_vacaciones}
+            formatMoney={fmt}
+            variant="compact"
+            titulo="Vacaciones del período"
+          />
+        </div>
+
+        {/* Conceptos de la liquidación */}
+        <div className="py-5">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-foreground/40 text-xs text-muted-foreground">
+                <th className="px-3 py-2 pl-0 text-left font-semibold">Concepto</th>
+                <th className="px-3 py-2 pr-0 text-right font-semibold">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              <Seccion titulo="Devengado" primera />
+              <Fila
+                label={empleado.salario_tipo === 'VARIABLE' ? 'Base (jornales)' : 'Sueldo básico'}
+                value={fmt(liquidacion.total_jornales)}
+              />
+              {liquidacion.total_cosecha > 0 && (
+                <Fila label="Cosecha" value={fmt(liquidacion.total_cosecha)} />
+              )}
+              {/* §16 - En una nomina historica no hay planillas detras, asi
+                  que la unica traza de como se pago la cosecha es lo que
+                  trajo el archivo: los gajos y el promedio kg/gajo. */}
+              {liquidacion.cosecha_historica && (
+                <tr className="border-b border-border">
+                  <td colSpan={2} className="py-2 text-xs text-muted-foreground">
                     {liquidacion.cosecha_historica.gajos.toLocaleString('es-CO')} gajos ×{' '}
                     {liquidacion.cosecha_historica.promedio_kg_gajo.toLocaleString('es-CO', {
                       minimumFractionDigits: 4,
@@ -249,267 +321,131 @@ export default function DesprendiblePago() {
                       maximumFractionDigits: 2,
                     })}{' '}
                     kg
-                  </p>
-                )}
-                {(liquidacion.total_horas_extra + liquidacion.total_recargos) > 0 && (
-                  <RowSmall
-                    label="Extras (Horas/Domin)"
-                    value={fmt(liquidacion.total_horas_extra + liquidacion.total_recargos)}
-                  />
-                )}
-                {liquidacion.total_incapacidades > 0 && lineasAusenciasRemuneradas({
-                  resumen: liquidacion.ausencias_remuneradas_resumen,
-                  etiqueta: liquidacion.etiqueta_ausencias_remuneradas,
-                  total: liquidacion.total_incapacidades,
-                  motivos: motivosRemunerados(liquidacion.detalle_ausencias),
-                }).map((linea) => (
-                  <RowSmall
-                    key={linea.clave}
-                    label={linea.detalle ? `${linea.etiqueta} (${linea.detalle})` : linea.etiqueta}
-                    value={fmt(linea.valor)}
-                  />
-                ))}
-                {/* PR-L15 - Solo las vacaciones que paga esta nomina. Las que
-                    pago Liquidaciones llegan en 0 y siguen apareciendo abajo,
-                    sin valor, para explicar los dias que faltan. */}
-                {(liquidacion.total_vacaciones ?? 0) > 0 && (
-                  <RowSmall
-                    label={
-                      diasVacacionesPagados > 0
-                        ? `Vacaciones (${diasVacacionesPagados} día${diasVacacionesPagados !== 1 ? 's' : ''})`
-                        : 'Vacaciones'
-                    }
-                    value={fmt(liquidacion.total_vacaciones!)}
-                  />
-                )}
-                {(liquidacion.total_vacaciones_compensadas ?? 0) > 0 && (
-                  <RowSmall
-                    label="Vacaciones compensadas en dinero"
-                    value={fmt(liquidacion.total_vacaciones_compensadas!)}
-                  />
-                )}
-                {/* §9.9 — Dominicales / festivos / recargo. Solo se muestra si
-                    llegan del backend (nóminas anteriores al cambio no los
-                    tienen). Sistema todo-o-nada según art. 173 num. 1. */}
-                {(liquidacion.total_dominicales ?? 0) > 0 && (
-                  <RowSmall label="Dominicales" value={fmt(liquidacion.total_dominicales!)} />
-                )}
-                {(liquidacion.total_festivos ?? 0) > 0 && (
-                  <RowSmall label="Festivos" value={fmt(liquidacion.total_festivos!)} />
-                )}
-                {((liquidacion.total_recargo_dominical ?? 0) + (liquidacion.total_recargo_festivo ?? 0)) > 0 && (
-                  <RowSmall
-                    label={
-                      liquidacion.porcentaje_recargo_dominical != null
-                        ? `Recargo dominical/festivo (${liquidacion.porcentaje_recargo_dominical}%)`
-                        : 'Recargo dominical/festivo'
-                    }
-                    value={fmt(
-                      (liquidacion.total_recargo_dominical ?? 0) + (liquidacion.total_recargo_festivo ?? 0),
-                    )}
-                  />
-                )}
-                <div className="border-t border-success/30 pt-2 mt-2">
-                  <div className="flex justify-between items-center bg-success/10 p-2 rounded">
-                    <span className="font-bold text-success text-xs">Total Bruto</span>
-                    <span className="font-bold text-base text-success">{fmt(totalBruto)}</span>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center pt-1">
-                  <span className="font-medium text-xs">
-                    Subsidio Transporte
-                    {/* PR-N6 — el colaborador firma este papel: tiene que
-                        poder ver con cuántos días se calculó el auxilio. */}
-                    {liquidacion.dias_auxilio_transporte != null && (
-                      <span className="ml-1 text-[10px] font-normal text-muted-foreground">
-                        ({liquidacion.dias_auxilio_transporte} día{liquidacion.dias_auxilio_transporte !== 1 ? 's' : ''})
-                      </span>
-                    )}
-                  </span>
-                  <span className="font-bold text-sm">{fmt(liquidacion.subsidio_transporte)}</span>
-                </div>
-              </div>
-            </div>
+                  </td>
+                </tr>
+              )}
+              {(liquidacion.total_horas_extra + liquidacion.total_recargos) > 0 && (
+                <Fila
+                  label="Extras (horas y dominicales)"
+                  value={fmt(liquidacion.total_horas_extra + liquidacion.total_recargos)}
+                />
+              )}
+              {ausencias.map((linea) => (
+                <Fila
+                  key={linea.clave}
+                  label={linea.detalle ? `${linea.etiqueta} (${linea.detalle})` : linea.etiqueta}
+                  value={fmt(linea.valor)}
+                />
+              ))}
+              {/* PR-L15 - Solo las vacaciones que paga esta nomina. Las que
+                  pago Liquidaciones llegan en 0 y siguen apareciendo abajo,
+                  sin valor, para explicar los dias que faltan. */}
+              {(liquidacion.total_vacaciones ?? 0) > 0 && (
+                <Fila
+                  label={
+                    diasVacacionesPagados > 0
+                      ? `Vacaciones (${diasVacacionesPagados} día${diasVacacionesPagados !== 1 ? 's' : ''})`
+                      : 'Vacaciones'
+                  }
+                  value={fmt(liquidacion.total_vacaciones!)}
+                />
+              )}
+              {(liquidacion.total_vacaciones_compensadas ?? 0) > 0 && (
+                <Fila
+                  label="Vacaciones compensadas en dinero"
+                  value={fmt(liquidacion.total_vacaciones_compensadas!)}
+                />
+              )}
+              {/* §9.9 — Dominicales / festivos / recargo. Solo se muestra si
+                  llegan del backend (nóminas anteriores al cambio no los
+                  tienen). Sistema todo-o-nada según art. 173 num. 1. */}
+              {(liquidacion.total_dominicales ?? 0) > 0 && (
+                <Fila label="Dominicales" value={fmt(liquidacion.total_dominicales!)} />
+              )}
+              {(liquidacion.total_festivos ?? 0) > 0 && (
+                <Fila label="Festivos" value={fmt(liquidacion.total_festivos!)} />
+              )}
+              {recargoDominical > 0 && (
+                <Fila
+                  label={
+                    liquidacion.porcentaje_recargo_dominical != null
+                      ? `Recargo dominical/festivo (${liquidacion.porcentaje_recargo_dominical} %)`
+                      : 'Recargo dominical/festivo'
+                  }
+                  value={fmt(recargoDominical)}
+                />
+              )}
+              <Fila label="Total bruto" value={fmt(totalBruto)} fuerte />
+              {/* PR-N6 — el colaborador firma este papel: tiene que poder ver
+                  con cuántos días se calculó el auxilio. */}
+              <Fila label={subsidioEtiqueta} value={fmt(liquidacion.subsidio_transporte)} />
 
-            {/* DEDUCCIONES */}
-            <div className="bg-destructive/5 rounded-lg p-3 border-l-4 border-destructive">
-              <h3 className="font-bold text-xs text-destructive mb-2 uppercase">Deducciones</h3>
-              <div className="space-y-1.5">
-                <RowSmall label="Descuento Salud (4%)" value={fmt(salud)} destructivo />
-                <RowSmall label="Descuento Pensión (4%)" value={fmt(pension)} destructivo />
-                <RowSmall label="Dcto Adelantos" value={fmt(adelantos)} destructivo />
-                <RowSmall label="Ahorro" value={fmt(ahorros)} destructivo />
-                {otras > 0 && (
-                  <RowSmall label="Otras deducciones" value={fmt(otras)} destructivo />
-                )}
-                <div className="border-t border-destructive/30 pt-2 mt-2">
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-xs">Total Deducciones</span>
-                    <span className="font-bold text-sm text-destructive">
-                      {fmt(liquidacion.total_deducciones)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
+              <Seccion titulo="Deducciones" />
+              <Fila label="Salud (4 %)" value={`−${fmt(salud)}`} />
+              <Fila label="Pensión (4 %)" value={`−${fmt(pension)}`} />
+              <Fila label="Adelantos" value={`−${fmt(adelantos)}`} />
+              <Fila label="Ahorro" value={`−${fmt(ahorros)}`} />
+              {otras > 0 && <Fila label="Otras deducciones" value={`−${fmt(otras)}`} />}
+              <Fila label="Total de deducciones" value={`−${fmt(liquidacion.total_deducciones)}`} fuerte />
 
-            {/* BONIFICACIÓN */}
-            {liquidacion.total_bonificaciones > 0 && (
-              <div className="bg-primary/5 rounded-lg p-3 border-l-4 border-primary">
-                <h3 className="font-bold text-xs text-primary mb-2 uppercase">Bonificación</h3>
-                <div className="flex justify-between items-center">
-                  <span className="font-medium text-xs">Total Bonificaciones</span>
-                  <span className="font-bold text-sm text-primary">
-                    {fmt(liquidacion.total_bonificaciones)}
-                  </span>
-                </div>
-              </div>
-            )}
+              <Seccion titulo="Bonificación" />
+              <Fila label="Bonificación" value={fmt(liquidacion.total_bonificaciones ?? 0)} />
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-foreground/60">
+                <td className="pt-4 text-base font-bold text-foreground">Total neto</td>
+                <td className="pt-4 text-right text-2xl font-bold tabular-nums text-success">
+                  {fmt(liquidacion.total_neto)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
 
-            {/* TOTAL NETO */}
-            <div className="bg-primary/10 rounded-lg p-4 border-2 border-primary mt-4">
-              <div className="flex justify-between items-center">
-                <span className="font-bold text-lg">TOTAL NETO</span>
-                <span className="font-bold text-2xl sm:text-3xl text-primary">{fmt(liquidacion.total_neto)}</span>
-              </div>
-            </div>
-
-            {/* §9.9 — Detalle día por día de descansos. Componente compartido
-                con `LiquidarColaborador` (mismo shape, variante compacta para
-                el desprendible impreso). */}
-            <div className="mt-4">
-              <DetalleAusencias
-                items={liquidacion.detalle_ausencias}
-                formatMoney={fmt}
-                variant="compact"
-                titulo="Detalle de ausencias"
-              />
-            </div>
-
-            <div className="mt-4">
-              <DetalleDescansos
-                items={liquidacion.detalle_descansos}
-                diasPerdidos={liquidacion.dias_descanso_perdidos}
-                totalDescansoPerdido={liquidacion.total_descanso_perdido}
-                formatMoney={fmt}
-                variant="compact"
-                titulo="Detalle de descansos"
-              />
-            </div>
-
-            {/* PLAN_AUSENCIAS_IMPLICITAS §1.6 — Días no laborados sin novedad
-                registrada. Sección propia bajo detalle_ausencias porque
-                legalmente no es lo mismo. Solo se muestra si el backend adjunta
-                el detalle. */}
-            <div className="mt-4">
-              <FaltasInjustificadas
-                items={liquidacion.detalle_faltas_injustificadas}
-                total={liquidacion.dias_injustificados}
-                formatMoney={fmt}
-                variant="compact"
-                titulo="Días no laborados sin novedad registrada"
-              />
-            </div>
-
-            {/* PR-L8 — Los días del disfrute dentro del período. En `DIRECTO`
-                la línea va sin valor: los pagó Liquidaciones con su
-                comprobante VAC-n. En `NOMINA` el tramo lo paga esta nómina y
-                el propio bloque muestra cuánto (PR-L15). */}
-            <div className="mt-4">
-              <DiasVacaciones
-                items={liquidacion.detalle_vacaciones}
-                total={liquidacion.dias_vacaciones}
-                formatMoney={fmt}
-                variant="compact"
-                titulo="Vacaciones del período"
-              />
-            </div>
+        {/* Firmas */}
+        <div className="mt-8 grid grid-cols-2 gap-8">
+          <div className="text-center">
+            <div className="mb-2 h-16 border-b border-foreground/40"></div>
+            <p className="text-xs text-muted-foreground">Firma de recibido</p>
           </div>
-
-          {/* Footer: firmas */}
-          <div className="mt-12 pt-8 border-t border-border">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-              <div className="text-center">
-                <div className="h-20 border-b-2 border-muted-foreground/30 mb-3"></div>
-                <p className="text-sm font-semibold text-muted-foreground">FIRMA RECIBIDO</p>
-              </div>
-              <div className="text-center">
-                <div className="h-20 border-b-2 border-muted-foreground/30 mb-3"></div>
-                <p className="text-sm font-semibold text-muted-foreground">HUELLA</p>
-              </div>
-            </div>
+          <div className="text-center">
+            <div className="mb-2 h-16 border-b border-foreground/40"></div>
+            <p className="text-xs text-muted-foreground">Huella</p>
           </div>
+        </div>
 
-          {/* Nota al pie */}
-          <div className="mt-6 text-xs text-center text-muted-foreground italic">
-            <p>Este desprendible es un documento oficial de pago. Consérvelo para sus registros.</p>
-          </div>
-        </CardContent>
+        <p className="mt-8 text-center text-xs text-muted-foreground">
+          Este desprendible es un documento oficial de pago. Consérvalo para tus registros.
+        </p>
       </Card>
 
-      {/* Acciones duplicadas abajo - NO SE IMPRIME */}
-      <div className="print:hidden grid grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto">
-        <Button onClick={handleAceptar} size="lg" className="bg-success hover:bg-success/90">
-          <Check className="h-5 w-5" />
+      <div className="mx-auto flex max-w-3xl flex-col-reverse gap-2 sm:flex-row sm:justify-end print:hidden">
+        <Button onClick={handleAceptar}>
+          <Check strokeWidth={2} />
           Aceptar
-        </Button>
-        <Button
-          onClick={() => void pedirPdf('imprimir')}
-          disabled={descargando}
-          variant="outline"
-          size="lg"
-          
-        >
-          <Printer className="h-5 w-5" />
-          Imprimir
-        </Button>
-        <Button
-          onClick={enviarWhatsapp}
-          disabled={generandoWa}
-          variant="outline"
-          size="lg"
-          className="text-primary border-primary hover:bg-primary/5"
-        >
-          {generandoWa ? <Loader2 className="h-5 w-5 animate-spin" /> : <MessageCircle className="h-5 w-5" />}
-          WhatsApp
-        </Button>
-        <Button
-          onClick={() => void pedirPdf('descargar')}
-          disabled={descargando}
-          variant="outline"
-          size="lg"
-          
-        >
-          {descargando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
-          PDF
         </Button>
       </div>
     </div>
   );
 }
 
-function InfoMini({ label, value }: { label: string; value: string }) {
+/** Rótulo de sección dentro de la tabla de conceptos. */
+function Seccion({ titulo, primera }: { titulo: string; primera?: boolean }) {
   return (
-    <div className="p-1.5 bg-muted/20 rounded">
-      <span className="font-semibold text-muted-foreground text-[10px] uppercase">{label}</span>
-      <div className="font-semibold text-xs">{value}</div>
-    </div>
+    <tr>
+      <td colSpan={2} className={`${primera ? 'pt-4' : 'pt-5'} pb-1 text-[13px] font-medium text-muted-foreground`}>
+        {titulo}
+      </td>
+    </tr>
   );
 }
 
-function RowSmall({
-  label,
-  value,
-  destructivo,
-}: {
-  label: string;
-  value: string;
-  destructivo?: boolean;
-}) {
+/** Fila de concepto: etiqueta a la izquierda, valor a la derecha. */
+function Fila({ label, value, fuerte }: { label: string; value: string; fuerte?: boolean }) {
   return (
-    <div className="flex justify-between items-center">
-      <span className="font-medium text-xs">{label}</span>
-      <span className={`font-bold text-sm ${destructivo ? 'text-destructive' : ''}`}>{value}</span>
-    </div>
+    <tr className={`border-b border-border ${fuerte ? 'font-semibold' : ''}`}>
+      <td className="px-3 py-2 pl-0">{label}</td>
+      <td className="px-3 py-2 pr-0 text-right tabular-nums">{value}</td>
+    </tr>
   );
 }

@@ -9,8 +9,6 @@
  * al confirmar, así que aquí no se recalcula nada.
  */
 import { useState } from 'react';
-import { Link } from 'react-router';
-import { Card, CardContent } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
 import { Label } from '../../../components/ui/label';
@@ -20,7 +18,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../../components/ui/alert-dialog';
 import {
-  ArrowLeft, AlertTriangle, RotateCcw, Loader2, Download, Printer, Banknote, CheckCircle,
+  AlertTriangle, RotateCcw, Loader2, Download, Printer, Banknote, Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -37,12 +35,28 @@ import { fmtCOP, descargarBlob, nombrePdf, semestreLabel, TEXTOS_PERIODO, type T
 import { imprimirPdf } from '../../../lib/pdf/imprimirPdf';
 import RegistrarPagoDialog, { type ObjetivoPago } from './RegistrarPagoDialog';
 import DesprendibleFilaCard from './DesprendibleFilaCard';
+import PageHeader from '../../../components/common/PageHeader';
+import StatStrip from '../../../components/common/StatStrip';
+import SeccionCard from '../../../components/liquidaciones/SeccionCard';
+import DatoLista from '../../../components/liquidaciones/DatoLista';
+import TotalResumen from '../../../components/liquidaciones/TotalResumen';
 
 interface Props {
   periodo: LiquidacionPeriodoDetalle;
   tipo: TipoPeriodoDetalle;
   /** Recarga el período tras un giro, anulación o reapertura. */
   onReload: () => Promise<unknown>;
+}
+
+/** Estado de giro del período: completo, parcial o solo liquidado. */
+function EstadoPeriodoBadge({ estado, completo }: { estado: string; completo: string }) {
+  if (estado === 'PARCIAL') return <Badge variant="warning">Giro parcial</Badge>;
+  return (
+    <Badge variant="success">
+      <Check strokeWidth={2.5} />
+      {estado === 'COMPLETO' ? completo : 'Liquidado'}
+    </Badge>
+  );
 }
 
 export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) {
@@ -186,146 +200,112 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
     }
   };
 
+  const eyebrow = txt.nombre.charAt(0).toUpperCase() + txt.nombre.slice(1);
+
   return (
     <div className="space-y-6 print:space-y-3">
-      <Button variant="ghost" size="sm" asChild className="print:hidden">
-        <Link to={txt.rutaTab}><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
-      </Button>
-
-      {/* Encabezado con el estado del período */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-primary">{periodo.descripcion}</h1>
-          <p className="text-muted-foreground mt-1">
+      <PageHeader
+        eyebrow={eyebrow}
+        title={periodo.descripcion}
+        description={
+          <>
             {txt.subtituloWizard} · Cerrada el {periodo.cerrado_at ? formatFecha(periodo.cerrado_at) : '—'}
             {periodo.cerrado_por ? ` por ${periodo.cerrado_por.name}` : ''}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {periodo.vencida && (
-            <Badge variant="destructive" className="text-sm px-3 py-1">
-              <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
-              Vencida
-            </Badge>
-          )}
-          {periodo.estado_pago === 'COMPLETO' ? (
-            <Badge className="bg-success/10 text-success border border-success/30 text-sm px-3 py-1">
-              <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
-              {txt.badgeCompleto}
-            </Badge>
-          ) : periodo.estado_pago === 'PARCIAL' ? (
-            <Badge className="bg-warning-soft text-warning border border-warning/20 text-sm px-3 py-1">
-              Giro parcial
-            </Badge>
-          ) : (
-            <Badge className="bg-primary/10 text-primary border border-primary/30 text-sm px-3 py-1">
-              <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
-              Liquidado
-            </Badge>
-          )}
-        </div>
-      </div>
+          </>
+        }
+        backTo={txt.rutaTab}
+        actions={
+          <>
+            {periodo.vencida && (
+              <Badge variant="destructive">
+                <AlertTriangle strokeWidth={2.5} />
+                Vencida
+              </Badge>
+            )}
+            <EstadoPeriodoBadge estado={periodo.estado_pago} completo={txt.badgeCompleto} />
+            <Button
+              variant="outline"
+              onClick={() => void pedirPdfPeriodo('imprimir')}
+              disabled={descargandoPeriodo}
+              className="print:hidden"
+            >
+              <Printer strokeWidth={2} />
+              Imprimir
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void pedirPdfPeriodo('descargar')}
+              disabled={descargandoPeriodo}
+              className="print:hidden"
+            >
+              {descargandoPeriodo ? <Loader2 className="animate-spin" /> : <Download strokeWidth={2} />}
+              Descargar soporte PDF
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setReabrirOpen(true)}
+              disabled={reabrirDeshabilitado}
+              title={reabrirDeshabilitado ? 'No se puede reabrir con giros registrados: anúlalos primero' : undefined}
+              className="print:hidden"
+            >
+              <RotateCcw strokeWidth={2} />
+              Reabrir
+            </Button>
+            {pendientes.length > 0 && (
+              <Button onClick={() => setObjetivoPago({ fila: null, pendientes: pendientes.length })} className="print:hidden">
+                <Banknote strokeWidth={2} />
+                {txt.girarTodos}
+              </Button>
+            )}
+          </>
+        }
+      />
 
-      {/* Ficha del período */}
-      <Card>
-        <CardContent className="p-5">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
-            <div>
-              <p className="text-xs text-muted-foreground mb-0.5">Período</p>
-              <p className="text-sm font-medium">
-                {formatFecha(periodo.fecha_inicio)} – {formatFecha(periodo.fecha_fin)}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-0.5">
-                {esCesantias ? 'Fondos' : esPrima ? 'Semestre' : 'Tasa'}
-              </p>
-              <p className="text-sm font-medium">
-                {esCesantias
-                  ? (fondos || '—')
-                  : esPrima
-                    ? (semestreLabel(periodo.semestre) || '—')
-                    : `${tasa}% anual (fija por ley)`}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-0.5">Fecha límite</p>
-              <p
-                className={`text-sm font-medium ${periodo.vencida ? 'text-destructive' : ''}`}
-                title={`Fecha legal: ${formatFecha(periodo.fecha_limite_legal)}. Operativa: último día hábil.`}
-              >
-                {formatFecha(periodo.fecha_limite_operativa)}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-0.5">{txt.giradoEnLabel}</p>
-              <p className={`text-sm font-semibold ${ultimoGiro ? 'text-success' : 'text-muted-foreground'}`}>
-                {ultimoGiro ? formatFecha(ultimoGiro) : 'Sin giros'}
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <SeccionCard title="Período">
+        <DatoLista
+          className="lg:grid-cols-4"
+          items={[
+            { label: 'Período', value: `${formatFecha(periodo.fecha_inicio)} – ${formatFecha(periodo.fecha_fin)}` },
+            {
+              label: esCesantias ? 'Fondos' : esPrima ? 'Semestre' : 'Tasa',
+              value: esCesantias
+                ? (fondos || '—')
+                : esPrima
+                  ? (semestreLabel(periodo.semestre) || '—')
+                  : `${tasa}% anual (fija por ley)`,
+            },
+            {
+              label: 'Fecha límite',
+              value: (
+                <span
+                  className={periodo.vencida ? 'text-destructive' : undefined}
+                  title={`Fecha legal: ${formatFecha(periodo.fecha_limite_legal)}. Operativa: último día hábil.`}
+                >
+                  {formatFecha(periodo.fecha_limite_operativa)}
+                </span>
+              ),
+            },
+            {
+              label: txt.giradoEnLabel,
+              value: ultimoGiro ? formatFecha(ultimoGiro) : <span className="text-muted-foreground">Sin giros</span>,
+            },
+          ]}
+        />
+      </SeccionCard>
 
-      {/* Acciones del período */}
-      <div className="flex gap-3 justify-end flex-wrap print:hidden">
-        <Button
-          variant="outline"
-          onClick={() => void pedirPdfPeriodo('imprimir')}
-          disabled={descargandoPeriodo}
-          
-        >
-          <Printer className="h-4 w-4" />
-          Imprimir
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => void pedirPdfPeriodo('descargar')}
-          disabled={descargandoPeriodo}
-          
-        >
-          {descargandoPeriodo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-          Descargar Soporte PDF
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => setReabrirOpen(true)}
-          disabled={reabrirDeshabilitado}
-          title={reabrirDeshabilitado ? 'No se puede reabrir con giros registrados: anúlalos primero' : undefined}
-          
-        >
-          <RotateCcw className="h-4 w-4" />
-          Reabrir
-        </Button>
-        {pendientes.length > 0 && (
-          <Button onClick={() => setObjetivoPago({ fila: null, pendientes: pendientes.length })} >
-            <Banknote className="h-4 w-4" />
-            {txt.girarTodos}
-          </Button>
-        )}
-      </div>
-
-      {/* Totales */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="p-4 rounded-xl border border-primary/20 bg-primary/5">
-          <p className="text-xs text-muted-foreground mb-1">Total liquidado</p>
-          <p className="text-2xl font-bold text-primary">{fmtCOP(periodo.totales.liquidado)}</p>
-        </div>
-        <div className="p-4 rounded-xl border border-success/20 bg-success/5">
-          <p className="text-xs text-muted-foreground mb-1">{txt.giradoLabel}</p>
-          <p className="text-2xl font-bold text-success">{fmtCOP(periodo.totales.consignado)}</p>
-        </div>
-        <div className="p-4 rounded-xl border border-border bg-muted/20">
-          <p className="text-xs text-muted-foreground mb-1">{txt.pendienteGiroLabel}</p>
-          <p className="text-2xl font-bold">{fmtCOP(periodo.totales.pendiente)}</p>
-        </div>
-      </div>
+      <StatStrip
+        items={[
+          { label: 'Total liquidado', value: fmtCOP(periodo.totales.liquidado) },
+          { label: txt.giradoLabel, value: fmtCOP(periodo.totales.consignado) },
+          { label: txt.pendienteGiroLabel, value: fmtCOP(periodo.totales.pendiente) },
+        ]}
+      />
 
       {periodo.advertencias_globales.length > 0 && (
         <div className="space-y-2">
           {periodo.advertencias_globales.map((a, i) => (
-            <div key={i} className="flex items-center gap-3 rounded-xl border border-warning/20 bg-warning-soft px-4 py-3 text-sm text-warning">
-              <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
+            <div key={i} className="flex gap-2 rounded-lg bg-warning-soft p-3 text-sm text-foreground">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
               <span>{a.mensaje ?? a.code}</span>
             </div>
           ))}
@@ -334,8 +314,8 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
 
       {/* Desprendibles por colaborador */}
       <div className="space-y-4">
-        <div>
-          <h2 className="font-semibold text-lg">Detalle por Colaborador</h2>
+        <div className="space-y-1">
+          <h2>Detalle por colaborador</h2>
           <p className="text-sm text-muted-foreground">
             {filas.length} colaborador{filas.length !== 1 ? 'es' : ''} liquidado{filas.length !== 1 ? 's' : ''}
           </p>
@@ -357,6 +337,13 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
           />
         ))}
       </div>
+
+      <TotalResumen
+        conteoLabel="Total colaboradores"
+        conteo={filas.length}
+        totalLabel={`Total ${txt.colValor.toLowerCase()} liquidado`}
+        total={fmtCOP(periodo.totales.liquidado)}
+      />
 
       {/* Registrar giro (fila o todos) */}
       <RegistrarPagoDialog
@@ -381,9 +368,9 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
             <AlertDialogAction
               onClick={anularPago}
               disabled={anulando}
-              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              className="bg-destructive hover:bg-destructive/90"
             >
-              {anulando && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              {anulando && <Loader2 className="h-4 w-4 animate-spin" />}
               Anular giro
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -413,7 +400,7 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
           <AlertDialogFooter>
             <AlertDialogCancel disabled={reabriendo}>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={reabrir} disabled={reabriendo}>
-              {reabriendo && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              {reabriendo && <Loader2 className="h-4 w-4 animate-spin" />}
               Reabrir período
             </AlertDialogAction>
           </AlertDialogFooter>

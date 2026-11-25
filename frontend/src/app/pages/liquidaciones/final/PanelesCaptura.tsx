@@ -35,18 +35,14 @@ export function PanelDevengadosManuales({
 }: PropsDevengados) {
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="font-semibold">Devengados que se agregan a mano</h3>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          El salario del último período lo paga la nómina. Agréguelo aquí solo si esa nómina no
-          lo va a cubrir, o se pagaría dos veces.
-        </p>
-      </div>
+      {items.length === 0 && (
+        <p className="text-sm text-muted-foreground">No hay devengados agregados a mano.</p>
+      )}
 
       {items.map((d) => (
-        <div key={d.key} className="space-y-3 rounded-lg border border-border p-3">
+        <div key={d.key} className="space-y-4 rounded-lg bg-muted/60 p-4">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">
+            <span className="text-[13px] font-medium text-muted-foreground">
               {d.codigo === 'SALARIO_PENDIENTE' ? 'Salario pendiente' : 'Otro devengado'}
             </span>
             <Button
@@ -54,67 +50,60 @@ export function PanelDevengadosManuales({
               variant="ghost"
               size="sm"
               onClick={() => onQuitar(d.key)}
-              className="h-8 px-2 text-destructive hover:text-destructive"
+              aria-label="Quitar"
+              className="text-muted-foreground hover:text-destructive"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 className="h-4 w-4" />
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             {d.codigo === 'OTRO_DEVENGADO' && (
               <div className="space-y-1.5">
-                <Label className="text-xs" htmlFor="panelescap-nombre-span-classname-text-destructive-span">
-                  Nombre <span className="text-destructive">*</span>
-                </Label>
-                <Input id="panelescap-nombre-span-classname-text-destructive-span"
+                <Label htmlFor={`dev-nombre-${d.key}`}>Nombre *</Label>
+                <Input id={`dev-nombre-${d.key}`}
                   value={d.nombre}
                   onChange={(e) => onEditar(d.key, 'nombre', e.target.value)}
                   placeholder="Bonificación de retiro"
-                  className="h-9"
                 />
               </div>
             )}
 
             {d.codigo === 'SALARIO_PENDIENTE' && (
               <div className="space-y-1.5">
-                <Label className="text-xs" htmlFor="panelescap-dias">Días</Label>
-                <Input id="panelescap-dias"
+                <Label htmlFor={`dev-dias-${d.key}`}>Días</Label>
+                <Input id={`dev-dias-${d.key}`}
                   type="number"
                   value={d.dias}
                   onChange={(e) => onEditar(d.key, 'dias', e.target.value)}
                   placeholder="1"
-                  className="h-9"
                 />
               </div>
             )}
 
             <div className="space-y-1.5">
-              <Label className="text-xs" htmlFor="panelescap-valor">Valor</Label>
-              <Input id="panelescap-valor"
+              <Label htmlFor={`dev-valor-${d.key}`}>Valor</Label>
+              <Input id={`dev-valor-${d.key}`}
                 type="number"
                 value={d.valor}
                 onChange={(e) => onEditar(d.key, 'valor', e.target.value)}
                 placeholder={d.codigo === 'SALARIO_PENDIENTE' ? 'Se calcula con los días' : '0'}
-                className="h-9"
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs" htmlFor="panelescap-motivo-span-classname-text-destructive-span">
-                Motivo <span className="text-destructive">*</span>
-              </Label>
-              <Input id="panelescap-motivo-span-classname-text-destructive-span"
+              <Label htmlFor={`dev-motivo-${d.key}`}>Motivo *</Label>
+              <Input id={`dev-motivo-${d.key}`}
                 value={d.motivo}
                 onChange={(e) => onEditar(d.key, 'motivo', e.target.value)}
                 placeholder="Por qué se paga aquí"
-                className="h-9"
               />
             </div>
           </div>
 
           {!d.motivo.trim() && (
-            <p className="flex items-center gap-1.5 text-xs text-destructive">
-              <AlertTriangle className="h-3.5 w-3.5" />
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
               Sin motivo este concepto no se agrega.
             </p>
           )}
@@ -184,7 +173,7 @@ export function PanelDeducciones({
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
         <div className="flex-1">
-          <p className="text-sm font-medium">Descontar salud y pensión</p>
+          <p className="text-sm font-medium text-foreground">Descontar salud y pensión</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Solo sobre el salario pendiente. Las cesantías, los intereses, la prima, las
             vacaciones compensadas y la indemnización no cotizan.
@@ -195,7 +184,7 @@ export function PanelDeducciones({
 
       <div className="space-y-3">
         <div>
-          <h3 className="text-sm font-semibold">Préstamos vigentes</h3>
+          <p className="text-[13px] font-medium text-muted-foreground">Préstamos vigentes</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Se descuenta el saldo completo. No hay descuentos parciales.
           </p>
@@ -207,7 +196,9 @@ export function PanelDeducciones({
           prestamos.map((p) => (
             <label
               key={p.prestamo_id}
-              className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-border p-3 hover:bg-muted/30"
+              className={`flex cursor-pointer items-center justify-between gap-4 rounded-lg border p-3 transition-colors ${
+                seleccion[p.prestamo_id] ? 'border-primary bg-primary-soft' : 'border-border hover:bg-muted/40'
+              }`}
             >
               <div className="flex items-center gap-3">
                 <Checkbox
@@ -215,13 +206,13 @@ export function PanelDeducciones({
                   onCheckedChange={(v) => onPrestamo(p.prestamo_id, v === true)}
                 />
                 <div>
-                  <p className="text-sm font-medium">{p.concepto}</p>
+                  <p className="text-sm font-medium text-foreground">{p.concepto}</p>
                   <p className="text-xs text-muted-foreground">
                     {p.cuotas_pendientes} cuota{p.cuotas_pendientes === 1 ? '' : 's'} sin pagar
                   </p>
                 </div>
               </div>
-              <span className="text-sm font-semibold">{fmtCOP(p.saldo_pendiente)}</span>
+              <span className="text-sm font-semibold tabular-nums text-foreground">{fmtCOP(p.saldo_pendiente)}</span>
             </label>
           ))
         )}
@@ -229,7 +220,7 @@ export function PanelDeducciones({
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Otras deducciones</h3>
+          <p className="text-[13px] font-medium text-muted-foreground">Otras deducciones</p>
           <Button type="button" variant="outline" size="sm" onClick={onAgregarOtra}>
             <Plus className="h-3.5 w-3.5" />
             Agregar
@@ -237,41 +228,34 @@ export function PanelDeducciones({
         </div>
 
         {otras.map((o) => (
-          <div key={o.key} className="space-y-3 rounded-lg border border-border p-3">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div key={o.key} className="space-y-4 rounded-lg bg-muted/60 p-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="space-y-1.5">
-                <Label className="text-xs" htmlFor="panelescap-concepto-span-classname-text-destructive-span">
-                  Concepto <span className="text-destructive">*</span>
-                </Label>
-                <Input id="panelescap-concepto-span-classname-text-destructive-span"
+                <Label htmlFor={`ded-concepto-${o.key}`}>Concepto *</Label>
+                <Input id={`ded-concepto-${o.key}`}
                   value={o.nombre}
                   onChange={(e) => onEditarOtra(o.key, 'nombre', e.target.value)}
                   placeholder="Dotación no devuelta"
-                  className="h-9"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs" htmlFor="panelescap-valor-span-classname-text-destructive-span">
-                  Valor <span className="text-destructive">*</span>
-                </Label>
-                <Input id="panelescap-valor-span-classname-text-destructive-span"
+                <Label htmlFor={`ded-valor-${o.key}`}>Valor *</Label>
+                <Input id={`ded-valor-${o.key}`}
                   type="number"
                   value={o.valor}
                   onChange={(e) => onEditarOtra(o.key, 'valor', e.target.value)}
-                  className="h-9"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs" htmlFor="panelescap-motivo">Motivo</Label>
-                <Input id="panelescap-motivo"
+                <Label htmlFor={`ded-motivo-${o.key}`}>Motivo</Label>
+                <Input id={`ded-motivo-${o.key}`}
                   value={o.motivo}
                   onChange={(e) => onEditarOtra(o.key, 'motivo', e.target.value)}
-                  className="h-9"
                 />
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <label className="flex cursor-pointer items-center gap-2 text-xs">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
                 <Checkbox
                   checked={o.autorizacion_escrita}
                   onCheckedChange={(v) => onEditarOtra(o.key, 'autorizacion_escrita', v === true)}
@@ -283,9 +267,10 @@ export function PanelDeducciones({
                 variant="ghost"
                 size="sm"
                 onClick={() => onQuitarOtra(o.key)}
-                className="h-8 px-2 text-destructive hover:text-destructive"
+                aria-label="Quitar"
+                className="text-muted-foreground hover:text-destructive"
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <Trash2 className="h-4 w-4" />
               </Button>
             </div>
           </div>
@@ -294,8 +279,8 @@ export function PanelDeducciones({
 
       {hayDescuento && (
         <label
-          className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 ${
-            autorizacionEscrita ? 'border-border' : 'border-destructive/40 bg-destructive/5'
+          className={`flex cursor-pointer items-start gap-3 rounded-lg p-4 transition-colors ${
+            autorizacionEscrita ? 'border border-primary bg-primary-soft' : 'bg-destructive-soft'
           }`}
         >
           <Checkbox
@@ -304,7 +289,7 @@ export function PanelDeducciones({
             className="mt-0.5"
           />
           <div>
-            <p className="text-sm font-medium">
+            <p className="text-sm font-medium text-foreground">
               El trabajador autorizó estos descuentos por escrito
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">

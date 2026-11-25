@@ -18,18 +18,22 @@
  * se calcula con los datos de las nóminas listadas.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent } from '../../components/ui/card';
+import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
 import {
-  Plus, FileText, Calculator, TrendingUp, TrendingDown, Eye, Search, Filter,
-  DollarSign, Receipt, Users, Building2, Check, Trash2, Pencil, FileUp,
+  Plus, Calculator, Eye, Search,
+  HandCoins, Receipt, Trash2, Pencil, Upload, Loader2,
+  Wallet, Building2, Clock,
 } from 'lucide-react';
 import StatusBadge from '../../components/common/StatusBadge';
+import PageHeader from '../../components/common/PageHeader';
+import StatStrip from '../../components/common/StatStrip';
+import { cop, num } from '../../lib/formato';
 import { Badge } from '../../components/ui/badge';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -91,7 +95,7 @@ function fmtMillones(n: number): string {
   // Cero se muestra como $0 (no como guion): "aún no se ha pagado nada"
   // es un dato, no una ausencia de dato.
   if (!n || n <= 0) return '$0';
-  return `$${(n / 1_000_000).toFixed(2)}M`;
+  return `$${num(n / 1_000_000, 2)} M`;
 }
 
 export default function Nomina() {
@@ -203,7 +207,7 @@ export default function Nomina() {
   // ── Opciones del dropdown de período para KPIs ───────────────────────────
   const opcionesPeriodo = useMemo(() => {
     return [
-      { value: 'todos', label: 'Todos' },
+      { value: 'todos', label: 'Todos los períodos' },
       ...nominas.map((n) => ({ value: String(n.id), label: periodoLabel(n) })),
     ];
   }, [nominas]);
@@ -298,273 +302,187 @@ export default function Nomina() {
     return { totalColaboradores, totalTerceros, netoAPagar, totalPendiente, labelBorrador, borradoresLen: borradores.length };
   }, [nominas, periodoKpi, indicadores, indicadoresPeriodo]);
 
+  /** Hay algo filtrando, asi que el vacio puede ser por los filtros. */
+  const hayFiltros = filtroEstado !== 'todos' || filtroMes !== 'todos' || filtroBusqueda !== '';
+  const limpiarFiltros = () => {
+    setFiltroEstado('todos');
+    setFiltroMes('todos');
+    setFiltroBusqueda('');
+  };
+
   return (
     <div className="space-y-6">
-      {/* Header con botón de crear */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-primary">Pagos</h1>
-          <p className="text-muted-foreground mt-2">
-            Gestión de períodos de nómina y desprendibles de pago
-          </p>
-        </div>
-        <div className="flex gap-3">
-          <Button
-            onClick={() => navigate('/nomina/planilla-diaria')}
-            size="lg"
-            variant="outline"
-            className="border-primary text-primary hover:bg-primary/10"
-          >
-            <Receipt className="h-4 w-4" />
-            Planilla Diaria
-          </Button>
-          <Button
-            onClick={() => navigate('/nomina/prestamos')}
-            size="lg"
-            variant="outline"
-            className="border-primary text-primary hover:bg-primary/10"
-          >
-            <DollarSign className="h-5 w-5" />
-            Préstamos
-          </Button>
-          {/* Los períodos que la finca pagó antes del sistema. Entra por
-              archivo y queda como nómina cerrada, con su desprendible. */}
-          <Button
-            onClick={() => navigate('/nomina/importar')}
-            size="lg"
-            variant="outline"
-            
-          >
-            <FileUp className="h-5 w-5" />
-            Importar histórico
-          </Button>
-          <Button onClick={() => navigate('/nomina/nueva')} size="lg" >
-            <Plus className="h-5 w-5" />
-            Nuevo Período de Pago
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Pagos"
+        description="Períodos de nómina y desprendibles de pago."
+        actions={
+          <>
+            <Button variant="outline" onClick={() => navigate('/nomina/planilla-diaria')}>
+              <Receipt strokeWidth={2} />
+              Planilla diaria
+            </Button>
+            <Button variant="outline" onClick={() => navigate('/nomina/prestamos')}>
+              <HandCoins strokeWidth={2} />
+              Préstamos
+            </Button>
+            {/* Los períodos que la finca pagó antes del sistema. Entra por
+                archivo y queda como nómina cerrada, con su desprendible. */}
+            <Button variant="outline" onClick={() => navigate('/nomina/importar')}>
+              <Upload strokeWidth={2} />
+              Importar pagos
+            </Button>
+            <Button onClick={() => navigate('/nomina/nueva')}>
+              <Plus strokeWidth={2} />
+              Nuevo período de pago
+            </Button>
+          </>
+        }
+      />
 
-      {/* Resumen de pagos con filtro por período */}
-      <Card>
-        <CardContent className="p-5">
-          <div className="flex items-center justify-between mb-5">
-            <p className="text-sm font-semibold text-foreground">Resumen de pagos</p>
-            <Select value={periodoKpi} onValueChange={setPeriodoKpi}>
-              <SelectTrigger aria-label="Periodo kpi" className="h-9 w-auto">
+      {/* Resumen de pagos. La tira de indicadores, con su propio período:
+          manda sobre las cuatro cifras, no sobre la lista de abajo. */}
+      <section className="space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2>Resumen de pagos</h2>
+          <Select value={periodoKpi} onValueChange={setPeriodoKpi}>
+            <SelectTrigger aria-label="Período del resumen" className="w-full sm:w-72">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {opcionesPeriodo.map((op) => (
+                <SelectItem key={op.value} value={op.value}>{op.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <StatStrip
+          items={[
+            {
+              label: 'Pagado a colaboradores',
+              value: fmtMillones(kpis.totalColaboradores),
+              note: 'Neto entregado a internos',
+              icon: Wallet,
+              tone: 'green',
+            },
+            {
+              label: 'Pagado a terceros',
+              value: fmtMillones(kpis.totalTerceros),
+              note: 'Empresas contratistas',
+              icon: Building2,
+              tone: 'green',
+            },
+            {
+              label: 'Neto a pagar',
+              value: fmtMillones(kpis.netoAPagar),
+              note: kpis.borradoresLen > 0 ? kpis.labelBorrador : 'Sin períodos abiertos',
+              icon: Calculator,
+              tone: 'blue',
+            },
+            /* Tres escenarios: hay deuda, hay borrador sin liquidar, o no hay
+               ni lo uno ni lo otro. El tercero no es una cifra, es "Al día". */
+            kpis.totalPendiente > 0
+              ? {
+                  label: 'Pendiente por pagar',
+                  value: <span className="text-destructive">{fmtMillones(kpis.totalPendiente)}</span>,
+                  note: 'Internos y terceros sin pagar',
+                  icon: Clock,
+                  tone: 'amber',
+                }
+              : kpis.borradoresLen > 0
+                ? {
+                    label: 'Pendiente por pagar',
+                    value: 'Sin liquidar',
+                    note: `${kpis.borradoresLen} nómina${kpis.borradoresLen === 1 ? '' : 's'} en curso`,
+                    icon: Clock,
+                    tone: 'amber',
+                  }
+                : {
+                    label: 'Pendiente por pagar',
+                    value: 'Al día',
+                    note: 'Todo pagado y sin pendientes',
+                    icon: Clock,
+                    tone: 'amber',
+                  },
+          ]}
+        />
+      </section>
+
+      {/* Períodos de pago. Los filtros van en la misma linea del titulo:
+          en el diseño no tienen tarjeta propia ni rotulo encima. */}
+      <section className="space-y-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2>Períodos de pago</h2>
+            <p className="text-sm text-muted-foreground">
+              {hayFiltros
+                ? `${nominasFiltradas.length} resultado${nominasFiltradas.length !== 1 ? 's' : ''}`
+                : 'Historial de períodos de nómina procesados'}
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="relative w-full sm:w-64">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
+              <Input
+                id="nomina-buscar"
+                type="search"
+                aria-label="Buscar período"
+                placeholder="Buscar período"
+                value={filtroBusqueda}
+                onChange={(e) => setFiltroBusqueda(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+              <SelectTrigger id="nomina-estado" aria-label="Estado" className="w-full sm:w-52">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {opcionesPeriodo.map((op) => (
-                  <SelectItem key={op.value} value={op.value}>{op.label}</SelectItem>
+                <SelectItem value="todos">Todos los estados</SelectItem>
+                <SelectItem value="BORRADOR">En borrador</SelectItem>
+                <SelectItem value="EN_PROGRESO">En progreso</SelectItem>
+                <SelectItem value="CERRADA">Finalizada</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filtroMes} onValueChange={setFiltroMes}>
+              <SelectTrigger id="nomina-mes" aria-label="Mes" className="w-full sm:w-52">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos los meses</SelectItem>
+                {Object.entries(MESES_NOMBRE).map(([k, v]) => (
+                  <SelectItem key={k} value={k}>{v}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {hayFiltros && (
+              <Button variant="ghost" onClick={limpiarFiltros}>Limpiar</Button>
+            )}
           </div>
-
-          {/* 4 mini-KPIs */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {/* Pagado a Colaboradores */}
-            <div className="flex items-center justify-between p-4 rounded-xl bg-primary/5 border border-primary/20">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1">Pagado a Colaboradores</p>
-                <p className="text-2xl font-bold text-primary">
-                  {fmtMillones(kpis.totalColaboradores)}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">Neto entregado a internos</p>
-              </div>
-              <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <Users className="h-5 w-5 text-primary" />
-              </div>
-            </div>
-
-            {/* Pagado a Terceros (placeholder hasta que haya endpoint) */}
-            <div className="flex items-center justify-between p-4 rounded-xl bg-warning-soft border border-warning/20">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1">Pagado a Terceros</p>
-                <p className="text-2xl font-bold text-warning">
-                  {fmtMillones(kpis.totalTerceros)}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">Empresas contratistas</p>
-              </div>
-              <div className="h-11 w-11 rounded-xl bg-warning-soft flex items-center justify-center flex-shrink-0">
-                <Building2 className="h-5 w-5 text-warning" />
-              </div>
-            </div>
-
-            {/* Neto a Pagar (períodos abiertos) */}
-            <div className="flex items-center justify-between p-4 rounded-xl bg-success/5 border border-success/20">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1">Neto a Pagar</p>
-                <p className="text-2xl font-bold text-success">
-                  {fmtMillones(kpis.netoAPagar)}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {kpis.borradoresLen > 0 ? kpis.labelBorrador : 'Sin períodos abiertos'}
-                </p>
-              </div>
-              <div className="h-11 w-11 rounded-xl bg-success/10 flex items-center justify-center flex-shrink-0">
-                <DollarSign className="h-5 w-5 text-success" />
-              </div>
-            </div>
-
-            {/* Pendiente por Pagar — 3 escenarios:
-                  1. Hay monto pendiente (>0)      → rojo con monto y trending-down.
-                  2. Hay borrador sin liquidar     → amarillo con "Sin liquidar" y check pendiente.
-                  3. No hay borradores ni deuda    → verde "Al día". */}
-            {(() => {
-              const hayDeuda = kpis.totalPendiente > 0;
-              const hayBorradorSinLiquidar = !hayDeuda && kpis.borradoresLen > 0;
-              return (
-                <div className={`flex items-center justify-between p-4 rounded-xl border ${
-                  hayDeuda
-                    ? 'bg-destructive/5 border-destructive/20'
-                    : hayBorradorSinLiquidar
-                      ? 'bg-warning-soft border-warning/20'
-                      : 'bg-muted/30 border-border'
-                }`}>
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Pendiente por Pagar</p>
-                    <p className={`text-2xl font-bold ${
-                      hayDeuda ? 'text-destructive'
-                        : hayBorradorSinLiquidar ? 'text-warning'
-                        : 'text-muted-foreground'
-                    }`}>
-                      {hayDeuda
-                        ? fmtMillones(kpis.totalPendiente)
-                        : hayBorradorSinLiquidar
-                          ? 'Sin liquidar'
-                          : 'Al día'}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {hayDeuda
-                        ? 'Internos + terceros sin pagar'
-                        : hayBorradorSinLiquidar
-                          ? `${kpis.borradoresLen} nómina${kpis.borradoresLen === 1 ? '' : 's'} en curso`
-                          : 'Todo pagado y sin pendientes'}
-                    </p>
-                  </div>
-                  <div className={`h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                    hayDeuda ? 'bg-destructive/10'
-                      : hayBorradorSinLiquidar ? 'bg-warning-soft'
-                      : 'bg-muted'
-                  }`}>
-                    {hayDeuda
-                      ? <TrendingDown className="h-5 w-5 text-destructive" />
-                      : hayBorradorSinLiquidar
-                        ? <DollarSign className="h-5 w-5 text-warning" />
-                        : <Check className="h-5 w-5 text-muted-foreground" />}
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Filtros */}
-      <Card>
-        <CardContent>
-          <div className="flex items-center gap-3 mb-4">
-            <Filter className="h-5 w-5 text-muted-foreground" />
-            <h3 className="font-semibold">Filtros</h3>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="nomina-buscar">Buscar</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input id="nomina-buscar"
-                  placeholder="Buscar por período..."
-                  value={filtroBusqueda}
-                  onChange={(e) => setFiltroBusqueda(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="nomina-estado">Estado</label>
-              <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-                <SelectTrigger id="nomina-estado">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="BORRADOR">En borrador</SelectItem>
-                  <SelectItem value="EN_PROGRESO">En progreso</SelectItem>
-                  <SelectItem value="CERRADA">Finalizada</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="nomina-mes">Mes</label>
-              <Select value={filtroMes} onValueChange={setFiltroMes}>
-                <SelectTrigger id="nomina-mes">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  {Object.entries(MESES_NOMBRE).map(([k, v]) => (
-                    <SelectItem key={k} value={k}>{v}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {(filtroEstado !== 'todos' || filtroMes !== 'todos' || filtroBusqueda !== '') && (
-            <div className="mt-4 flex items-center gap-2">
-              <Badge variant="outline" className="gap-1">
-                {nominasFiltradas.length} resultado{nominasFiltradas.length !== 1 ? 's' : ''}
-              </Badge>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setFiltroEstado('todos');
-                  setFiltroMes('todos');
-                  setFiltroBusqueda('');
-                }}
-              >
-                Limpiar filtros
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Listado de nóminas */}
-      <div className="space-y-4">
-        <div>
-          <h2 className="mb-2">Nóminas Creadas</h2>
-          <p className="text-muted-foreground">Historial de períodos de nómina procesados</p>
         </div>
 
         {cargando ? (
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              Cargando nóminas...
-            </CardContent>
+          <Card className="flex-row items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Cargando nóminas...
           </Card>
         ) : nominasFiltradas.length > 0 ? (
-          <Card className="overflow-hidden">
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/30">
-                      <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Período</th>
-                      <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Estado</th>
-                      <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Devengado</th>
-                      <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Deducciones</th>
-                      <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Neto Total</th>
-                      <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Acciones</th>
+          <Card className="gap-0 overflow-hidden">
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/60 text-[13px] font-medium text-muted-foreground">
+                    <tr>
+                      <th className="px-5 py-2.5 text-left font-semibold">Período</th>
+                      <th className="px-4 py-2.5 text-left font-semibold">Estado</th>
+                      <th className="hidden px-4 py-2.5 text-right font-semibold md:table-cell">Devengado</th>
+                      <th className="hidden px-4 py-2.5 text-right font-semibold md:table-cell">Deducciones</th>
+                      <th className="px-4 py-2.5 text-right font-semibold">Neto</th>
+                      <th className="px-5 py-2.5 text-right font-semibold">
+                        <span className="sr-only">Acciones</span>
+                      </th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {nominasFiltradas.map((n, index) => {
+                  <tbody className="divide-y divide-border">
+                    {nominasFiltradas.map((n) => {
                       const totalReal = toNumber(n.total_general);
                       const dedReal = toNumber(n.total_deducciones);
                       // §2.2 — `resumen` llega con el listado, así que no hay
@@ -576,75 +494,46 @@ export default function Nomina() {
                       const ded = res ? res.deducciones : dedReal;
                       const total = res ? res.neto : totalReal;
                       return (
-                        <tr
-                          key={n.id}
-                          className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${
-                            index % 2 === 0 ? 'bg-background' : 'bg-muted/5'
-                          }`}
-                        >
-                          <td className="p-4">
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
-                                <FileText className="h-5 w-5" />
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="font-semibold text-sm">{periodoLabel(n)}</span>
-                                <span className="text-xs text-muted-foreground">
-                                  {rangoFechasLabel(n)}
-                                </span>
-                              </div>
-                            </div>
+                        <tr key={n.id} className="transition-colors hover:bg-muted/40">
+                          <td className="px-5 py-3">
+                            <Link
+                              to={`/nomina/${n.id}`}
+                              className="font-semibold text-foreground hover:text-primary"
+                            >
+                              {periodoLabel(n)}
+                            </Link>
+                            <span className="block text-xs text-muted-foreground">
+                              {rangoFechasLabel(n)}
+                            </span>
                           </td>
-                          <td className="p-4">
+                          <td className="px-4 py-3">
                             <div className="flex flex-wrap items-center gap-1.5">
                               <StatusBadge status={n.estado as any} />
                               {/* §16 — Un período que se pagó antes del
                                   sistema y entró por archivo. No se liquida ni
                                   se cierra: ya está cerrado. */}
                               {n.origen === 'IMPORTACION' && (
-                                <Badge
-                                  variant="outline"
-                                  className="border-border text-muted-foreground"
-                                >
-                                  Histórico
-                                </Badge>
+                                <Badge variant="secondary">Histórico</Badge>
                               )}
                             </div>
                           </td>
-                          <td className="p-4 text-right">
-                            <div className="flex flex-col items-end">
-                              <span className="text-sm font-semibold text-success">
-                                ${dev.toLocaleString('es-CO')}
-                              </span>
-                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                <TrendingUp className="h-3 w-3 text-success" />
-                                {usarEstimado ? 'Ingresos estimados' : 'Ingresos'}
-                              </div>
-                            </div>
+                          {/* `estimado` marca las cifras mientras quede una
+                              fila pendiente de liquidar. Se dice una vez, en
+                              el neto, y no tres veces con una flecha. */}
+                          <td className="hidden px-4 py-3 text-right tabular-nums text-foreground md:table-cell">
+                            {cop(dev)}
                           </td>
-                          <td className="p-4 text-right">
-                            <div className="flex flex-col items-end">
-                              <span className="text-sm font-semibold text-destructive">
-                                ${ded.toLocaleString('es-CO')}
-                              </span>
-                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                <TrendingDown className="h-3 w-3 text-destructive" />
-                                {usarEstimado ? 'Descuentos estimados' : 'Descuentos'}
-                              </div>
-                            </div>
+                          <td className="hidden px-4 py-3 text-right tabular-nums text-foreground md:table-cell">
+                            {cop(ded)}
                           </td>
-                          <td className="p-4 text-right">
-                            <div className="flex flex-col items-end">
-                              <span className="text-sm font-bold text-primary">
-                                ${total.toLocaleString('es-CO')}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                {usarEstimado ? 'A pagar (est.)' : 'A pagar'}
-                              </span>
-                            </div>
+                          <td className="px-4 py-3 text-right font-semibold tabular-nums text-foreground">
+                            {cop(total)}
+                            {usarEstimado && (
+                              <span className="block text-xs font-normal text-muted-foreground">Estimado</span>
+                            )}
                           </td>
-                          <td className="p-4">
-                            <div className="flex gap-2 justify-end">
+                          <td className="px-5 py-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
                               {/* §10.1 — Liquidar sigue disponible mientras la
                                   nómina no esté CERRADA; editar y eliminar
                                   solo en BORRADOR, porque con una fila ya
@@ -654,35 +543,39 @@ export default function Nomina() {
                                 <>
                                   <Button
                                     size="sm"
+                                    variant="outline"
                                     onClick={() => navigate(`/nomina/${n.id}`)}
                                   >
-                                    <Calculator className="h-4 w-4" />
+                                    <Calculator strokeWidth={2} />
                                     Liquidar
                                   </Button>
                                   {n.estado === 'BORRADOR' && (
                                     <>
                                       <Button
-                                        size="sm"
-                                        variant="outline"
+                                        size="icon"
+                                        variant="ghost"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           navigate(`/nomina/${n.id}/editar`);
                                         }}
+                                        className="text-muted-foreground"
                                         title="Editar nómina"
+                                        aria-label="Editar nómina"
                                       >
-                                        <Pencil className="h-4 w-4" />
+                                        <Pencil strokeWidth={2} />
                                       </Button>
                                       <Button
-                                        size="sm"
-                                        variant="outline"
+                                        size="icon"
+                                        variant="ghost"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setNominaAEliminar(n);
                                         }}
-                                        className="text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/50"
+                                        className="text-muted-foreground hover:bg-destructive-soft hover:text-destructive"
                                         title="Eliminar nómina"
+                                        aria-label="Eliminar nómina"
                                       >
-                                        <Trash2 className="h-4 w-4" />
+                                        <Trash2 strokeWidth={2} />
                                       </Button>
                                     </>
                                   )}
@@ -691,27 +584,28 @@ export default function Nomina() {
                                 <>
                                   <Button
                                     size="sm"
-                                    variant="outline"
+                                    variant="ghost"
+                                    className="text-muted-foreground"
                                     onClick={() => navigate(`/nomina/${n.id}`)}
-                                    className="hover:bg-primary/10 hover:text-primary hover:border-primary"
                                   >
-                                    <Eye className="h-4 w-4" />
+                                    <Eye strokeWidth={2} />
                                     Ver
                                   </Button>
                                   {/* §2.5 — Una importada sí se borra, para
                                       deshacer un cargue; una del wizard, no. */}
                                   {n.origen === 'IMPORTACION' && (
                                     <Button
-                                      size="sm"
-                                      variant="outline"
+                                      size="icon"
+                                      variant="ghost"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setNominaAEliminar(n);
                                       }}
-                                      className="text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/50"
+                                      className="text-muted-foreground hover:bg-destructive-soft hover:text-destructive"
                                       title="Eliminar importación"
+                                      aria-label="Eliminar importación"
                                     >
-                                      <Trash2 className="h-4 w-4" />
+                                      <Trash2 strokeWidth={2} />
                                     </Button>
                                   )}
                                 </>
@@ -723,45 +617,31 @@ export default function Nomina() {
                     })}
                   </tbody>
                 </table>
-              </div>
-            </CardContent>
+            </div>
           </Card>
         ) : nominas.length === 0 ? (
-          <Card className="border-2 border-dashed bg-muted/30">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <FileText className="h-16 w-16 text-muted-foreground mb-4" />
-              <p className="text-lg font-semibold mb-2">No hay períodos de nómina</p>
-              <p className="text-sm text-muted-foreground mb-4">
-                Comienza creando tu primer período de nómina
+          <Card className="items-center py-14 text-center">
+            <div className="space-y-1">
+              <h3>No hay períodos de nómina</h3>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                Crea el primer período para liquidar a tus colaboradores.
               </p>
-              <Button onClick={() => navigate('/nomina/nueva')} >
-                <Plus className="h-4 w-4" />
-                Crear Primer Período
-              </Button>
-            </CardContent>
+            </div>
+            <Button onClick={() => navigate('/nomina/nueva')}>
+              <Plus strokeWidth={2} />
+              Crear primer período
+            </Button>
           </Card>
         ) : (
-          <Card className="border-2 border-dashed bg-muted/30">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Search className="h-16 w-16 text-muted-foreground mb-4" />
-              <p className="text-lg font-semibold mb-2">No se encontraron resultados</p>
-              <p className="text-sm text-muted-foreground mb-4">
-                Intenta ajustar los filtros de búsqueda
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setFiltroEstado('todos');
-                  setFiltroMes('todos');
-                  setFiltroBusqueda('');
-                }}
-              >
-                Limpiar filtros
-              </Button>
-            </CardContent>
+          <Card className="items-center py-12 text-center">
+            <div className="space-y-1">
+              <p className="font-semibold text-foreground">Sin resultados</p>
+              <p className="text-sm text-muted-foreground">Ningún período coincide con los filtros.</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={limpiarFiltros}>Limpiar filtros</Button>
           </Card>
         )}
-      </div>
+      </section>
 
       {/* Confirmar eliminar nómina */}
       <AlertDialog
@@ -785,7 +665,7 @@ export default function Nomina() {
             <AlertDialogAction
               onClick={confirmarEliminar}
               disabled={eliminando}
-              className="bg-destructive text-white hover:bg-destructive/90"
+              className="bg-destructive hover:bg-destructive/90"
             >
               {eliminando ? 'Eliminando...' : 'Eliminar'}
             </AlertDialogAction>

@@ -5,8 +5,8 @@
  * `meta.totales` y cubren el filtro completo, no solo la página visible.
  */
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
-import { Card, CardContent } from '../../components/ui/card';
+import { useNavigate } from 'react-router';
+import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
@@ -14,7 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
 import {
-  ArrowLeft, Search, Download, Eye, Loader2, Banknote, MoreHorizontal, RotateCcw, Ban, Check,
+  Search, Download, Eye, Loader2, Banknote, MoreHorizontal, RotateCcw, Ban, Calculator,
   AlertTriangle,
 } from 'lucide-react';
 import {
@@ -34,11 +34,27 @@ import {
 import type { ApiError } from '../../../api/client';
 import { formatFecha } from '../../utils/fecha';
 import {
-  ESTADO_VACACION_BADGE, ESTADO_VACACION_LABEL, MODO_PAGO_BADGE, ORIGEN_LABEL,
-  descargarBlob, fmtCOP, fmtDias,
+  ESTADO_VACACION_LABEL, ORIGEN_LABEL, descargarBlob, fmtCOP, fmtDias,
 } from './vacaciones/comunes';
 import PagoVacacionDialog from './vacaciones/PagoVacacionDialog';
 import AnularVacacionDialog, { type ModoAnulacion } from './vacaciones/AnularVacacionDialog';
+import PageHeader from '../../components/common/PageHeader';
+
+type VarianteBadge = 'success' | 'warning' | 'destructive' | 'secondary' | 'info';
+
+// PR-N4 - PENDIENTE es una solicitud venida de Novedades: pide acción.
+const VARIANTE_ESTADO: Record<EstadoVacacion, VarianteBadge> = {
+  APROBADA: 'warning',
+  PAGADA: 'success',
+  CANCELADA: 'destructive',
+  PENDIENTE: 'warning',
+};
+
+// PR-L15 - El modo de pago no es un estado: es quien pone la plata.
+const VARIANTE_MODO_PAGO: Record<ModoPagoVacacion, VarianteBadge> = {
+  DIRECTO: 'secondary',
+  NOMINA: 'info',
+};
 
 /**
  * PR-L15 — `modo_pago = NOMINA` no gira plata desde el modulo: cada nomina
@@ -169,78 +185,74 @@ export default function VacacionesHistorico() {
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" size="sm" asChild>
-        <Link to="/liquidaciones?tab=vacaciones"><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
-      </Button>
-
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-primary">Histórico de Vacaciones</h1>
-        <p className="mt-1 text-muted-foreground">Registro de todas las vacaciones liquidadas</p>
-      </div>
+      <PageHeader
+        eyebrow="Vacaciones"
+        title="Histórico de vacaciones"
+        description="Registro de todas las vacaciones liquidadas."
+        backTo="/liquidaciones?tab=vacaciones"
+      />
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-3">
-        <div className="relative min-w-[180px] flex-1">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="relative w-full lg:w-72 lg:shrink-0">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
           <Input
-            placeholder="Buscar colaborador..."
+            type="search"
+            placeholder="Buscar colaborador"
             value={filtroNombre}
             onChange={(e) => setFiltroNombre(e.target.value)}
-            className="h-9 pl-8"
+            className="pl-9"
           />
         </div>
-
-        <div className="flex items-center gap-2">
-          <span className="whitespace-nowrap text-sm text-muted-foreground">Desde</span>
-          <Input type="date" value={filtroDesde} onChange={(e) => setFiltroDesde(e.target.value)} className="h-9" />
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center lg:justify-end">
+          {hayFiltros && (
+            <Button variant="ghost" size="sm" className="col-span-2 justify-self-start" onClick={limpiar}>
+              Limpiar filtros
+            </Button>
+          )}
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="whitespace-nowrap">Desde</span>
+            <Input type="date" value={filtroDesde} onChange={(e) => setFiltroDesde(e.target.value)} className="sm:w-40" />
+          </label>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="whitespace-nowrap">Hasta</span>
+            <Input type="date" value={filtroHasta} onChange={(e) => setFiltroHasta(e.target.value)} className="sm:w-40" />
+          </label>
+          <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+            <SelectTrigger className="w-full sm:w-48" aria-label="Estado"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos los estados</SelectItem>
+              <SelectItem value="PENDIENTE">Solicitudes pendientes</SelectItem>
+              <SelectItem value="APROBADA">Pendiente de pago</SelectItem>
+              <SelectItem value="PAGADA">Pagada</SelectItem>
+              <SelectItem value="CANCELADA">Anulada</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filtroOrigen} onValueChange={setFiltroOrigen}>
+            <SelectTrigger className="w-full sm:w-48" aria-label="Origen"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todo origen</SelectItem>
+              <SelectItem value="SISTEMA">Liquidadas aquí</SelectItem>
+              <SelectItem value="HISTORICO">Registros históricos</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filtroModoPago} onValueChange={setFiltroModoPago}>
+            <SelectTrigger className="w-full sm:w-48" aria-label="Forma de pago"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Toda forma de pago</SelectItem>
+              <SelectItem value="DIRECTO">{MODO_PAGO_LABEL.DIRECTO}</SelectItem>
+              <SelectItem value="NOMINA">{MODO_PAGO_LABEL.NOMINA}</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filtroInterrupcion} onValueChange={setFiltroInterrupcion}>
+            <SelectTrigger className="w-full sm:w-52" aria-label="Interrupción"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Interrumpidas o no</SelectItem>
+              <SelectItem value="interrumpidas">Interrumpidas</SelectItem>
+              <SelectItem value="reintegro">Con reintegro pendiente</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-
-        <div className="flex items-center gap-2">
-          <span className="whitespace-nowrap text-sm text-muted-foreground">Hasta</span>
-          <Input type="date" value={filtroHasta} onChange={(e) => setFiltroHasta(e.target.value)} className="h-9" />
-        </div>
-
-        <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-          <SelectTrigger className="h-9 w-[11rem]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos los estados</SelectItem>
-            <SelectItem value="PENDIENTE">Solicitudes pendientes</SelectItem>
-            <SelectItem value="APROBADA">Pendiente de pago</SelectItem>
-            <SelectItem value="PAGADA">Pagada</SelectItem>
-            <SelectItem value="CANCELADA">Anulada</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={filtroOrigen} onValueChange={setFiltroOrigen}>
-          <SelectTrigger className="h-9 w-[11rem]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todo origen</SelectItem>
-            <SelectItem value="SISTEMA">Liquidadas aquí</SelectItem>
-            <SelectItem value="HISTORICO">Registros históricos</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={filtroModoPago} onValueChange={setFiltroModoPago}>
-          <SelectTrigger className="h-9 w-[11rem]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Toda forma de pago</SelectItem>
-            <SelectItem value="DIRECTO">{MODO_PAGO_LABEL.DIRECTO}</SelectItem>
-            <SelectItem value="NOMINA">{MODO_PAGO_LABEL.NOMINA}</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={filtroInterrupcion} onValueChange={setFiltroInterrupcion}>
-          <SelectTrigger className="h-9 w-[12rem]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Interrumpidas o no</SelectItem>
-            <SelectItem value="interrumpidas">Interrumpidas</SelectItem>
-            <SelectItem value="reintegro">Con reintegro pendiente</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {hayFiltros && (
-          <Button variant="ghost" size="sm" onClick={limpiar}>Limpiar filtros</Button>
-        )}
       </div>
 
       {/* v1.14 — Lo pagado de más no se recupera solo: hay que descontarlo en
@@ -249,310 +261,124 @@ export default function VacacionesHistorico() {
         <button
           type="button"
           onClick={() => { setFiltroInterrupcion('reintegro'); setPagina(1); }}
-          className="w-full rounded-xl border border-warning/20 bg-warning-soft px-4 py-3 text-left text-sm text-warning"
+          className="flex w-full gap-2 rounded-lg bg-warning-soft p-4 text-left text-sm text-foreground transition-colors hover:bg-warning-soft/70"
         >
-          {meta!.totales.reintegros_pendientes} vacación(es) interrumpida(s) con{' '}
-          {fmtCOP(meta!.totales.reintegros_pendientes_valor ?? 0)} por reintegrar.
-          {' '}Descuéntelo en la nómina del reintegro o condónelo.
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+          <span>
+            {meta!.totales.reintegros_pendientes} vacación(es) interrumpida(s) con{' '}
+            {fmtCOP(meta!.totales.reintegros_pendientes_valor ?? 0)} por reintegrar.
+            {' '}Descuéntelo en la nómina del reintegro o condónelo.
+          </span>
         </button>
       )}
 
       {/* Tabla */}
-      <Card className="glass-subtle overflow-hidden">
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  <th className="p-4 text-left text-sm font-semibold text-muted-foreground">Colaborador</th>
-                  <th className="p-4 text-left text-sm font-semibold text-muted-foreground">Comprobante</th>
-                  <th className="p-4 text-center text-sm font-semibold text-muted-foreground">Días disfrute</th>
-                  <th className="p-4 text-center text-sm font-semibold text-muted-foreground">Días dinero</th>
-                  <th className="p-4 text-left text-sm font-semibold text-muted-foreground">Rango</th>
-                  <th className="p-4 text-left text-sm font-semibold text-muted-foreground">Forma de pago</th>
-                  <th className="p-4 text-left text-sm font-semibold text-muted-foreground">Pago</th>
-                  <th className="p-4 text-right text-sm font-semibold text-muted-foreground">Total</th>
-                  <th className="p-4 text-left text-sm font-semibold text-muted-foreground">Estado</th>
-                  <th className="p-4 text-right text-sm font-semibold text-muted-foreground">Acciones</th>
+      <Card className="gap-0 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/60 text-[13px] font-medium text-muted-foreground">
+              <tr>
+                <th className="px-5 py-2.5 text-left font-semibold">Colaborador</th>
+                <th className="hidden px-4 py-2.5 text-left font-semibold lg:table-cell">Comprobante</th>
+                <th className="hidden px-4 py-2.5 text-right font-semibold md:table-cell">Días disfrute</th>
+                <th className="hidden px-4 py-2.5 text-right font-semibold md:table-cell">Días dinero</th>
+                <th className="hidden px-4 py-2.5 text-left font-semibold lg:table-cell">Rango</th>
+                <th className="hidden px-4 py-2.5 text-left font-semibold xl:table-cell">Forma de pago</th>
+                <th className="hidden px-4 py-2.5 text-left font-semibold sm:table-cell">Pago</th>
+                <th className="px-4 py-2.5 text-right font-semibold">Total</th>
+                <th className="hidden px-4 py-2.5 text-left font-semibold sm:table-cell">Estado</th>
+                <th className="px-4 py-2.5"><span className="sr-only">Acciones</span></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {cargando ? (
+                <tr>
+                  <td colSpan={10} className="px-5 py-12 text-center">
+                    <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Cargando registros...
+                    </span>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {cargando ? (
-                  <tr>
-                    <td colSpan={10} className="py-12 text-center">
-                      <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Cargando registros
-                      </span>
-                    </td>
-                  </tr>
-                ) : filas.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} className="py-12 text-center text-sm text-muted-foreground">
-                      {hayFiltros
-                        ? 'No se encontraron registros con los filtros aplicados'
-                        : 'Todavía no hay vacaciones liquidadas'}
-                    </td>
-                  </tr>
-                ) : (
-                  filas.map((h, idx) => (
-                    <tr
-                      key={h.id}
-                      className={`border-b border-border transition-colors last:border-0 hover:bg-muted/20 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}
-                    >
-                      <td className="p-4">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-medium text-foreground">{h.empleado.nombre_completo}</span>
-                          <span className="text-xs text-muted-foreground">{h.empleado.cargo ?? `CC ${h.empleado.documento}`}</span>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex flex-col">
-                          <span className="text-sm text-foreground">{h.numero_comprobante}</span>
-                          {h.origen !== 'SISTEMA' && (
-                            <span className="text-xs text-muted-foreground">{ORIGEN_LABEL[h.origen]}</span>
-                          )}
-                          {h.interrumpida && (
-                            <span className="text-xs text-warning">
-                              Interrumpida
-                              {h.interrupcion?.reintegro?.estado === 'PENDIENTE'
-                                ? ' · reintegro pendiente'
-                                : ''}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-4 text-center">
-                        <span className="text-sm font-medium text-success">{fmtDias(h.dias_habiles)}</span>
-                      </td>
-                      <td className="p-4 text-center">
-                        <span className="text-sm font-medium text-warning">
-                          {h.dias_dinero > 0 ? fmtDias(h.dias_dinero) : '—'}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        <span className="text-sm text-foreground">
-                          {h.fecha_inicio ? `${formatFecha(h.fecha_inicio)} — ${formatFecha(h.fecha_fin)}` : '—'}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        {h.estado === 'PENDIENTE' ? (
-                          <span className="text-sm text-muted-foreground">—</span>
-                        ) : (
-                          <Badge variant="outline" className={MODO_PAGO_BADGE[h.modo_pago ?? 'DIRECTO']}>
-                            {MODO_PAGO_LABEL[h.modo_pago ?? 'DIRECTO']}
-                          </Badge>
-                        )}
-                      </td>
-                      <td className="p-4">
-                        {/* En NOMINA la fecha de pago llega solo cuando el
-                            ultimo tramo cierra: hasta entonces lo util es
-                            cuanto pagaron las nominas y cuanto falta. */}
-                        {porNomina(h) && h.estado !== 'CANCELADA' ? (
-                          <div className="flex flex-col">
-                            <span className="text-sm text-foreground">{fmtCOP(yaPagado(h))} pagado</span>
-                            {saldo(h) > 0 ? (
-                              <span className={`text-xs ${saldoVencido(h) ? 'text-destructive' : 'text-muted-foreground'}`}>
-                                {fmtCOP(saldo(h))} pendiente
-                              </span>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">{formatFecha(h.pago.fecha_pago)}</span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-sm text-foreground">{formatFecha(h.pago.fecha_pago)}</span>
-                        )}
-                      </td>
-                      <td className="p-4 text-right">
-                        <span className="text-sm font-semibold text-foreground">{fmtCOP(h.valor_total)}</span>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex flex-col items-start gap-1">
-                          <Badge variant="outline" className={ESTADO_VACACION_BADGE[h.estado]}>
-                            {ESTADO_VACACION_LABEL[h.estado]}
-                          </Badge>
-                          {saldoVencido(h) && (
-                            <span
-                              className="inline-flex items-center gap-1 text-xs text-destructive"
-                              title={ADVERTENCIA_PAGO_NOMINA_LABEL.VACACIONES_PAGO_EN_NOMINA_PENDIENTE}
-                            >
-                              <AlertTriangle className="h-3 w-3" />
-                              Saldo sin pagar
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex justify-end gap-2">
-                          {/* PR-N4 — Una solicitud PENDIENTE no tiene valores
-                              ni comprobante: aprobarla ES liquidarla, con el
-                              `solicitud_id` por delante. */}
-                          {h.estado === 'PENDIENTE' && (
-                            <>
-                              <Button
-                                size="sm"
-                                onClick={() => navigate(`/liquidaciones/vacaciones/nueva?solicitud=${h.id}`)}
-                                className="bg-success hover:bg-success/90"
-                              >
-                                <Check className="h-3.5 w-3.5" />
-                                Liquidar
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setAAnular({ fila: h, modo: 'solicitud' })}
-                                className="hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
-                              >
-                                <Ban className="h-3.5 w-3.5" />
-                                Rechazar
-                              </Button>
-                            </>
-                          )}
-                          {h.estado === 'APROBADA' && h.origen === 'SISTEMA' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setAPagar(h)}
-                              className="hover:border-primary hover:bg-primary/10 hover:text-primary"
-                            >
-                              <Banknote className="h-3.5 w-3.5" />
-                              {/* En NOMINA el giro solo cubre el saldo que las
-                                  nominas no alcanzaron a pagar. */}
-                              {porNomina(h) ? 'Pagar saldo' : 'Pagar'}
-                            </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => navigate(`/liquidaciones/vacaciones/${h.id}`)}
-                            
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            Ver
-                          </Button>
-                          {/* Una solicitud no tiene comprobante que descargar:
-                              el PDF se genera al liquidarla. */}
-                          {h.estado !== 'PENDIENTE' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={descargando === h.id}
-                              onClick={() => descargarComprobante(h)}
-                              className="hover:border-primary hover:bg-primary/10 hover:text-primary"
-                            >
-                              {descargando === h.id
-                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                : <Download className="h-3.5 w-3.5" />}
-                              PDF
-                            </Button>
-                          )}
-                          {/* Las dos anulaciones van en menú: son destructivas
-                              y no deben quedar al lado de "Ver" (§10.9, §10.10). */}
-                          {h.estado !== 'CANCELADA' && h.estado !== 'PENDIENTE' && h.origen !== 'LIQUIDACION_FINAL'
-                            && (puedeAnularPago(h) || puedeAnularLiquidacion(h)) && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button size="sm" variant="outline" className="px-2">
-                                  <MoreHorizontal className="h-3.5 w-3.5" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                {/* PR-L15 — Lo que pago una nomina cerrada no
-                                    se devuelve desde aqui: hay que reabrir
-                                    esa nomina. El backend responde 409. */}
-                                {puedeAnularPago(h) && (
-                                  <DropdownMenuItem
-                                    onClick={() => setAAnular({ fila: h, modo: 'pago' })}
-                                    className="gap-2"
-                                  >
-                                    <RotateCcw className="h-3.5 w-3.5" />
-                                    Anular pago
-                                  </DropdownMenuItem>
-                                )}
-                                {/* Igual con la liquidacion: con tramos ya
-                                    pagados en nomina deja de ser anulable. */}
-                                {puedeAnularLiquidacion(h) && (
-                                  <DropdownMenuItem
-                                    onClick={() => setAAnular({ fila: h, modo: 'liquidacion' })}
-                                    className="gap-2 text-destructive focus:text-destructive"
-                                  >
-                                    <Ban className="h-3.5 w-3.5" />
-                                    Anular liquidación
-                                  </DropdownMenuItem>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+              ) : filas.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="px-5 py-12 text-center text-muted-foreground">
+                    {hayFiltros
+                      ? 'No se encontraron registros con los filtros aplicados.'
+                      : 'Todavía no hay vacaciones liquidadas.'}
+                  </td>
+                </tr>
+              ) : (
+                filas.map((h) => (
+                  <FilaHistorico
+                    key={h.id}
+                    h={h}
+                    descargando={descargando === h.id}
+                    onLiquidar={() => navigate(`/liquidaciones/vacaciones/nueva?solicitud=${h.id}`)}
+                    onVer={() => navigate(`/liquidaciones/vacaciones/${h.id}`)}
+                    onPagar={() => setAPagar(h)}
+                    onDescargar={() => descargarComprobante(h)}
+                    onAnular={(modo) => setAAnular({ fila: h, modo })}
+                  />
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3">
-            <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">{meta?.totales.registros ?? 0}</span> registros
-              {(filtroDesde || filtroHasta) && ' en el período seleccionado'}
-              {meta && meta.totales.pendientes_pago > 0 && (
-                <span> · {meta.totales.pendientes_pago} sin pagar</span>
-              )}
-              {/* PR-L15 — De esas, las que esperan el cierre de una nomina.
-                  No son una mora del modulo: no hay nada que girar aqui. */}
-              {meta && (meta.totales.pendientes_pago_nomina ?? 0) > 0 && (
-                <span className="text-info">
-                  {' · '}{meta.totales.pendientes_pago_nomina} esperando nómina
-                </span>
-              )}
-              {/* PR-N4 — Sin liquidar, la nómina del período paga esos días
-                  como trabajados. Merece su propio contador. */}
-              {meta && (meta.totales.solicitudes_pendientes ?? 0) > 0 && (
-                <span className="text-warning">
-                  {' · '}{meta.totales.solicitudes_pendientes} solicitud
-                  {meta.totales.solicitudes_pendientes !== 1 ? 'es' : ''} por resolver
-                </span>
-              )}
-            </p>
-            {/* v1.11 — `total_pagado` es el bruto; `valor_neto` es lo que de
-                verdad salió de caja, ya sin los aportes del trabajador. */}
-            <p className="text-sm text-muted-foreground">
-              Total pagado:{' '}
-              <span className="font-semibold text-foreground">{fmtCOP(meta?.totales.total_pagado ?? 0)}</span>
-              {meta && (meta.totales.total_deducciones ?? 0) > 0 && (
-                <>
-                  {' · '}Neto girado:{' '}
-                  <span className="font-semibold text-foreground">
-                    {fmtCOP(meta.totales.valor_neto ?? 0)}
-                  </span>
-                </>
-              )}
-            </p>
-          </div>
-
-          {meta && meta.last_page > 1 && (
-            <div className="flex items-center justify-between border-t border-border px-4 py-3">
-              <Button
-                variant="outline" size="sm"
-                disabled={pagina <= 1 || cargando}
-                onClick={() => setPagina((p) => p - 1)}
-              >
-                Anterior
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                Página {meta.current_page} de {meta.last_page}
+        <div className="flex flex-col gap-1 border-t border-border px-5 py-3 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <p>
+            <span className="font-medium text-foreground">{meta?.totales.registros ?? 0}</span> registros
+            {(filtroDesde || filtroHasta) && ' en el período seleccionado'}
+            {meta && meta.totales.pendientes_pago > 0 && (
+              <span> · {meta.totales.pendientes_pago} sin pagar</span>
+            )}
+            {/* PR-L15 — De esas, las que esperan el cierre de una nomina.
+                No son una mora del modulo: no hay nada que girar aqui. */}
+            {meta && (meta.totales.pendientes_pago_nomina ?? 0) > 0 && (
+              <span>{' · '}{meta.totales.pendientes_pago_nomina} esperando nómina</span>
+            )}
+            {/* PR-N4 — Sin liquidar, la nómina del período paga esos días
+                como trabajados. Merece su propio contador. */}
+            {meta && (meta.totales.solicitudes_pendientes ?? 0) > 0 && (
+              <span className="font-medium text-warning">
+                {' · '}{meta.totales.solicitudes_pendientes} solicitud
+                {meta.totales.solicitudes_pendientes !== 1 ? 'es' : ''} por resolver
               </span>
-              <Button
-                variant="outline" size="sm"
-                disabled={pagina >= meta.last_page || cargando}
-                onClick={() => setPagina((p) => p + 1)}
-              >
-                Siguiente
-              </Button>
-            </div>
-          )}
-        </CardContent>
+            )}
+          </p>
+          {/* v1.11 — `total_pagado` es el bruto; `valor_neto` es lo que de
+              verdad salió de caja, ya sin los aportes del trabajador. */}
+          <p>
+            Total pagado:{' '}
+            <span className="font-semibold tabular-nums text-foreground">{fmtCOP(meta?.totales.total_pagado ?? 0)}</span>
+            {meta && (meta.totales.total_deducciones ?? 0) > 0 && (
+              <>
+                {' · '}Neto girado:{' '}
+                <span className="font-semibold tabular-nums text-foreground">{fmtCOP(meta.totales.valor_neto ?? 0)}</span>
+              </>
+            )}
+          </p>
+        </div>
+
+        {meta && meta.last_page > 1 && (
+          <div className="flex items-center justify-between border-t border-border px-5 py-3">
+            <Button variant="outline" size="sm" disabled={pagina <= 1 || cargando} onClick={() => setPagina((p) => p - 1)}>
+              Anterior
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Página {meta.current_page} de {meta.last_page}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={pagina >= meta.last_page || cargando}
+              onClick={() => setPagina((p) => p + 1)}
+            >
+              Siguiente
+            </Button>
+          </div>
+        )}
       </Card>
 
       <PagoVacacionDialog
@@ -567,6 +393,165 @@ export default function VacacionesHistorico() {
         onCerrar={() => setAAnular(null)}
         onAnulada={reemplazar}
       />
+    </div>
+  );
+}
+
+interface FilaHistoricoProps {
+  h: VacacionItem;
+  descargando: boolean;
+  onLiquidar: () => void;
+  onVer: () => void;
+  onPagar: () => void;
+  onDescargar: () => void;
+  onAnular: (modo: ModoAnulacion) => void;
+}
+
+function FilaHistorico({ h, descargando, onLiquidar, onVer, onPagar, onDescargar, onAnular }: FilaHistoricoProps) {
+  return (
+    <tr className="transition-colors hover:bg-muted/40">
+      <td className="px-5 py-3">
+        <span className="font-semibold text-foreground">{h.empleado.nombre_completo}</span>
+        <span className="block text-xs text-muted-foreground">{h.empleado.cargo ?? `C.C. ${h.empleado.documento}`}</span>
+        <span className="mt-1 block sm:hidden">
+          <Badge variant={VARIANTE_ESTADO[h.estado]}>{ESTADO_VACACION_LABEL[h.estado]}</Badge>
+        </span>
+      </td>
+      <td className="hidden px-4 py-3 lg:table-cell">
+        <span className="text-foreground">{h.numero_comprobante}</span>
+        {h.origen !== 'SISTEMA' && (
+          <span className="block text-xs text-muted-foreground">{ORIGEN_LABEL[h.origen]}</span>
+        )}
+        {h.interrumpida && (
+          <span className="block text-xs text-warning">
+            Interrumpida
+            {h.interrupcion?.reintegro?.estado === 'PENDIENTE' ? ' · reintegro pendiente' : ''}
+          </span>
+        )}
+      </td>
+      <td className="hidden px-4 py-3 text-right tabular-nums text-foreground md:table-cell">{fmtDias(h.dias_habiles)}</td>
+      <td className="hidden px-4 py-3 text-right tabular-nums text-foreground md:table-cell">
+        {h.dias_dinero > 0 ? fmtDias(h.dias_dinero) : <span className="text-muted-foreground">—</span>}
+      </td>
+      <td className="hidden whitespace-nowrap px-4 py-3 text-muted-foreground lg:table-cell">
+        {h.fecha_inicio ? `${formatFecha(h.fecha_inicio)} – ${formatFecha(h.fecha_fin)}` : '—'}
+      </td>
+      <td className="hidden px-4 py-3 xl:table-cell">
+        {h.estado === 'PENDIENTE' ? (
+          <span className="text-muted-foreground">—</span>
+        ) : (
+          <Badge variant={VARIANTE_MODO_PAGO[h.modo_pago ?? 'DIRECTO']}>{MODO_PAGO_LABEL[h.modo_pago ?? 'DIRECTO']}</Badge>
+        )}
+      </td>
+      <td className="hidden px-4 py-3 sm:table-cell">
+        {/* En NOMINA la fecha de pago llega solo cuando el ultimo tramo
+            cierra: hasta entonces lo util es cuanto pagaron y cuanto falta. */}
+        {porNomina(h) && h.estado !== 'CANCELADA' ? (
+          <>
+            <span className="tabular-nums text-foreground">{fmtCOP(yaPagado(h))} pagado</span>
+            {saldo(h) > 0 ? (
+              <span className={`block text-xs ${saldoVencido(h) ? 'text-destructive' : 'text-muted-foreground'}`}>
+                {fmtCOP(saldo(h))} pendiente
+              </span>
+            ) : (
+              <span className="block text-xs text-muted-foreground">{formatFecha(h.pago.fecha_pago)}</span>
+            )}
+          </>
+        ) : (
+          <span className="text-muted-foreground">{formatFecha(h.pago.fecha_pago)}</span>
+        )}
+      </td>
+      <td className="px-4 py-3 text-right font-semibold tabular-nums text-foreground">{fmtCOP(h.valor_total)}</td>
+      <td className="hidden px-4 py-3 sm:table-cell">
+        <div className="flex flex-col items-start gap-1">
+          <Badge variant={VARIANTE_ESTADO[h.estado]}>{ESTADO_VACACION_LABEL[h.estado]}</Badge>
+          {saldoVencido(h) && (
+            <span
+              className="inline-flex items-center gap-1 text-xs text-destructive"
+              title={ADVERTENCIA_PAGO_NOMINA_LABEL.VACACIONES_PAGO_EN_NOMINA_PENDIENTE}
+            >
+              <AlertTriangle className="h-3 w-3" />
+              Saldo sin pagar
+            </span>
+          )}
+        </div>
+      </td>
+      <td className="px-4 py-3">
+        <AccionesFila h={h} descargando={descargando} onLiquidar={onLiquidar} onVer={onVer} onPagar={onPagar} onDescargar={onDescargar} onAnular={onAnular} />
+      </td>
+    </tr>
+  );
+}
+
+function AccionesFila({ h, descargando, onLiquidar, onVer, onPagar, onDescargar, onAnular }: FilaHistoricoProps) {
+  // Las dos anulaciones van en menú: son destructivas y no deben quedar al
+  // lado de "Ver" (§10.9, §10.10).
+  const conMenu = h.estado !== 'CANCELADA' && h.estado !== 'PENDIENTE' && h.origen !== 'LIQUIDACION_FINAL'
+    && (puedeAnularPago(h) || puedeAnularLiquidacion(h));
+  return (
+    <div className="flex items-center justify-end gap-1">
+      {/* PR-N4 — Una solicitud PENDIENTE no tiene valores ni comprobante:
+          aprobarla ES liquidarla, con el `solicitud_id` por delante. */}
+      {h.estado === 'PENDIENTE' && (
+        <>
+          <Button size="sm" variant="outline" onClick={onLiquidar}>
+            <Calculator strokeWidth={2} />
+            Liquidar
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => onAnular('solicitud')} className="text-muted-foreground hover:text-destructive">
+            Rechazar
+          </Button>
+        </>
+      )}
+      {h.estado === 'APROBADA' && h.origen === 'SISTEMA' && (
+        <Button size="sm" variant="outline" onClick={onPagar}>
+          <Banknote strokeWidth={2} />
+          {/* En NOMINA el giro solo cubre el saldo que las nominas no pagaron. */}
+          {porNomina(h) ? 'Pagar saldo' : 'Pagar'}
+        </Button>
+      )}
+      <Button variant="ghost" size="icon" onClick={onVer} aria-label={`Ver comprobante de ${h.empleado.nombre_completo}`} title="Ver comprobante">
+        <Eye className="text-muted-foreground" strokeWidth={2} />
+      </Button>
+      {/* Una solicitud no tiene comprobante que descargar: el PDF se genera al liquidarla. */}
+      {h.estado !== 'PENDIENTE' && (
+        <Button
+          variant="ghost"
+          size="icon"
+          disabled={descargando}
+          onClick={onDescargar}
+          aria-label={`Descargar comprobante de ${h.empleado.nombre_completo}`}
+          title="Descargar comprobante"
+        >
+          {descargando ? <Loader2 className="animate-spin" /> : <Download className="text-muted-foreground" strokeWidth={2} />}
+        </Button>
+      )}
+      {conMenu && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" aria-label="Más acciones">
+              <MoreHorizontal className="text-muted-foreground" strokeWidth={2} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {/* PR-L15 — Lo que pago una nomina cerrada no se devuelve desde
+                aqui: hay que reabrir esa nomina. El backend responde 409. */}
+            {puedeAnularPago(h) && (
+              <DropdownMenuItem onClick={() => onAnular('pago')} className="gap-2">
+                <RotateCcw className="h-4 w-4" />
+                Anular pago
+              </DropdownMenuItem>
+            )}
+            {/* Con tramos ya pagados en nomina deja de ser anulable. */}
+            {puedeAnularLiquidacion(h) && (
+              <DropdownMenuItem onClick={() => onAnular('liquidacion')} className="gap-2 text-destructive focus:text-destructive">
+                <Ban className="h-4 w-4" />
+                Anular liquidación
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   );
 }
