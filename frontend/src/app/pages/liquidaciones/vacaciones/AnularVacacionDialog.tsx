@@ -142,7 +142,7 @@ export default function AnularVacacionDialog({ vacacion, modo, onCerrar, onAnula
           <Button
             onClick={ejecutar}
             disabled={procesando}
-            className={esPago ? undefined : 'bg-destructive text-destructive-foreground hover:bg-destructive/90'}
+            variant={esPago ? 'default' : 'destructive'}
           >
             {procesando && <Loader2 className="animate-spin" />}
             {esPago ? 'Anular pago' : esSolicitud ? 'Rechazar' : 'Anular'}

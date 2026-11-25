@@ -11,7 +11,7 @@ import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import {
-  Banknote, Printer, Download, Loader2, AlertTriangle, Ban, RotateCcw, Info, Scissors, CalendarX,
+  Banknote, Printer, Download, Loader2, AlertTriangle, Ban, RotateCcw, Info, Scissors, CalendarX, FileText, ArrowLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -21,14 +21,13 @@ import {
   DIA_NO_HABIL_LABEL,
   MODO_PAGO_LABEL,
   type ComprobanteVacaciones,
-  type EstadoVacacion,
-  type ModoPagoVacacion,
   type VacacionItem,
 } from '../../../api/vacaciones';
 import type { ApiError } from '../../../api/client';
 import { formatFecha } from '../../utils/fecha';
 import {
-  ESTADO_VACACION_LABEL, ORIGEN_LABEL, descargarBlob, fmtCOP, fmtDias,
+  ESTADO_VACACION_LABEL, ESTADO_VACACION_VARIANTE, MODO_PAGO_VARIANTE, ORIGEN_LABEL,
+  descargarBlob, fmtCOP, fmtDias,
 } from './vacaciones/comunes';
 import { imprimirPdf } from '../../lib/pdf/imprimirPdf';
 import PagoVacacionDialog from './vacaciones/PagoVacacionDialog';
@@ -39,28 +38,14 @@ import {
 } from '../../components/vacaciones/InterrumpirVacacionDialog';
 import { MarcarReintegroDialog } from '../../components/vacaciones/MarcarReintegroDialog';
 import PageHeader from '../../components/common/PageHeader';
+import StatStrip from '../../components/common/StatStrip';
 import SeccionCard from '../../components/liquidaciones/SeccionCard';
 import DatoLista from '../../components/liquidaciones/DatoLista';
 import ConceptosTabla, { type Concepto } from '../../components/liquidaciones/ConceptosTabla';
 import VacioCard from '../../components/liquidaciones/VacioCard';
+import { METODO_PAGO_LABEL } from './periodo/textos';
 
 const VOLVER = '/liquidaciones/vacaciones/historico';
-
-type VarianteBadge = 'success' | 'warning' | 'destructive' | 'secondary' | 'info';
-
-// PR-N4 - PENDIENTE es una solicitud venida de Novedades: pide acción.
-const VARIANTE_ESTADO: Record<EstadoVacacion, VarianteBadge> = {
-  APROBADA: 'warning',
-  PAGADA: 'success',
-  CANCELADA: 'destructive',
-  PENDIENTE: 'warning',
-};
-
-// PR-L15 - El modo de pago no es un estado: es quien pone la plata.
-const VARIANTE_MODO_PAGO: Record<ModoPagoVacacion, VarianteBadge> = {
-  DIRECTO: 'secondary',
-  NOMINA: 'info',
-};
 
 export default function VacacionesDetalle() {
   const { id } = useParams<{ id: string }>();
@@ -76,6 +61,8 @@ export default function VacacionesDetalle() {
   /** CST art. 188: el colaborador volvió antes y el disfrute se acorta. */
   const [interrumpirAbierto, setInterrumpirAbierto] = useState(false);
   const [reintegroAbierto, setReintegroAbierto] = useState(false);
+  /** Como el diseño: abre en resumen de una columna; "Ver detalle" abre la vista completa. */
+  const [verDetalle, setVerDetalle] = useState(false);
   const reqIdRef = useRef(0);
 
   const cargar = () => {
@@ -132,7 +119,7 @@ export default function VacacionesDetalle() {
   if (cargando) {
     return (
       <div className="space-y-6">
-        <PageHeader eyebrow="Vacaciones" title="Comprobante de vacaciones" backTo={VOLVER} />
+        <PageHeader title="Liquidación de vacaciones" backTo={VOLVER} />
         <Card className="flex-row items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Cargando comprobante...
@@ -144,10 +131,10 @@ export default function VacacionesDetalle() {
   if (!comprobante || !item) {
     return (
       <div className="space-y-6">
-        <PageHeader eyebrow="Vacaciones" title="Comprobante de vacaciones" backTo={VOLVER} />
+        <PageHeader title="Liquidación de vacaciones" backTo={VOLVER} />
         <VacioCard
           icon={CalendarX}
-          title="Comprobante no encontrado"
+          title="No se encontró la información de vacaciones"
           description="El registro no existe o ya no está disponible."
           action={
             <Button variant="outline" asChild>
@@ -200,82 +187,197 @@ export default function VacacionesDetalle() {
   const puedeAnularPago = estado === 'PAGADA' && item.pago.metodo_pago !== 'NOMINA';
   const puedeAnular = estado !== 'CANCELADA' && !(porNomina && pagadoEnNomina > 0);
 
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow={`Vacaciones · ${item.numero_comprobante}`}
-        title={
-          <span className="flex flex-wrap items-center gap-2">
-            {comprobante.empleado.nombre_completo}
-            <Badge variant={VARIANTE_ESTADO[estado]}>{ESTADO_VACACION_LABEL[estado]}</Badge>
-          </span>
-        }
-        description={`${comprobante.empleado.cargo ?? 'Sin cargo'} · C.C. ${comprobante.empleado.documento} · Liquidado el ${formatFecha(comprobante.fechas.fecha_liquidacion)}`}
-        backTo={VOLVER}
-      />
+  const encabezado = (
+    <PageHeader
+      eyebrow="Vacaciones"
+      title={comprobante.empleado.nombre_completo}
+      description={verDetalle ? 'Detalle de la liquidación de vacaciones.' : 'Resumen de la liquidación de vacaciones.'}
+      backTo={VOLVER}
+    />
+  );
 
-      <div className="space-y-4 empty:hidden">
-        {estado === 'CANCELADA' && (
-          <div className="flex gap-2 rounded-lg bg-destructive-soft p-4">
-            <Ban className="mt-0.5 h-4 w-4 shrink-0 text-destructive" strokeWidth={2} />
-            <p className="text-sm text-foreground">
-              Liquidación anulada. Los días volvieron al saldo del colaborador.
-              {typeof comprobante.anulacion?.motivo === 'string' && ` Motivo: ${comprobante.anulacion.motivo}`}
-            </p>
-          </div>
-        )}
-
-        {fueInterrumpida && interrupcion && (
-          <AvisoInterrupcion
-            interrupcion={interrupcion}
-            onMarcarReintegro={() => setReintegroAbierto(true)}
-          />
-        )}
-
-        {comprobante.advertencias.length > 0 && (
-          <div className="space-y-1.5 rounded-lg bg-warning-soft p-4">
-            {comprobante.advertencias.map((a, i) => (
-              <p key={`${a.code}-${i}`} className="flex gap-2 text-sm text-foreground">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
-                {a.mensaje ?? a.code}
+  const alertas = (
+        <div className="space-y-4 empty:hidden">
+          {estado === 'CANCELADA' && (
+            <div className="flex gap-2 rounded-lg bg-destructive-soft p-3">
+              <Ban className="mt-0.5 h-4 w-4 shrink-0 text-destructive" strokeWidth={2} />
+              <p className="text-sm text-foreground">
+                Liquidación anulada. Los días volvieron al saldo del colaborador.
+                {typeof comprobante.anulacion?.motivo === 'string' && ` Motivo: ${comprobante.anulacion.motivo}`}
               </p>
-            ))}
-          </div>
+            </div>
+          )}
+
+          {fueInterrumpida && interrupcion && (
+            <AvisoInterrupcion
+              interrupcion={interrupcion}
+              onMarcarReintegro={() => setReintegroAbierto(true)}
+            />
+          )}
+
+          {comprobante.advertencias.length > 0 && (
+            <div className="space-y-1.5 rounded-lg bg-warning-soft p-3">
+              {comprobante.advertencias.map((a, i) => (
+                <p key={`${a.code}-${i}`} className="flex gap-2 text-sm text-foreground">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+                  {a.mensaje ?? a.code}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+  );
+
+  /*
+   * El contrato no trae un campo "tipo de vacaciones": lo dice la mezcla de
+   * días. Solo dinero es compensación (CST 189); solo calendario, disfrute.
+   */
+  const tipoLiquidacion = res.dias_calendario > 0
+    ? (res.dias_dinero > 0 ? 'Disfrute y compensación en dinero' : 'Vacaciones laborales')
+    : 'Vacaciones compensadas en dinero';
+
+  const tarjetaColaborador = (
+    <SeccionCard
+      title={verDetalle ? 'Colaborador y período' : 'Colaborador'}
+      description={verDetalle ? 'Datos tomados del comprobante de vacaciones.' : undefined}
+    >
+      <div className="space-y-6">
+        <DatoLista
+          items={[
+            { label: 'Nombre completo', value: comprobante.empleado.nombre_completo },
+            { label: 'Cédula', value: comprobante.empleado.documento },
+            { label: 'Cargo', value: comprobante.empleado.cargo ?? 'Sin cargo' },
+            { label: 'Fecha de ingreso', value: formatFecha(comprobante.empleado.fecha_ingreso) },
+            { label: 'Tipo', value: tipoLiquidacion },
+            { label: 'Comprobante', value: item.numero_comprobante },
+            { label: 'Fecha de liquidación', value: formatFecha(comprobante.fechas.fecha_liquidacion) },
+            { label: 'Estado', value: <Badge variant={ESTADO_VACACION_VARIANTE[estado]}>{ESTADO_VACACION_LABEL[estado]}</Badge> },
+            {
+              label: 'Período',
+              value: cal ? `${formatFecha(cal.fecha_inicio)} – ${formatFecha(cal.fecha_fin)}` : 'Sin disfrute',
+            },
+          ]}
+        />
+        {cal && cal.dias_no_habiles.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            No hábiles en el rango:{' '}
+            {cal.dias_no_habiles
+              .map((d) => `${formatFecha(d.fecha)} (${DIA_NO_HABIL_LABEL[d.motivo]})`)
+              .join(', ')}
+          </p>
         )}
       </div>
+    </SeccionCard>
+  );
+
+  /*
+   * Los cuatro indicadores van siempre, también en una compensación solo en
+   * dinero: un cero dice más que una tarjeta que desaparece. El saldo que
+   * queda después solo lo trae el comprobante de las liquidadas aquí.
+   */
+  const estadisticas = (
+    <StatStrip
+      items={[
+        { label: 'Días de disfrute', value: fmtDias(res.dias_disfrute), unit: 'hábiles' },
+        { label: 'Días calendario pagados', value: fmtDias(res.dias_calendario), unit: 'días' },
+        { label: 'Días en dinero', value: fmtDias(res.dias_dinero), unit: 'días' },
+        {
+          label: 'Días pendientes',
+          value: comprobante.saldo ? fmtDias(comprobante.saldo.dias_disponibles_exigibles_despues) : '—',
+          unit: comprobante.saldo ? 'días' : undefined,
+          note: comprobante.saldo ? 'Saldo exigible después de esta liquidación' : undefined,
+        },
+      ]}
+    />
+  );
+
+  const calculo = (
+    <SeccionCard
+      title={verDetalle ? 'Componentes salariales' : 'Cálculo de la compensación'}
+      description={res.formula_aplicada || 'Base para el cálculo de la compensación.'}
+    >
+      <DetalleValores comprobante={comprobante} />
+    </SeccionCard>
+  );
+
+  const dialogos = (
+    <>
+    {/* ── Diálogos ─────────────────────────────────────────────────────── */}
+    <PagoVacacionDialog
+      vacacion={pagoAbierto ? item : null}
+      onCerrar={() => setPagoAbierto(false)}
+      onPagada={() => cargar()}
+    />
+
+    <AnularVacacionDialog
+      vacacion={modoAnular ? item : null}
+      modo={modoAnular ?? 'pago'}
+      onCerrar={() => setModoAnular(null)}
+      onAnulada={() => cargar()}
+    />
+
+    <InterrumpirVacacionDialog
+      vacacionId={interrumpirAbierto ? item.id : null}
+      comprobante={item.numero_comprobante}
+      onClose={() => setInterrumpirAbierto(false)}
+      onInterrumpida={() => cargar()}
+    />
+
+    <MarcarReintegroDialog
+      vacacionId={reintegroAbierto ? item.id : null}
+      neto={reintegro?.neto}
+      onClose={() => setReintegroAbierto(false)}
+      onMarcado={() => cargar()}
+    />
+    </>
+  );
+
+  // Vista inicial, como el diseño: una columna y las acciones al pie.
+  if (!verDetalle) {
+    return (
+      <div className="space-y-6">
+        {encabezado}
+        {alertas}
+        {tarjetaColaborador}
+        {estadisticas}
+        {calculo}
+        <div className="flex flex-col-reverse gap-2 border-t border-border pt-5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end print:hidden">
+          <Button variant="ghost" className="sm:mr-auto" onClick={() => setVerDetalle(true)}>
+            <FileText strokeWidth={2} />
+            Ver detalle
+          </Button>
+          <Button variant="outline" onClick={() => void pedirPdf('imprimir')} disabled={descargando}>
+            <Printer strokeWidth={2} />
+            Imprimir
+          </Button>
+          <Button variant="outline" onClick={() => void pedirPdf('descargar')} disabled={descargando}>
+            {descargando ? <Loader2 className="animate-spin" /> : <Download strokeWidth={2} />}
+            Descargar PDF
+          </Button>
+          {puedePagar && (
+            <Button onClick={() => setPagoAbierto(true)}>
+              <Banknote strokeWidth={2} />
+              {porNomina ? 'Pagar el saldo' : 'Registrar pago'}
+            </Button>
+          )}
+        </div>
+        {dialogos}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {encabezado}
+      {alertas}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <SeccionCard title="Colaborador y disfrute" description="Datos tomados del comprobante persistido.">
-            <div className="space-y-4">
-              <DatoLista
-                items={[
-                  { label: 'Nombre completo', value: comprobante.empleado.nombre_completo },
-                  { label: 'Cargo', value: comprobante.empleado.cargo ?? 'Sin cargo' },
-                  ...(cal
-                    ? [
-                        { label: 'Inicio', value: formatFecha(cal.fecha_inicio) },
-                        { label: 'Fin', value: formatFecha(cal.fecha_fin) },
-                        { label: 'Días hábiles', value: fmtDias(cal.dias_habiles) },
-                        { label: 'Días calendario pagados', value: fmtDias(cal.dias_calendario) },
-                      ]
-                    : []),
-                ]}
-              />
-              {cal && cal.dias_no_habiles.length > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  No hábiles en el rango:{' '}
-                  {cal.dias_no_habiles
-                    .map((d) => `${formatFecha(d.fecha)} (${DIA_NO_HABIL_LABEL[d.motivo]})`)
-                    .join(', ')}
-                </p>
-              )}
-            </div>
-          </SeccionCard>
+          {tarjetaColaborador}
 
-          <SeccionCard title="Detalle de la liquidación" description={res.formula_aplicada}>
-            <DetalleValores comprobante={comprobante} />
-          </SeccionCard>
+          {estadisticas}
+
+          {calculo}
 
           {comprobante.periodos_afectados.length > 0 && (
             <SeccionCard title="Períodos de causación consumidos" contentClassName="px-0 py-0 sm:px-0">
@@ -294,10 +396,10 @@ export default function VacacionesDetalle() {
                     { label: 'Pensión trabajador', value: fmtCOP(comprobante.seguridad_social.pension_trabajador) },
                   ]}
                 />
-                <p className="flex gap-2 text-xs text-muted-foreground">
-                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-                  {comprobante.seguridad_social.nota}
-                </p>
+                <div className="flex gap-2 rounded-lg bg-info-soft p-3">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-info" strokeWidth={2} />
+                  <p className="text-sm text-foreground">{comprobante.seguridad_social.nota}</p>
+                </div>
               </div>
             </SeccionCard>
           )}
@@ -331,8 +433,10 @@ export default function VacacionesDetalle() {
             <div className="space-y-5">
               <ConceptosTabla
                 items={[
-                  ...(res.dias_calendario > 0 ? [{ label: 'Días de disfrute', valor: `${fmtDias(res.dias_disfrute)} hábiles` }] : []),
-                  ...(res.dias_dinero > 0 ? [{ label: 'Días en dinero', valor: `${fmtDias(res.dias_dinero)} días` }] : []),
+                  /* Las dos líneas de días van siempre, como en el diseño. */
+                  { label: 'Días de disfrute', valor: `${fmtDias(res.dias_disfrute)} hábiles` },
+                  { label: 'Días calendario pagados', valor: `${fmtDias(res.dias_calendario)} días` },
+                  { label: 'Días en dinero', valor: `${fmtDias(res.dias_dinero)} días` },
                   { label: totalDeducciones > 0 ? 'Total devengado' : 'Total', valor: fmtCOP(res.valor_total), total: totalDeducciones === 0 },
                   ...(totalDeducciones > 0
                     ? [
@@ -345,7 +449,7 @@ export default function VacacionesDetalle() {
               <div className="space-y-2 text-sm">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-muted-foreground">Estado</span>
-                  <Badge variant={VARIANTE_ESTADO[estado]}>{ESTADO_VACACION_LABEL[estado]}</Badge>
+                  <Badge variant={ESTADO_VACACION_VARIANTE[estado]}>{ESTADO_VACACION_LABEL[estado]}</Badge>
                 </div>
                 {esHistorico && (
                   <div className="flex items-center justify-between gap-2">
@@ -357,7 +461,7 @@ export default function VacacionesDetalle() {
                 {!esHistorico && estado !== 'PENDIENTE' && (
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-muted-foreground">Pago</span>
-                    <Badge variant={VARIANTE_MODO_PAGO[item.modo_pago ?? 'DIRECTO']}>
+                    <Badge variant={MODO_PAGO_VARIANTE[item.modo_pago ?? 'DIRECTO']}>
                       {MODO_PAGO_LABEL[item.modo_pago ?? 'DIRECTO']}
                     </Badge>
                   </div>
@@ -370,6 +474,10 @@ export default function VacacionesDetalle() {
                 )}
               </div>
               <div className="space-y-2 border-t border-border pt-4 print:hidden">
+                <Button variant="outline" onClick={() => setVerDetalle(false)} className="w-full">
+                  <ArrowLeft strokeWidth={2} />
+                  Ver resumen
+                </Button>
                 {puedePagar && (
                   <Button onClick={() => setPagoAbierto(true)} className="w-full">
                     <Banknote strokeWidth={2} />
@@ -378,13 +486,13 @@ export default function VacacionesDetalle() {
                   </Button>
                 )}
                 <div className="grid grid-cols-2 gap-2">
-                  <Button variant="outline" onClick={() => void pedirPdf('descargar')} disabled={descargando}>
+                  <Button variant="outline" onClick={() => void pedirPdf('descargar')} disabled={descargando} aria-label="Descargar PDF">
                     {descargando ? <Loader2 className="animate-spin" /> : <Download strokeWidth={2} />}
-                    PDF
+                    <span className="hidden sm:inline lg:hidden xl:inline">PDF</span>
                   </Button>
-                  <Button variant="outline" onClick={() => void pedirPdf('imprimir')} disabled={descargando}>
+                  <Button variant="outline" onClick={() => void pedirPdf('imprimir')} disabled={descargando} aria-label="Imprimir">
                     <Printer strokeWidth={2} />
-                    Imprimir
+                    <span className="hidden sm:inline lg:hidden xl:inline">Imprimir</span>
                   </Button>
                 </div>
                 {sePuedeInterrumpir && (
@@ -415,33 +523,7 @@ export default function VacacionesDetalle() {
         </div>
       </div>
 
-      {/* ── Diálogos ─────────────────────────────────────────────────────── */}
-      <PagoVacacionDialog
-        vacacion={pagoAbierto ? item : null}
-        onCerrar={() => setPagoAbierto(false)}
-        onPagada={() => cargar()}
-      />
-
-      <AnularVacacionDialog
-        vacacion={modoAnular ? item : null}
-        modo={modoAnular ?? 'pago'}
-        onCerrar={() => setModoAnular(null)}
-        onAnulada={() => cargar()}
-      />
-
-      <InterrumpirVacacionDialog
-        vacacionId={interrumpirAbierto ? item.id : null}
-        comprobante={item.numero_comprobante}
-        onClose={() => setInterrumpirAbierto(false)}
-        onInterrumpida={() => cargar()}
-      />
-
-      <MarcarReintegroDialog
-        vacacionId={reintegroAbierto ? item.id : null}
-        neto={reintegro?.neto}
-        onClose={() => setReintegroAbierto(false)}
-        onMarcado={() => cargar()}
-      />
+      {dialogos}
     </div>
   );
 }
@@ -453,10 +535,10 @@ function AvisoInterrupcion({ interrupcion, onMarcarReintegro }: { interrupcion: 
   const reintegro = interrupcion.reintegro ?? null;
   const reintegroPendiente = reintegro?.estado === 'PENDIENTE';
   return (
-    <div className="flex gap-2 rounded-lg bg-warning-soft p-4">
+    <div className="flex gap-2 rounded-lg bg-warning-soft p-3">
       <Scissors className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
       <div className="min-w-0 flex-1 space-y-2 text-sm text-foreground">
-        <p className="font-semibold">
+        <p className="font-medium">
           El disfrute terminó antes: volvió a trabajar el {formatFecha(interrupcion.fecha_reintegro)}
         </p>
         <p>
@@ -464,7 +546,7 @@ function AvisoInterrupcion({ interrupcion, onMarcarReintegro }: { interrupcion: 
           {interrupcion.fechas_devueltas
             && ` (${formatFecha(interrupcion.fechas_devueltas.desde)} a ${formatFecha(interrupcion.fechas_devueltas.hasta)})`}
           . Antes terminaba el{' '}
-          {interrupcion.original.fecha_fin ? formatFecha(interrupcion.original.fecha_fin) : '—'}
+          {interrupcion.original.fecha_fin ? formatFecha(interrupcion.original.fecha_fin) : 'sin fecha'}
           {' '}con {interrupcion.original.dias_habiles} día(s) hábil(es) y{' '}
           {fmtCOP(interrupcion.original.valor_total)}.
         </p>
@@ -502,25 +584,22 @@ function DetalleValores({ comprobante }: { comprobante: ComprobanteVacaciones })
   const tasas = comprobante.seguridad_social?.tasas ?? null;
   const conceptos: Concepto[] = [];
 
-  if (res.dias_calendario > 0) {
-    // PR-L15 (D1) - Lo remunerado son dias comerciales, no calendario: del 16
-    // al 31 de octubre son 30, no 31. Solo se nombra cuando difieren.
-    const dias = res.dias_pago != null && res.dias_pago !== res.dias_calendario
-      ? `${fmtDias(res.dias_pago)} días comerciales × ${fmtCOP(res.valor_dia)}`
-      : `${fmtDias(res.dias_calendario)} días calendario × ${fmtCOP(res.valor_dia)}`;
-    conceptos.push({
-      label: 'Días de disfrute',
-      detalle: `${dias} · equivalen a ${fmtDias(res.dias_disfrute)} hábiles`,
-      valor: fmtCOP(res.valor_disfrute),
-    });
-  }
-  if (res.dias_dinero > 0) {
-    conceptos.push({
-      label: 'Días en dinero',
-      detalle: `${fmtDias(res.dias_dinero)} días × ${fmtCOP(res.valor_dia)}${res.acuerdo_escrito ? ' · con acuerdo escrito' : ''}`,
-      valor: fmtCOP(res.valor_dinero),
-    });
-  }
+  // PR-L15 (D1) - Lo remunerado son dias comerciales, no calendario: del 16
+  // al 31 de octubre son 30, no 31. Solo se nombra cuando difieren.
+  const diasPagados = res.dias_pago != null && res.dias_pago !== res.dias_calendario
+    ? `${fmtDias(res.dias_pago)} días comerciales × ${fmtCOP(res.valor_dia)}`
+    : `${fmtDias(res.dias_calendario)} días calendario × ${fmtCOP(res.valor_dia)}`;
+  // Los dos conceptos se listan siempre: en cero también son información.
+  conceptos.push({
+    label: 'Días de disfrute',
+    detalle: `${diasPagados} · equivalen a ${fmtDias(res.dias_disfrute)} hábiles`,
+    valor: fmtCOP(res.valor_disfrute),
+  });
+  conceptos.push({
+    label: 'Días en dinero',
+    detalle: `${fmtDias(res.dias_dinero)} días × ${fmtCOP(res.valor_dia)}${res.acuerdo_escrito ? ' · con acuerdo escrito' : ''}`,
+    valor: fmtCOP(res.valor_dinero),
+  });
   conceptos.push({ label: totalDeducciones > 0 ? 'Total devengado' : 'Total', valor: fmtCOP(res.valor_total), total: true });
 
   if (deducciones && totalDeducciones > 0) {
@@ -543,16 +622,16 @@ function DetalleValores({ comprobante }: { comprobante: ComprobanteVacaciones })
 
   return (
     <div className="space-y-4">
-      {comprobante.base && (
-        <DatoLista
-          className="sm:grid-cols-3"
-          items={[
-            { label: 'Base mensual (art. 192)', value: fmtCOP(comprobante.base.base_mensual) },
-            { label: 'Valor día', value: fmtCOP(res.valor_dia) },
-            { label: 'Fecha base', value: formatFecha(comprobante.fechas.fecha_base) },
-          ]}
-        />
-      )}
+      {/* La base va siempre: un registro histórico no la trae y se dice. */}
+      <DatoLista
+        className="sm:grid-cols-2 lg:grid-cols-4"
+        items={[
+          { label: 'Salario básico', value: comprobante.base ? fmtCOP(comprobante.base.salario_basico) : '—' },
+          { label: 'Base mensual (art. 192)', value: comprobante.base ? fmtCOP(comprobante.base.base_mensual) : '—' },
+          { label: 'Valor día', value: fmtCOP(res.valor_dia) },
+          { label: 'Fecha base', value: formatFecha(comprobante.fechas.fecha_base) },
+        ]}
+      />
       <ConceptosTabla items={conceptos} />
     </div>
   );
@@ -562,7 +641,7 @@ function PeriodosConsumidos({ periodos }: { periodos: ComprobanteVacaciones['per
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="bg-muted/60 text-[13px] font-medium text-muted-foreground">
+        <thead className="whitespace-nowrap bg-muted/60 text-[13px] font-medium text-muted-foreground">
           <tr>
             <th className="px-5 py-2.5 text-left font-semibold">Período</th>
             <th className="px-4 py-2.5 text-left font-semibold">Rango</th>
@@ -605,7 +684,7 @@ function DetallePago({ item, esHistorico }: { item: VacacionItem; esHistorico: b
           className="sm:grid-cols-4"
           items={[
             { label: 'Fecha', value: formatFecha(item.pago.fecha_pago) },
-            { label: 'Método', value: item.pago.metodo_pago === 'NOMINA' ? 'Nómina' : item.pago.metodo_pago ?? '—' },
+            { label: 'Método', value: item.pago.metodo_pago === 'NOMINA' ? 'Nómina' : (item.pago.metodo_pago ? METODO_PAGO_LABEL[item.pago.metodo_pago] ?? item.pago.metodo_pago : '—') },
             { label: 'Referencia', value: item.pago.referencia_pago ?? '—' },
             {
               // `total_pagado` es el bruto; `neto_pagado` es lo que se giró.
@@ -663,14 +742,16 @@ function DetallePago({ item, esHistorico }: { item: VacacionItem; esHistorico: b
       )}
 
       {porNomina && saldoNomina > 0 && (
-        <p className={`flex gap-2 text-xs ${saldoVencido ? 'text-destructive' : 'text-muted-foreground'}`}>
+        <div className={`flex gap-2 rounded-lg p-3 ${saldoVencido ? 'bg-destructive-soft' : 'bg-info-soft'}`}>
           {saldoVencido
-            ? <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            : <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
-          {saldoVencido
-            ? ADVERTENCIA_PAGO_NOMINA_LABEL.VACACIONES_PAGO_EN_NOMINA_PENDIENTE
-            : 'Cada nómina que cubre el disfrute paga su tramo al cerrarse.'}
-        </p>
+            ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" strokeWidth={2} />
+            : <Info className="mt-0.5 h-4 w-4 shrink-0 text-info" strokeWidth={2} />}
+          <p className="text-sm text-foreground">
+            {saldoVencido
+              ? ADVERTENCIA_PAGO_NOMINA_LABEL.VACACIONES_PAGO_EN_NOMINA_PENDIENTE
+              : 'Cada nómina que cubre el disfrute paga su tramo al cerrarse.'}
+          </p>
+        </div>
       )}
     </div>
   );

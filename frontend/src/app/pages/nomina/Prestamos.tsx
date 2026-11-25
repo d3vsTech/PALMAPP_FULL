@@ -195,9 +195,9 @@ export default function Prestamos() {
                 <tr>
                   <th className="px-5 py-2.5 text-left font-semibold">Colaborador</th>
                   <th className={`${th} hidden text-left lg:table-cell`}>Concepto</th>
-                  <th className={`${th} hidden text-right md:table-cell`}>Monto total</th>
+                  <th className={`${th} hidden text-right lg:table-cell`}>Monto total</th>
                   <th className={`${th} text-right`}>Saldo</th>
-                  <th className={`${th} hidden text-right md:table-cell`}>Cuota</th>
+                  <th className={`${th} hidden text-right lg:table-cell`}>Cuota</th>
                   <th className={`${th} hidden text-left lg:table-cell`}>Avance</th>
                   <th className={`${th} hidden text-left xl:table-cell`}>Fecha fin</th>
                   <th className={`${th} hidden text-left sm:table-cell`}>Estado</th>
@@ -240,7 +240,7 @@ export default function Prestamos() {
                     const puedeCancelar = p.estado === 'VIGENTE';
                     return (
                       <tr key={p.id} className="transition-colors hover:bg-muted/40">
-                        <td className="px-5 py-3">
+                        <td className="min-w-[12rem] px-5 py-3">
                           <Link
                             to={`/nomina/prestamos/${p.id}`}
                             className="font-semibold text-foreground hover:text-primary"
@@ -259,13 +259,13 @@ export default function Prestamos() {
                             )}
                           </span>
                         </td>
-                        <td className={`${td} hidden text-right tabular-nums md:table-cell`}>
+                        <td className={`${td} hidden text-right tabular-nums lg:table-cell`}>
                           ${total.toLocaleString('es-CO')}
                         </td>
                         <td className={`${td} text-right font-semibold tabular-nums text-foreground`}>
                           ${saldo.toLocaleString('es-CO')}
                         </td>
-                        <td className={`${td} hidden text-right tabular-nums md:table-cell`}>
+                        <td className={`${td} hidden text-right tabular-nums lg:table-cell`}>
                           ${cuota.toLocaleString('es-CO')}
                         </td>
                         <td className={`${td} hidden lg:table-cell`}>
@@ -284,7 +284,7 @@ export default function Prestamos() {
                         <td className={`${td} hidden sm:table-cell`}>
                           <Badge variant={cfg.variant}>{cfg.label}</Badge>
                         </td>
-                        <td className="px-5 py-3">
+                        <td className="whitespace-nowrap px-5 py-3">
                           <div className="flex items-center justify-end gap-1">
                             {/* El nombre ya lleva al detalle; este queda como
                                 atajo desde el lado de las acciones. */}

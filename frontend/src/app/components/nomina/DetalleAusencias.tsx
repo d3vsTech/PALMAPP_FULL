@@ -105,8 +105,8 @@ interface Props {
  * hay zona horaria en juego.
  */
 function rangoFechas(a: AusenciaItem): string {
-  const desde = String(a.fecha_inicio).slice(0, 10);
-  const hasta = String(a.fecha_fin).slice(0, 10);
+  const desde = soloFecha(a.fecha_inicio);
+  const hasta = soloFecha(a.fecha_fin);
   return desde === hasta ? desde : `${desde} a ${hasta}`;
 }
 

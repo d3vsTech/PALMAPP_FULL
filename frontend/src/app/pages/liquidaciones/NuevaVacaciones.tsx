@@ -26,10 +26,10 @@ import {
   AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
-import { Plane, Info, AlertCircle, AlertTriangle, Check, Loader2 } from 'lucide-react';
+import { Info, AlertCircle, AlertTriangle, Check, Loader2 } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
 import SeccionCard from '../../components/liquidaciones/SeccionCard';
-import VacioCard from '../../components/liquidaciones/VacioCard';
+import { BuscadorColaboradorVacacion } from './vacaciones/BuscadorColaboradorVacacion';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'sonner';
 import {
@@ -51,6 +51,7 @@ import { fmtCOP, fmtDias } from './vacaciones/comunes';
 import FichaColaboradorVacacion, { AjusteBase } from './vacaciones/FichaColaboradorVacacion';
 import {
   Aviso, ConsumoSaldo, DatosPagoAnticipado, PlanDePago, RangoCalendario, Segmentado,
+  fechaCorta, fechaLarga,
 } from './vacaciones/PiezasNuevaVacacion';
 import { ResumenVacacion, SaldoVacacion } from './vacaciones/ResumenNuevaVacacion';
 
@@ -271,7 +272,7 @@ export default function NuevaVacaciones() {
           setModoBaseManual(false);
           setBaseManual('');
           setMotivoAjuste('');
-          toast.error(e.message ?? 'No tiene permiso para ajustar la base');
+          toast.error(e.message ?? 'No tienes permiso para ajustar la base');
           return;
         }
         setErrorPreview(mensajeError(e));
@@ -356,7 +357,7 @@ export default function NuevaVacaciones() {
     return (
       <Card className="flex-row items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" />
-        Cargando colaborador...
+        Cargando colaborador
       </Card>
     );
   }
@@ -364,17 +365,18 @@ export default function NuevaVacaciones() {
   if (!empleadoId || !detalle) {
     return (
       <div className="space-y-6">
-        <PageHeader eyebrow="Vacaciones" title="Liquidación de vacaciones" backTo={VOLVER} />
-        <VacioCard
-          icon={Plane}
-          title="Sin colaborador"
-          description="Elige un colaborador desde la lista de turnos pendientes para liquidar sus vacaciones."
-          action={
-            <Button variant="outline" asChild>
-              <Link to={VOLVER}>Volver a liquidaciones</Link>
-            </Button>
-          }
+        <PageHeader
+          eyebrow="Vacaciones"
+          title="Nueva liquidación de vacaciones"
+          description="Registra disfrute de vacaciones y días compensados en dinero."
+          backTo={VOLVER}
         />
+        {/* Como el diseño: el colaborador se elige aquí mismo, sin volver atrás. */}
+        <SeccionCard title="Colaborador" description="Busca al colaborador que vas a liquidar.">
+          <BuscadorColaboradorVacacion
+            onElegir={(id) => navigate(`/liquidaciones/vacaciones/nueva?col=${id}`)}
+          />
+        </SeccionCard>
       </div>
     );
   }
@@ -451,7 +453,7 @@ export default function NuevaVacaciones() {
    */
   const aplicarBaseManual = () => {
     if (nBaseManual <= 0) {
-      toast.error('Indique la base mensual');
+      toast.error('Indica la base mensual');
       return;
     }
     if (nBaseManual === baseSistema) {
@@ -459,15 +461,15 @@ export default function NuevaVacaciones() {
       return;
     }
     if (!motivoAjuste.trim()) {
-      toast.error('Indique el motivo del ajuste');
+      toast.error('Indica el motivo del ajuste');
       return;
     }
     if (totalPedido <= 0) {
-      toast.error('Capture los días a liquidar para ver el recálculo');
+      toast.error('Captura los días a liquidar para ver el recálculo');
       return;
     }
     if (nDisfrute > 0 && !fechaInicio) {
-      toast.error('Indique la fecha de inicio del disfrute');
+      toast.error('Indica la fecha de inicio del disfrute');
       return;
     }
     void cargarPreview();
@@ -485,6 +487,13 @@ export default function NuevaVacaciones() {
     setModoPago(modo);
     if (modo === 'NOMINA') setTipoPago('pendiente');
   };
+
+  /** Tercera columna del resumen, con las palabras del diseño. */
+  const formaPagoTexto = modoPago === 'NOMINA'
+    ? 'Incluido en nómina'
+    : tipoPago === 'anticipado'
+      ? `Anticipado · ${fechaLarga(fechaPago)}`
+      : 'Directo · pagar después';
 
   const puedeConfirmar =
     !bloqueado && !!preview && !calculandoPreview && totalPedido > 0 &&
@@ -510,15 +519,15 @@ export default function NuevaVacaciones() {
       {/* PR-N4 — Lo que pidió el colaborador, para que el liquidador vea de
           dónde salen los campos prellenados y qué cambió si los ajusta. */}
       {solicitud && (
-        <Aviso tono="warning" icono={Info}>
-          <p className="font-semibold">Solicitud {solicitud.numero_comprobante}</p>
+        <Aviso tono="info" icono={Info}>
+          <p className="font-medium">Solicitud {solicitud.numero_comprobante}</p>
           <p>
             Pidió {solicitud.dias_habiles} días hábiles
-            {solicitud.fecha_inicio && ` desde el ${String(solicitud.fecha_inicio).slice(0, 10)}`}.
-            Puedes ajustar los días antes de liquidar; lo que guardes es lo que queda.
+            {solicitud.fecha_inicio && ` desde el ${fechaCorta(solicitud.fecha_inicio)}`}.
+            Puedes ajustar los días antes de liquidar. Lo que guardes es lo que queda.
           </p>
           {solicitud.observacion && (
-            <p className="text-xs text-muted-foreground">Observación: {solicitud.observacion}</p>
+            <p className="text-muted-foreground">Observación: {solicitud.observacion}</p>
           )}
         </Aviso>
       )}
@@ -615,7 +624,7 @@ export default function NuevaVacaciones() {
               </Label>
               <Input
                 id="diasDisfrute"
-                type="number" min={0} step={1} placeholder="0"
+                type="number" min={0} step={1} max={maxDisfrute} placeholder="0"
                 value={diasDisfrute}
                 onChange={(e) => setDiasDisfrute(e.target.value)}
                 disabled={bloqueado}
@@ -649,13 +658,13 @@ export default function NuevaVacaciones() {
               valor={modoPago}
               onCambio={cambiarModoPago}
               opciones={[
-                { valor: 'DIRECTO', label: 'Pago directo', disabled: bloqueado },
                 {
                   valor: 'NOMINA',
-                  label: 'En nómina',
+                  label: 'Pago en nómina',
                   disabled: bloqueado || nDisfrute <= 0,
                   title: nDisfrute <= 0 ? 'En nómina solo se puede pagar un disfrute, no una compensación suelta' : undefined,
                 },
+                { valor: 'DIRECTO', label: 'Pago directo', disabled: bloqueado },
               ]}
             />
             <p className="text-xs text-muted-foreground">
@@ -699,40 +708,41 @@ export default function NuevaVacaciones() {
             />
           )}
 
+          {totalPedido > 0 && maxDisfrute > 0 && (
+            <ConsumoSaldo disfrute={nDisfrute} dinero={nDinero} disponibles={maxDisfrute} />
+          )}
+
+          {(excedeSaldo || excedeDinero) && (
+            <div className="flex items-start gap-2.5 rounded-lg border border-destructive/20 bg-destructive-soft px-4 py-3 text-sm text-destructive">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+              <span>
+                {excedeSaldo
+                  ? `El total (${fmtDias(totalPedido)} días) supera los días disponibles (${fmtDias(maxDisfrute)}).`
+                  : `Los días en dinero (${fmtDias(nDinero)}) superan el máximo permitido (${fmtDias(maxDinero)}). Art. 189 CST.`}
+              </span>
+            </div>
+          )}
+
           {nDisfrute > 0 && fechaInicio && (
             <RangoCalendario calendario={calendario} calculando={calculandoCalendario} diasPago={diasPago} />
           )}
 
           {/* Acuerdo escrito: sin él la compensación no es válida */}
           {nDinero > 0 && (
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg bg-warning-soft px-4 py-3">
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-foreground">
               <Checkbox
                 checked={acuerdoEscrito}
                 onCheckedChange={(v) => setAcuerdoEscrito(v === true)}
                 className="mt-0.5"
               />
-              <span className="text-sm">
-                <span className="font-semibold text-foreground">Hay acuerdo escrito con el trabajador</span>
+              <span>
+                <span className="font-medium text-foreground">Hay acuerdo escrito con el trabajador</span>
                 <span className="mt-0.5 block text-muted-foreground">
                   El artículo 189 del CST exige que la compensación en dinero se pacte por escrito.
                   Sin el documento firmado la liquidación no se puede confirmar.
                 </span>
               </span>
             </label>
-          )}
-
-          {totalPedido > 0 && maxDisfrute > 0 && (
-            <ConsumoSaldo disfrute={nDisfrute} dinero={nDinero} disponibles={maxDisfrute} />
-          )}
-
-          {(excedeSaldo || excedeDinero) && (
-            <Aviso tono="destructive" icono={AlertCircle}>
-              <p>
-                {excedeSaldo
-                  ? `El total (${fmtDias(totalPedido)} días) supera el saldo disponible (${fmtDias(maxDisfrute)}).`
-                  : `Los días en dinero (${fmtDias(nDinero)}) superan el máximo permitido (${fmtDias(maxDinero)}).`}
-              </p>
-            </Aviso>
           )}
 
           <div className="space-y-2">
@@ -746,13 +756,21 @@ export default function NuevaVacaciones() {
             />
           </div>
 
+          {/* Nota legal del diseño: el encabezado y la explicación de los dos
+              tipos de días, más los topes que aplica el sistema. */}
           <Aviso tono="muted" icono={Info}>
+            <p className="font-medium text-foreground">Arts. 186, 189 y 192 CST: dos tipos de vacaciones</p>
+            <p className="text-muted-foreground">
+              <strong className="text-foreground">Días de disfrute:</strong> el trabajador descansa
+              físicamente (obligatorio). Se cuentan en días hábiles y se pagan por días calendario.
+            </p>
+            <p className="text-muted-foreground">
+              <strong className="text-foreground">Días en dinero:</strong> se compensan en efectivo y no
+              pueden superar la mitad del período causado.
+            </p>
             <p className="text-muted-foreground">
               <strong className="text-foreground">Art. 186 CST:</strong> 15 días hábiles por año de
-              servicio. <strong className="text-foreground">Art. 189 CST:</strong> los días compensados
-              en dinero no pueden superar la mitad del período causado.{' '}
-              <strong className="text-foreground">Art. 192 CST:</strong> el disfrute se paga por días
-              calendario. El sistema aplica los tres topes.
+              servicio. El sistema aplica los tres topes.
             </p>
           </Aviso>
         </div>
@@ -797,7 +815,7 @@ export default function NuevaVacaciones() {
             </Aviso>
           )}
 
-          <ResumenVacacion preview={preview} calendario={calendario} listo={puedeConfirmar} />
+          <ResumenVacacion preview={preview} calendario={calendario} formaPago={formaPagoTexto} listo={puedeConfirmar} />
           <SaldoVacacion preview={preview} />
         </>
       )}

@@ -14,29 +14,17 @@ import { Calculator, Search, Loader2, Inbox, X } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   vacacionesApi,
-  type EstadoVencimiento,
   type MetaTurnosPendientes,
   type TurnoPendienteVacaciones,
   type VacacionItem,
 } from '../../../api/vacaciones';
 import type { ApiError } from '../../../api/client';
 import { formatFecha } from '../../utils/fecha';
-import { SEMAFORO, fmtDias } from './vacaciones/comunes';
+import { SEMAFORO, fmtDias, fmtFechaCorta } from './vacaciones/comunes';
 import AnularVacacionDialog from './vacaciones/AnularVacacionDialog';
 import SeccionEncabezado from '../../components/liquidaciones/SeccionEncabezado';
 import FiltrosFila from '../../components/liquidaciones/FiltrosFila';
 import VacioCard from '../../components/liquidaciones/VacioCard';
-
-type VarianteBadge = 'destructive' | 'warning' | 'success' | 'secondary';
-
-/** Semáforo del backend pintado con las variantes de Badge del diseño. */
-const VARIANTE_SEMAFORO: Record<EstadoVencimiento, VarianteBadge> = {
-  VENCIDA: 'destructive',
-  URGENTE: 'destructive',
-  PROXIMA: 'warning',
-  CON_TIEMPO: 'success',
-  AL_DIA: 'secondary',
-};
 
 function textoVencimiento(dias: number | null): string {
   if (dias == null) return '—';
@@ -113,11 +101,11 @@ export default function VacacionesTab() {
 
       {/* ── Solicitudes por resolver (PR-N4) ──────────────────────────────── */}
       {solicitudes.length > 0 && (
-        <div className="flex gap-2 rounded-lg bg-warning-soft p-4">
+        <div className="flex gap-2 rounded-lg bg-warning-soft p-3">
           <Inbox className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
           <div className="min-w-0 flex-1 space-y-3">
             <div className="space-y-0.5">
-              <p className="text-sm font-semibold text-foreground">
+              <p className="text-sm font-medium text-foreground">
                 {solicitudes.length} solicitud{solicitudes.length !== 1 ? 'es' : ''} de vacaciones por resolver
               </p>
               <p className="text-sm text-foreground">
@@ -191,7 +179,7 @@ export default function VacacionesTab() {
         ) : filas.length === 0 ? (
           <VacioCard
             icon={Search}
-            title="No hay vacaciones pendientes"
+            title="Sin resultados"
             description={busqueda ? 'Ningún colaborador coincide con la búsqueda.' : 'Nadie tiene días de vacaciones por liquidar.'}
             action={busqueda ? <Button variant="outline" onClick={() => setBusqueda('')}>Limpiar búsqueda</Button> : undefined}
           />
@@ -199,7 +187,7 @@ export default function VacacionesTab() {
           <Card className="gap-0 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-muted/60 text-[13px] font-medium text-muted-foreground">
+                <thead className="whitespace-nowrap bg-muted/60 text-[13px] font-medium text-muted-foreground">
                   <tr>
                     <th className="px-5 py-2.5 text-left font-semibold">Colaborador</th>
                     <th className="hidden px-4 py-2.5 text-left font-semibold md:table-cell">Documento</th>
@@ -226,19 +214,20 @@ export default function VacacionesTab() {
 
 function FilaTurno({ fila: f, onLiquidar }: { fila: TurnoPendienteVacaciones; onLiquidar: () => void }) {
   const s = SEMAFORO[f.estado_vencimiento];
-  const variante = VARIANTE_SEMAFORO[f.estado_vencimiento];
   const esUrgente = f.estado_vencimiento === 'VENCIDA' || f.estado_vencimiento === 'URGENTE';
   const sinSaldo = f.dias_disponibles_exigibles <= 0;
   return (
     <tr className="transition-colors hover:bg-muted/40">
       <td className="px-5 py-3">
         <span className="font-semibold text-foreground">{f.empleado.nombre_completo}</span>
+        {/* El cargo va siempre bajo el nombre, como en el diseño. */}
+        <span className="block text-xs text-muted-foreground">{f.empleado.cargo ?? 'Sin cargo'}</span>
         <span className="mt-1 block sm:hidden">
-          <Badge variant={variante}>{s.label}</Badge>
+          <Badge variant={s.variant}>{s.label}</Badge>
         </span>
       </td>
       <td className="hidden px-4 py-3 tabular-nums text-muted-foreground md:table-cell">{f.empleado.documento}</td>
-      <td className="hidden px-4 py-3 text-muted-foreground lg:table-cell">{formatFecha(f.empleado.fecha_ingreso)}</td>
+      <td className="hidden whitespace-nowrap px-4 py-3 text-muted-foreground lg:table-cell">{fmtFechaCorta(f.empleado.fecha_ingreso)}</td>
       <td className="px-4 py-3 text-right font-semibold tabular-nums text-foreground">
         {sinSaldo ? (
           <span className="font-normal text-muted-foreground">—</span>
@@ -246,7 +235,7 @@ function FilaTurno({ fila: f, onLiquidar }: { fila: TurnoPendienteVacaciones; on
           <>
             {fmtDias(f.dias_disponibles_exigibles)}
             {f.dias_causados_periodo_actual > 0 && (
-              <span className="block text-xs font-normal text-muted-foreground">
+              <span className="block whitespace-nowrap text-xs font-normal text-muted-foreground">
                 +{fmtDias(f.dias_causados_periodo_actual)} en curso
               </span>
             )}
@@ -258,15 +247,15 @@ function FilaTurno({ fila: f, onLiquidar }: { fila: TurnoPendienteVacaciones; on
           <span className="text-muted-foreground">—</span>
         ) : (
           <>
-            <span className={esUrgente ? 'font-medium text-destructive' : 'text-foreground'}>
+            <span className={`whitespace-nowrap ${esUrgente ? 'font-medium text-destructive' : 'text-foreground'}`}>
               {textoVencimiento(f.dias_para_vencimiento)}
             </span>
-            <span className="block text-xs text-muted-foreground">{formatFecha(f.fecha_vencimiento)}</span>
+            <span className="block text-xs text-muted-foreground">{fmtFechaCorta(f.fecha_vencimiento)}</span>
           </>
         )}
       </td>
       <td className="hidden px-4 py-3 sm:table-cell">
-        <Badge variant={variante}>{s.label}</Badge>
+        <Badge variant={s.variant}>{s.label}</Badge>
       </td>
       <td className="px-4 py-3 text-right">
         {sinSaldo ? (

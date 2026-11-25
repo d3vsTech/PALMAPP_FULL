@@ -17,7 +17,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
-import { Info, Loader2 } from 'lucide-react';
+import { AlertTriangle, Info, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '../../components/common/PageHeader';
 import SeccionCard from '../../components/liquidaciones/SeccionCard';
@@ -160,7 +160,7 @@ export default function NuevaIntereses() {
               <Label htmlFor="descripcion">Descripción</Label>
               <Input
                 id="descripcion"
-                placeholder={`Intereses de cesantías año ${formData.anio || anioActual}`}
+                placeholder={`Intereses de cesantías ${formData.anio || anioActual}`}
                 value={formData.descripcion}
                 onChange={(e) => handleChange('descripcion', e.target.value)}
               />
@@ -176,7 +176,7 @@ export default function NuevaIntereses() {
                 value={formData.fechaInicio}
                 onChange={(e) => handleChange('fechaInicio', e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">Si se deja vacía se usa la del período de cesantías</p>
+              <p className="text-xs text-muted-foreground">Opcional. Si la dejas vacía, se usa la del período de cesantías.</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="fechaFin">Fecha de fin</Label>
@@ -186,7 +186,7 @@ export default function NuevaIntereses() {
                 value={formData.fechaFin}
                 onChange={(e) => handleChange('fechaFin', e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">Si se deja vacía se usa la del período de cesantías</p>
+              <p className="text-xs text-muted-foreground">Opcional. Si la dejas vacía, se usa la del período de cesantías.</p>
             </div>
           </div>
 
@@ -204,16 +204,19 @@ export default function NuevaIntereses() {
 
           {/* Fechas límite del año elegido (legal + operativa, §2.2) */}
           {fechaLimite && (
-            <div className="rounded-lg bg-warning-soft p-3 text-sm text-foreground">
-              Fecha límite de pago: legal el{' '}
-              <strong>{formatFecha(fechaLimite.fecha_limite_legal, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
-              {!fechaLimite.es_dia_habil && (
-                <>
-                  {' '}(cae en día no hábil) · operativa el{' '}
-                  <strong>{formatFecha(fechaLimite.fecha_limite_operativa, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
-                </>
-              )}
-              . Los intereses no pagados a tiempo generan sanción de mora.
+            <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-warning">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+              <p>
+                Fecha límite de pago: legal el{' '}
+                <strong>{formatFecha(fechaLimite.fecha_limite_legal, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
+                {!fechaLimite.es_dia_habil && (
+                  <>
+                    {' '}(cae en día no hábil) · operativa el{' '}
+                    <strong>{formatFecha(fechaLimite.fecha_limite_operativa, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
+                  </>
+                )}
+                . Los intereses no pagados a tiempo generan sanción de mora.
+              </p>
             </div>
           )}
 
@@ -277,7 +280,7 @@ export default function NuevaIntereses() {
                 key={p.id}
                 type="button"
                 onClick={() => setBaseElegida(p.id)}
-                className={`w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors ${
+                className={`w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                   baseElegida === p.id
                     ? 'border-primary bg-primary-soft'
                     : 'border-border hover:bg-muted/40'

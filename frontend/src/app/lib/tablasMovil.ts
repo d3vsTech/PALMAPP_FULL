@@ -33,7 +33,12 @@ function etiquetarTabla(tabla: HTMLTableElement) {
         columna += celda.colSpan;
         // Un solo ícono de acción va en la esquina de la tarjeta, sin ocupar una fila.
         const acciones = titulo === '' && celda !== fila.cells[0] && celda.colSpan === 1 ? celda.querySelectorAll('button, a') : null;
-        celda.toggleAttribute('data-accion-unica', acciones?.length === 1 && acciones[0].querySelector(':scope > svg:only-child') !== null);
+        // `svg:only-child` no ve el texto suelto: "Liquidar" con su ícono pasaba por
+        // botón de solo ícono y quedaba montado encima del nombre. Se exige que no haya texto.
+        const soloIcono = acciones?.length === 1
+          && acciones[0].querySelector(':scope > svg:only-child') !== null
+          && (acciones[0].textContent ?? '').trim() === '';
+        celda.toggleAttribute('data-accion-unica', soloIcono);
       }
     }
   }

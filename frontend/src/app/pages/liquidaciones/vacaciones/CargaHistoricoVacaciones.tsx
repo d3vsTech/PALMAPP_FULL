@@ -64,7 +64,7 @@ const VARIANTE_SEMAFORO: Record<string, 'destructive' | 'warning' | 'success' | 
   CON_TIEMPO: 'success',
 };
 
-const TH = 'px-4 py-2.5 text-left font-semibold';
+const TH = 'whitespace-nowrap px-4 py-2.5 text-left font-semibold';
 
 /** Días calendario del rango, ambos extremos incluidos. */
 function diasCalendario(inicio: string, fin: string): number {
@@ -241,30 +241,30 @@ export default function CargaHistoricoVacaciones() {
     <div className="space-y-6">
       <PageHeader
         backTo="/liquidaciones?tab=vacaciones"
-        eyebrow="Vacaciones · Puesta en marcha"
+        eyebrow="Vacaciones"
         title="Cargar vacaciones anteriores"
         description="Vacaciones que los colaboradores ya disfrutaron antes de usar PalmApp."
       />
 
       {/* ── Ayuda ───────────────────────────────────────────────────────────── */}
-      <div className="flex gap-2 rounded-lg bg-info-soft p-4 text-sm">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-info" strokeWidth={2} />
-          <div className="space-y-1.5 text-foreground">
-            <p>
-              <strong className="text-foreground">Carga esto antes de liquidar vacaciones nuevas.</strong>{' '}
-              Si liquidas primero unas de este año, el sistema las imputa al período más
-              viejo y los saldos quedan inflados.
-            </p>
-            <p>Un registro por cada vacación disfrutada. Cuatro salidas son cuatro registros.</p>
-            <p>
-              Si solo sabes el año, usa una fecha razonable de ese año y anótalo en la
-              observación. Lo que importa es que sea anterior a la primera nómina cargada.
-            </p>
-            <p>
-              <strong className="text-foreground">Quien nunca salió a vacaciones no se toca.</strong>{' '}
-              Su saldo vencido es real, y el módulo lo muestra a propósito.
-            </p>
-          </div>
+      <div className="flex gap-2 rounded-lg bg-info-soft p-3 text-sm text-foreground">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-info" strokeWidth={2} />
+        <div className="space-y-1.5">
+          <p>
+            <strong className="font-semibold">Carga esto antes de liquidar vacaciones nuevas.</strong>{' '}
+            Si liquidas primero unas de este año, el sistema las imputa al período más
+            viejo y los saldos quedan inflados.
+          </p>
+          <p>Un registro por cada vacación disfrutada. Cuatro salidas son cuatro registros.</p>
+          <p>
+            Si solo sabes el año, usa una fecha razonable de ese año y anótalo en la
+            observación. Lo que importa es que sea anterior a la primera nómina cargada.
+          </p>
+          <p>
+            <strong className="font-semibold">Quien nunca salió a vacaciones no se toca.</strong>{' '}
+            Su saldo vencido es real, y el módulo lo muestra a propósito.
+          </p>
+        </div>
       </div>
 
       {!puedeCargar && (
@@ -283,6 +283,7 @@ export default function CargaHistoricoVacaciones() {
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
               <Input
                 type="search"
+                aria-label="Buscar colaborador"
                 placeholder="Buscar colaborador"
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
@@ -315,10 +316,10 @@ export default function CargaHistoricoVacaciones() {
                       {getIniciales(f.empleado.nombre_completo)}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">
+                      <p className="text-sm font-medium text-foreground">
                         {f.empleado.nombre_completo}
                       </p>
-                      <p className="truncate text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         CC {f.empleado.documento} · Ingreso {formatFecha(f.empleado.fecha_ingreso)}
                       </p>
                     </div>
@@ -503,8 +504,8 @@ export default function CargaHistoricoVacaciones() {
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label>Días en dinero <span className="font-normal text-muted-foreground">(opcional)</span></Label>
-                      <Input
+                      <Label htmlFor="cargahisto-dias-dinero">Días en dinero <span className="font-normal text-muted-foreground">(opcional)</span></Label>
+                      <Input id="cargahisto-dias-dinero"
                         type="number" min={0} max={30} step={0.5} placeholder="0"
                         disabled={!puedeCargar}
                         value={form.diasDinero}
@@ -512,8 +513,8 @@ export default function CargaHistoricoVacaciones() {
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label>Valor pagado <span className="font-normal text-muted-foreground">(opcional)</span></Label>
-                      <Input
+                      <Label htmlFor="cargahisto-valor-pagado">Valor pagado <span className="font-normal text-muted-foreground">(opcional)</span></Label>
+                      <Input id="cargahisto-valor-pagado"
                         type="number" min={0} max={MAX_VALOR_PAGADO} step={0.01} placeholder="0"
                         disabled={!puedeCargar}
                         value={form.valorPagado}
@@ -527,8 +528,8 @@ export default function CargaHistoricoVacaciones() {
                       </p>
                     </div>
                     <div className="space-y-1.5">
-                      <Label>Fecha de pago <span className="font-normal text-muted-foreground">(opcional)</span></Label>
-                      <Input
+                      <Label htmlFor="cargahisto-fecha-pago">Fecha de pago <span className="font-normal text-muted-foreground">(opcional)</span></Label>
+                      <Input id="cargahisto-fecha-pago"
                         type="date" max={HOY()} disabled={!puedeCargar}
                         value={form.fechaPago}
                         onChange={(e) => set('fechaPago', e.target.value)}
@@ -537,8 +538,8 @@ export default function CargaHistoricoVacaciones() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label>Observación <span className="font-normal text-muted-foreground">(opcional)</span></Label>
-                    <Textarea
+                    <Label htmlFor="cargahisto-observacion">Observación <span className="font-normal text-muted-foreground">(opcional)</span></Label>
+                    <Textarea id="cargahisto-observacion"
                       rows={2} disabled={!puedeCargar}
                       placeholder="Cargado desde archivo físico, período 2021"
                       value={form.observacion}
@@ -590,11 +591,7 @@ export default function CargaHistoricoVacaciones() {
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={anulando}>Cancelar</AlertDialogCancel>
-            <Button
-              onClick={anular}
-              disabled={anulando}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
+            <Button variant="destructive" onClick={anular} disabled={anulando}>
               {anulando && <Loader2 className="animate-spin" strokeWidth={2} />}
               Anular
             </Button>

@@ -102,7 +102,7 @@ export function Eyebrow({ children, className }: { children: ReactNode; classNam
 }
 
 /** Clases compartidas para tablas a mano. La alineación la pone cada columna. */
-export const thead = 'bg-muted/60 text-[13px] font-medium text-muted-foreground';
+export const thead = 'whitespace-nowrap bg-muted/60 text-[13px] font-medium text-muted-foreground';
 export const th = 'px-4 py-2.5 font-semibold';
 export const td = 'px-4 py-3';
 

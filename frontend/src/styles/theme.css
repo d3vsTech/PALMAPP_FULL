@@ -653,7 +653,7 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; touch-act
   [data-slot="radio-group-item"] { width: 24px; height: 24px; }
   [data-slot="switch"] { height: 28px; width: 50px; }
   [data-slot="switch"] > span { width: 24px; height: 24px; }
-  [data-slot="switch"][data-state="checked"] > span { transform: translateX(22px); }
+  [data-slot="switch"][data-state="checked"] > span { translate: 22px 0; transform: none; }
 
   /* Opciones de listas desplegables y menús */
   [data-slot="select-item"], [data-slot="dropdown-menu-item"], [data-slot="command-item"], [role="option"], [role="menuitem"] {
@@ -897,7 +897,7 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; touch-act
   /* Dentro de una tarjeta llega hasta sus bordes */
   [data-slot="card-content"] .barra-acciones { margin-inline: -1.5rem; }
   .barra-acciones > div { display: flex; }
-  .barra-acciones button { width: 100%; height: 2.75rem; padding-inline: 0.5rem; }
+  .barra-acciones button { width: 100%; height: auto; min-height: 2.75rem; padding-inline: 0.5rem; white-space: normal; line-height: 1.15; }
   /* Solo las flechas conservan su ícono: el texto necesita el espacio */
   .barra-acciones button:not(:has(.lucide-arrow-left, .lucide-arrow-right)) svg { display: none; }
 

@@ -850,6 +850,15 @@ export default function LiquidarColaborador() {
                           ) : cat.filas.some((f) => f.peso_kg !== undefined) && (
                             <th className={`${th} text-right`}>Peso (kg)</th>
                           )}
+                          {/* Valor bruto de la cosecha, como en el diseno. */}
+                          {cat.filas.some((f) => f.total_cosecha != null) && (
+                            <th
+                              className={`${th} hidden text-right lg:table-cell`}
+                              title="Valor bruto de la cosecha. Si hubo cuadrilla, es del grupo, no del colaborador."
+                            >
+                              Total cosecha
+                            </th>
+                          )}
                           {cat.filas.some((f) => f.palmas !== undefined) && (
                             <th className={`${th} text-right`}>Palmas</th>
                           )}
@@ -943,6 +952,13 @@ export default function LiquidarColaborador() {
                             ) : cat.filas.some((x) => x.peso_kg !== undefined) && (
                               <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{f.peso_kg ?? '-'}</td>
                             )}
+                            {cat.filas.some((x) => x.total_cosecha != null) && (
+                              <td className="hidden whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-muted-foreground lg:table-cell">
+                                {f.total_cosecha != null
+                                  ? `$${Number(f.total_cosecha).toLocaleString('es-CO', { maximumFractionDigits: 2 })}`
+                                  : '-'}
+                              </td>
+                            )}
                             {cat.filas.some((x) => x.palmas !== undefined) && (
                               <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{f.palmas ?? '-'}</td>
                             )}
@@ -972,6 +988,13 @@ export default function LiquidarColaborador() {
                           {conPrecio && <td className={cf}></td>}
                           {conPeso && (
                             <td className={`${cf} text-right tabular-nums`}>{cat.subtotal_peso ?? ''}</td>
+                          )}
+                          {cat.filas.some((x) => x.total_cosecha != null) && (
+                            <td className={`${cf} hidden text-right tabular-nums lg:table-cell`}>
+                              {`$${cat.filas
+                                .reduce((suma, x) => suma + Number(x.total_cosecha ?? 0), 0)
+                                .toLocaleString('es-CO', { maximumFractionDigits: 2 })}`}
+                            </td>
                           )}
                           {cat.filas.some((x) => x.palmas !== undefined) && (
                             <td className={`${cf} text-right tabular-nums`}>{cat.subtotal_palmas ?? ''}</td>

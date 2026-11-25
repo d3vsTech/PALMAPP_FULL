@@ -23,7 +23,6 @@ import StatStrip from '../../../components/common/StatStrip';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
 import { Label } from '../../../components/ui/label';
-import { Checkbox } from '../../../components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -31,14 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../../components/ui/select';
-import {
-  AlertTriangle,
-  ArrowRight,
-  CheckCircle2,
-  Info,
-  Loader2,
-  Upload,
-} from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowRight, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../../contexts/AuthContext';
 import {
@@ -62,13 +54,18 @@ import {
 import { descargarBlob, fmtCOP, fmtFecha } from '../final/comunes';
 import {
   Aviso,
+  BadgeDetectados,
   BadgeEstadoFila,
+  BarraSubida,
+  CasillaSobrescribir,
+  ExitoCargue,
   TD,
   TH,
   THEAD,
   BotonesPlantilla,
   CabecerasIgnoradas,
   CeldaColaborador,
+  CeldaObservacion,
   EstadoValidacion,
   IncidenciasFila,
   PasoCard,
@@ -252,7 +249,7 @@ export default function CargaHistoricoVacacionesArchivo() {
         backTo="/liquidaciones?tab=vacaciones"
         eyebrow="Vacaciones"
         title="Cargar histórico de vacaciones"
-        description="Registre las vacaciones que sus colaboradores ya disfrutaron antes de usar el sistema. Un archivo por año de inicio del disfrute."
+        description="Registra las vacaciones que tus colaboradores ya disfrutaron antes de usar el sistema. Un archivo por año de inicio del disfrute."
       />
 
       {/* Paso 1: plantilla. El año no va dentro del archivo. */}
@@ -260,6 +257,7 @@ export default function CargaHistoricoVacacionesArchivo() {
         n={1}
         titulo="Descarga la plantilla"
         subtitulo="Prepara tus datos con las columnas que espera el sistema."
+        contenidoClassName="space-y-2"
         accion={
           <BotonesPlantilla
             descargando={descargandoPlantilla}
@@ -267,14 +265,13 @@ export default function CargaHistoricoVacacionesArchivo() {
           />
         }
       >
-        <VistaPreviaPlantilla columnas={COLUMNAS_PLANTILLA} filas={FILAS_EJEMPLO} />
+        <VistaPreviaPlantilla columnas={COLUMNAS_PLANTILLA} filas={FILAS_EJEMPLO} formatos=".xlsx, .xls y .csv" />
 
         <p className="text-xs text-muted-foreground">
           Basta con una de <strong className="text-foreground">fecha_fin</strong> o{' '}
           <strong className="text-foreground">dias_habiles</strong>: la otra la calcula el sistema
-          con el calendario de festivos. Si vienen las dos, manda el archivo. Formatos aceptados:{' '}
-          <strong className="text-foreground">.xlsx, .xls, .csv</strong>. Las fechas se leen como
-          día/mes: <strong className="text-foreground">07/10/2024 es el 7 de octubre</strong>.
+          con el calendario de festivos. Si vienen las dos, manda el archivo. Las fechas se leen
+          como día/mes: <strong className="text-foreground">07/10/2024 es el 7 de octubre</strong>.
         </p>
       </PasoCard>
 
@@ -302,6 +299,9 @@ export default function CargaHistoricoVacacionesArchivo() {
               ))}
             </SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground">
+            El de la fecha de inicio del disfrute. El año no va dentro del archivo.
+          </p>
         </div>
 
         <ZonaArchivo
@@ -309,6 +309,7 @@ export default function CargaHistoricoVacacionesArchivo() {
           analisis={analisis?.archivo}
           inputRef={inputRef}
           accept={ACCEPT_ARCHIVO}
+          bloqueado={cargando}
           onArchivo={elegirArchivo}
           onQuitar={limpiar}
           detalle={
@@ -332,7 +333,7 @@ export default function CargaHistoricoVacacionesArchivo() {
         {/* Sin calendario de un año el sistema no puede derivar ni comparar
             días: conviene decirlo antes de que el usuario vea los errores. */}
         {(analisis?.parametros.anios_sin_calendario.length ?? 0) > 0 && (
-          <Aviso tono="warning" icono={Info}>
+          <Aviso tono="warning" icono={AlertTriangle}>
             No hay calendario de festivos de{' '}
             {analisis!.parametros.anios_sin_calendario.join(', ')}. Las filas que traigan fecha
             fin y días hábiles se cargan igual; las que dejen una de las dos por calcular dan
@@ -346,7 +347,9 @@ export default function CargaHistoricoVacacionesArchivo() {
         <PasoCard
           n={3}
           titulo="Revisa los datos"
-          subtitulo="Confirma que todo esté bien antes de cargarlo."
+          subtitulo="Confirma que todo esté bien antes de subirlo."
+          accion={<BadgeDetectados total={analisis.archivo.filas_leidas} />}
+          contenidoClassName="space-y-6"
         >
             <StatStrip
               items={[
@@ -373,27 +376,21 @@ export default function CargaHistoricoVacacionesArchivo() {
                 key={`${a.code}-${i}`}
                 className="flex items-start gap-2 text-sm text-muted-foreground"
               >
-                <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                <Info className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
                 {a.mensaje}
               </p>
             ))}
 
             {hayYaCargados && (
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg bg-warning-soft p-4">
-                <Checkbox
-                  checked={sobrescribir}
-                  onCheckedChange={(v) => cambiarSobrescribir(v === true)}
-                  className="mt-0.5"
-                />
-                <div>
-                  <p className="text-sm font-medium text-foreground">Reemplazar las vacaciones ya cargadas</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Hay fechas que cruzan una vacación histórica ya registrada. La anterior se
-                    borra y la nueva queda con otro número. Nunca se toca una vacación liquidada
-                    por el sistema. Sin marcar esta casilla el archivo no se puede cargar.
-                  </p>
-                </div>
-              </label>
+              <CasillaSobrescribir
+                checked={sobrescribir}
+                onChange={cambiarSobrescribir}
+                titulo="Reemplazar las vacaciones ya cargadas"
+              >
+                Hay fechas que cruzan una vacación histórica ya registrada. La anterior se
+                borra y la nueva queda con otro número. Nunca se toca una vacación liquidada
+                por el sistema. Sin marcar esta casilla el archivo no se puede subir.
+              </CasillaSobrescribir>
             )}
 
             <TablaFilasVacaciones filas={analisis.filas} />
@@ -403,41 +400,31 @@ export default function CargaHistoricoVacacionesArchivo() {
             <PanelSaldos colaboradores={analisis.colaboradores} cargado={cargado} />
 
             {hayErrores && (
-              <Aviso tono="destructive" icono={AlertTriangle}>
+              <Aviso tono="destructive" icono={AlertCircle}>
                 Hay {resumen.con_error} fila{resumen.con_error === 1 ? '' : 's'} con error. El
-                cargue es todo o nada: corrija el archivo y vuelva a subirlo.
+                cargue es todo o nada: corrige el archivo y vuelve a subirlo.
               </Aviso>
             )}
 
             {cargado ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-success-soft p-4">
-                <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-                  <CheckCircle2 className="h-4 w-4 text-success" strokeWidth={2} />
-                  Vacaciones de {analisis.anio} cargadas.
-                </p>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => navigate('/liquidaciones?tab=vacaciones')}>
-                    Ver turnos pendientes
-                  </Button>
-                  <Button size="sm" onClick={limpiar}>
-                    Cargar otro año
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex justify-end">
-                <Button
-                  onClick={() => void cargar()}
-                  disabled={!listoParaCargar || !puedeCargar}
-                >
-                  {cargando ? (
-                    <Loader2 className="animate-spin" strokeWidth={2} />
-                  ) : (
-                    <Upload strokeWidth={2} />
-                  )}
-                  Cargar {aCargar} vacación{aCargar === 1 ? '' : 'es'}
+              <ExitoCargue total={aCargar} modulo="vacaciones">
+                <Button variant="outline" onClick={limpiar}>
+                  Cargar otro archivo
                 </Button>
-              </div>
+                <Button onClick={() => navigate('/liquidaciones?tab=vacaciones')}>
+                  Ir a vacaciones
+                </Button>
+              </ExitoCargue>
+            ) : (
+              <BarraSubida
+                total={aCargar}
+                modulo="vacaciones"
+                bloqueado={hayErrores}
+                cargando={cargando}
+                deshabilitado={!listoParaCargar || !puedeCargar}
+                onCancelar={limpiar}
+                onSubir={() => void cargar()}
+              />
             )}
         </PasoCard>
       )}
@@ -451,8 +438,8 @@ export default function CargaHistoricoVacacionesArchivo() {
         <CardContent className="space-y-5">
           <div className="space-y-2 text-sm text-muted-foreground">
             <Regla n={1}>
-              <strong className="text-foreground">Cargue el histórico antes</strong> de liquidar
-              vacaciones nuevas en la pestaña. Si liquida primero una de este año, el sistema la
+              <strong className="text-foreground">Carga el histórico antes</strong> de liquidar
+              vacaciones nuevas en la pestaña. Si liquidas primero una de este año, el sistema la
               imputa al período más viejo y los saldos quedan corridos.
             </Regla>
             <Regla n={2}>
@@ -516,7 +503,7 @@ export default function CargaHistoricoVacacionesArchivo() {
               una vacación suelta que aparece después del cargue. */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
             <p className="text-xs text-muted-foreground">
-              ¿Es una sola vacación? Regístrela a mano sin preparar un archivo.
+              ¿Es una sola vacación? Regístrala a mano sin preparar un archivo.
             </p>
             <Button
               variant="outline"
@@ -552,18 +539,13 @@ function TablaFilasVacaciones({ filas }: { filas: FilaHistoricoVacaciones[] }) {
       <table className="w-full text-sm">
         <thead className={THEAD}>
           <tr>
-            <th className={TH}>Fila</th>
-            <th className={TH}>
-              Colaborador
-            </th>
+            <th className={`${TH} w-8`}>#</th>
+            <th className={TH}>Colaborador</th>
             <th className={TH}>Disfrute</th>
             <th className={`${TH} text-center`}>Días</th>
-            <th className={`${TH} hidden md:table-cell`}>
-              Se imputa a
-            </th>
-            <th className={`${TH} hidden text-right lg:table-cell`}>
-              Valor pagado
-            </th>
+            <th className={`${TH} hidden md:table-cell`}>Se imputa a</th>
+            <th className={`${TH} hidden text-right lg:table-cell`}>Valor pagado</th>
+            <th className={`${TH} hidden xl:table-cell`}>Observación</th>
             <th className={TH}>Estado</th>
           </tr>
         </thead>
@@ -575,7 +557,7 @@ function TablaFilasVacaciones({ filas }: { filas: FilaHistoricoVacaciones[] }) {
                 key={f.fila}
                 className={f.estado === 'ERROR' ? 'bg-destructive-soft/40' : undefined}
               >
-                <td className={`${TD} text-muted-foreground`}>{f.fila}</td>
+                <td className={`${TD} text-xs text-muted-foreground`}>{f.fila}</td>
 
                 <td className={TD}>
                   <CeldaColaborador
@@ -658,6 +640,10 @@ function TablaFilasVacaciones({ filas }: { filas: FilaHistoricoVacaciones[] }) {
                   )}
                 </td>
 
+                <td className={`${TD} hidden xl:table-cell`}>
+                  <CeldaObservacion texto={f.observacion} />
+                </td>
+
                 <td className={TD}>
                   <BadgeEstadoFila estado={f.estado}>
                     {ESTADO_FILA_LABEL[f.estado]}
@@ -734,23 +720,17 @@ function PanelSaldos({
   return (
     <div className="space-y-2">
       <h4 className="text-sm font-semibold text-foreground">
-        Saldo por colaborador {cargado ? '(ya aplicado)' : '(simulado)'}
+        {cargado ? 'Saldo por colaborador ya aplicado' : 'Saldo simulado por colaborador'}
       </h4>
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-sm">
           <thead className={THEAD}>
             <tr>
-              <th className={TH}>
-                Colaborador
-              </th>
-              <th className={`${TH} hidden sm:table-cell`}>
-                Filas
-              </th>
+              <th className={TH}>Colaborador</th>
+              <th className={`${TH} hidden sm:table-cell`}>Filas</th>
               <th className={`${TH} text-right`}>Antes</th>
               <th className={`${TH} text-center`} />
-              <th className={`${TH} text-right`}>
-                Después
-              </th>
+              <th className={`${TH} text-right`}>Después</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">

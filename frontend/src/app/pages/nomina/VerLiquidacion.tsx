@@ -192,7 +192,9 @@ export default function VerLiquidacion() {
               <CardTitle>Devengado</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <FilaMonto label="Sueldo base" value={fmt(liquidacion.total_jornales)} />
+              {liquidacion.total_jornales > 0 && (
+                <FilaMonto label="Sueldo base" value={fmt(liquidacion.total_jornales)} />
+              )}
               {liquidacion.total_cosecha > 0 && (
                 <FilaMonto label="Cosecha" value={fmt(liquidacion.total_cosecha)} />
               )}

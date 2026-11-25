@@ -11,7 +11,9 @@ import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
-import { Plus, FileText, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  Plus, FileText, Loader2, ChevronLeft, ChevronRight, Wallet, FilePen, BadgeCheck, CheckCircle2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -24,7 +26,7 @@ import {
   type ResumenLiquidacionFinal,
   ESTADO_LIQUIDACION_LABEL,
 } from '../../../api/liquidacionFinal';
-import { fmtCOP, fmtFecha, mensajeErrorLiquidacion } from './final/comunes';
+import { ESTADO_BADGE, fmtCOP, fmtFecha, mensajeErrorLiquidacion } from './final/comunes';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
@@ -32,16 +34,6 @@ import StatStrip from '../../components/common/StatStrip';
 import SeccionEncabezado from '../../components/liquidaciones/SeccionEncabezado';
 import FiltrosFila from '../../components/liquidaciones/FiltrosFila';
 import VacioCard from '../../components/liquidaciones/VacioCard';
-
-type VarianteBadge = 'secondary' | 'info' | 'success' | 'destructive';
-
-/** Color del estado, igual que los badges del diseño. */
-const ESTADO_VARIANTE: Record<EstadoLiquidacionFinal, VarianteBadge> = {
-  BORRADOR: 'secondary',
-  APROBADA: 'info',
-  PAGADA: 'success',
-  ANULADA: 'destructive',
-};
 
 const POR_PAGINA = 15;
 
@@ -158,10 +150,10 @@ export default function LiquidacionFinalTab() {
       {/* Cards del resumen (§11.2) */}
       <StatStrip
         items={[
-          { label: 'Monto por pagar', value: fmtCOP(resumen?.monto_por_pagar ?? 0), note: 'Aprobadas sin pagar' },
-          { label: 'Borradores', value: resumen?.borradores ?? 0, note: 'Sin aprobar' },
-          { label: 'Aprobadas', value: resumen?.aprobadas ?? 0, note: 'Pendientes de pago' },
-          { label: 'Pagadas', value: resumen?.pagadas ?? 0, note: 'Finalizadas' },
+          { label: 'Monto por pagar', value: fmtCOP(resumen?.monto_por_pagar ?? 0), note: 'Liquidaciones aprobadas', icon: Wallet, tone: 'green' },
+          { label: 'Borradores', value: resumen?.borradores ?? 0, note: 'Sin aprobar', icon: FilePen, tone: 'amber' },
+          { label: 'Aprobadas', value: resumen?.aprobadas ?? 0, note: 'Pendientes de pago', icon: BadgeCheck, tone: 'blue' },
+          { label: 'Pagadas', value: resumen?.pagadas ?? 0, note: 'Finalizadas', icon: CheckCircle2, tone: 'green' },
         ]}
       />
 
@@ -169,7 +161,7 @@ export default function LiquidacionFinalTab() {
         <FiltrosFila
           busqueda={busqueda}
           onBusqueda={setBusqueda}
-          placeholder="Nombre, cédula o cargo"
+          placeholder="Buscar colaborador"
           activos={hayFiltros}
           resultados={meta?.total}
           onLimpiar={limpiarFiltros}
@@ -181,7 +173,7 @@ export default function LiquidacionFinalTab() {
               setPagina(1);
             }}
           >
-            <SelectTrigger aria-label="Estado" className="w-full sm:w-44">
+            <SelectTrigger aria-label="Estado" className="w-full sm:w-52">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -253,7 +245,7 @@ export default function LiquidacionFinalTab() {
           <Card className="gap-0 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-muted/60 text-[13px] font-medium text-muted-foreground">
+                <thead className="whitespace-nowrap bg-muted/60 text-[13px] font-medium text-muted-foreground">
                   <tr>
                     <th className="px-5 py-2.5 text-left font-semibold">Colaborador</th>
                     <th className="hidden px-4 py-2.5 text-left font-semibold lg:table-cell">Comprobante</th>
@@ -269,7 +261,7 @@ export default function LiquidacionFinalTab() {
                     const to = `/liquidaciones/liquidacion-final/${liq.id}`;
                     const estadoBadge = (
                       <span className="flex flex-wrap items-center gap-1">
-                        <Badge variant={ESTADO_VARIANTE[liq.estado]}>
+                        <Badge variant={ESTADO_BADGE[liq.estado]}>
                           {ESTADO_LIQUIDACION_LABEL[liq.estado]}
                         </Badge>
                         {/* PR-L14: una PAGADA cargada desde archivo no admite las mismas acciones. */}
@@ -278,7 +270,7 @@ export default function LiquidacionFinalTab() {
                     );
                     return (
                       <tr key={liq.id} className="transition-colors hover:bg-muted/40">
-                        <td className="px-5 py-3">
+                        <td className="min-w-[12rem] px-5 py-3">
                           <Link to={to} className="font-semibold text-foreground hover:text-primary">
                             {liq.empleado.nombre_completo}
                           </Link>
@@ -291,7 +283,7 @@ export default function LiquidacionFinalTab() {
                           {liq.numero_comprobante}
                         </td>
                         <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
-                          {liq.motivo_etiqueta ?? '—'}
+                          {liq.motivo_etiqueta ?? 'Sin motivo'}
                           {liq.indemniza && (
                             <span className="block text-xs text-muted-foreground">Con indemnización</span>
                           )}

@@ -1254,9 +1254,9 @@ export default function NuevaNominaWizard() {
                 <CardDescription>Define el mes, la quincena y las fechas de corte.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Periodicidad viene de Configuración → Parámetros de Nómina
-                    y no se muestra: es fija para toda la finca. */}
-                <div className={`grid gap-4 ${periodicidad === 'QUINCENAL' ? 'md:grid-cols-2' : ''}`}>
+                {/* La periodicidad se muestra como en el diseño, pero fija: la
+                    define Configuración → Parámetros de Nómina para toda la finca. */}
+                <div className={`grid gap-4 ${periodicidad === 'QUINCENAL' ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
                   <div className="space-y-2">
                     <Label htmlFor="mes">Mes {req}</Label>
                     <Select value={mes} onValueChange={setMes}>
@@ -1267,6 +1267,20 @@ export default function NuevaNominaWizard() {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="periodicidad">Periodicidad {req}</Label>
+                    <Select value={periodicidad} disabled>
+                      <SelectTrigger id="periodicidad"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="QUINCENAL">Quincenal</SelectItem>
+                        <SelectItem value="MENSUAL">Mensual</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Se configura en Configuración → Parámetros de nómina.
+                    </p>
                   </div>
 
                   {periodicidad === 'QUINCENAL' && (
@@ -1478,6 +1492,7 @@ export default function NuevaNominaWizard() {
                           <th className={`${th} text-left`}>Nombre</th>
                           <th className={`${th} hidden text-left md:table-cell`}>Documento</th>
                           <th className={`${th} hidden text-left sm:table-cell`}>Cargo</th>
+                          <th className={`${th} hidden text-right lg:table-cell`}>Salario base</th>
                           <th className={`${th} pr-5 text-left`}>Modalidad</th>
                         </tr>
                       </thead>
@@ -1493,7 +1508,7 @@ export default function NuevaNominaWizard() {
                               className={`cursor-pointer transition-colors hover:bg-muted/40 ${isSelected ? 'bg-primary-soft/60' : ''}`}
                               {...comoBoton(alternar)}
                             >
-                              <td className={`${td} pl-5`} onClick={(e) => e.stopPropagation()}>
+                              <td className={`celda-seleccion ${td} pl-5`} onClick={(e) => e.stopPropagation()}>
                                 <Checkbox
                                   checked={isSelected}
                                   aria-label={`Seleccionar a ${nombres} ${apellidos}`}
@@ -1511,6 +1526,10 @@ export default function NuevaNominaWizard() {
                               </td>
                               <td className={`${td} hidden text-muted-foreground md:table-cell`}>{empleado.documento || '—'}</td>
                               <td className={`${td} hidden text-muted-foreground sm:table-cell`}>{empleado.cargo || 'Sin cargo'}</td>
+                              {/* Salario base del maestro, como en el diseño. */}
+                              <td className={`${td} hidden text-right tabular-nums text-muted-foreground lg:table-cell`}>
+                                {empleado.salario_base > 0 ? cop(empleado.salario_base) : '—'}
+                              </td>
                               <td className={`${td} pr-5`}>
                                 <Badge variant="outline">
                                   {empleado.modalidad_pago === 'PRODUCCION'
@@ -1633,7 +1652,7 @@ export default function NuevaNominaWizard() {
                               className={`cursor-pointer transition-colors hover:bg-muted/40 ${todosSeleccionados ? 'bg-primary-soft/60' : ''}`}
                               {...comoBoton(toggleEmpresa)}
                             >
-                              <td className={`${td} pl-5`} onClick={(e) => e.stopPropagation()}>
+                              <td className={`celda-seleccion ${td} pl-5`} onClick={(e) => e.stopPropagation()}>
                                 <Checkbox
                                   checked={todosSeleccionados || (algunosSeleccionados ? 'indeterminate' : false)}
                                   aria-label={`Seleccionar ${g.razon_social}`}
@@ -1963,7 +1982,7 @@ export default function NuevaNominaWizard() {
                                         </Badge>
                                       )}
                                     </div>
-                                    <p className="truncate text-xs text-muted-foreground">{d.cargo}</p>
+                                    <p className="break-words text-xs text-muted-foreground">{d.cargo}</p>
                                   </div>
                                 </div>
                                 {(() => {
@@ -2409,7 +2428,7 @@ export default function NuevaNominaWizard() {
                         <p className="break-words text-sm font-medium text-foreground">{c.nombre}</p>
                         <Badge variant="secondary">{esTercero ? 'Tercero' : 'Colaborador'}</Badge>
                       </div>
-                      <p className="truncate text-xs text-muted-foreground">
+                      <p className="break-words text-xs text-muted-foreground">
                         {c.cargo ?? 'Sin cargo'}
                         {esTercero && c.tercero ? ` · ${c.tercero}` : ''}
                       </p>

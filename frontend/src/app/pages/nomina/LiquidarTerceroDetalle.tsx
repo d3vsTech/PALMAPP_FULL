@@ -514,12 +514,12 @@ export default function LiquidarTerceroDetalle() {
             </span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="truncate">{nombre}</h3>
+                <h3 className="break-words">{nombre}</h3>
                 <Badge variant={estaPagada ? 'success' : 'warning'}>
                   {estaPagada ? 'Liquidado' : 'Pendiente'}
                 </Badge>
               </div>
-              <p className="truncate text-xs text-muted-foreground">
+              <p className="break-words text-xs text-muted-foreground">
                 NIT {nit}
                 {contacto && ` · ${contacto}`}
               </p>
@@ -612,7 +612,7 @@ export default function LiquidarTerceroDetalle() {
                       : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2} />}
                     <div className="min-w-0">
                       <p className="break-words text-sm font-semibold text-foreground">{o.nombre_completo}</p>
-                      <p className="truncate text-xs text-muted-foreground">
+                      <p className="break-words text-xs text-muted-foreground">
                         {o.cargo || '—'} · {o.cedula}
                       </p>
                     </div>
@@ -862,9 +862,9 @@ export default function LiquidarTerceroDetalle() {
               {descuentosActa.map((d) => (
                 <div key={d.id} className="flex items-center justify-between gap-3 text-sm">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-foreground">{d.concepto_nombre}</p>
+                    <p className="break-words text-foreground">{d.concepto_nombre}</p>
                     {d.observacion && (
-                      <p className="truncate text-xs text-muted-foreground">{d.observacion}</p>
+                      <p className="break-words text-xs text-muted-foreground">{d.observacion}</p>
                     )}
                   </div>
                   <span className="whitespace-nowrap font-medium tabular-nums text-foreground">

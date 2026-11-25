@@ -18,15 +18,29 @@ import {
 import { formatFecha } from '../../../utils/fecha';
 import { fmtCOP, fmtDias } from './comunes';
 
+// ── Fechas ───────────────────────────────────────────────────────────────────
+
+/** Formatos del diseño: 15/01/2026, 15 ene 2026 y 15 de enero de 2026. */
+export const fechaCorta = (f?: string | null) =>
+  formatFecha(f, { day: '2-digit', month: '2-digit', year: 'numeric' });
+export const fechaMes = (f?: string | null) =>
+  formatFecha(f, { day: '2-digit', month: 'short', year: 'numeric' });
+export const fechaLarga = (f?: string | null) =>
+  formatFecha(f, { day: '2-digit', month: 'long', year: 'numeric' });
+
 // ── Aviso ────────────────────────────────────────────────────────────────────
 
 type Tono = 'destructive' | 'warning' | 'info' | 'muted';
 
-const FONDO: Record<Tono, string> = {
-  destructive: 'bg-destructive-soft',
-  warning: 'bg-warning-soft',
-  info: 'bg-info-soft',
-  muted: 'bg-muted/60',
+/**
+ * Cajas del diseño de liquidaciones: el error de días de NuevaVacaciones, la
+ * alerta ámbar de Cesantías e Intereses y la nota legal gris.
+ */
+const CAJA: Record<Tono, string> = {
+  destructive: 'gap-2.5 border border-destructive/20 bg-destructive-soft text-destructive',
+  warning: 'gap-3 border border-warning/30 bg-warning-soft text-warning',
+  info: 'gap-3 bg-info-soft text-foreground',
+  muted: 'gap-3 bg-muted/60 text-foreground',
 };
 
 const ICONO: Record<Tono, string> = {
@@ -36,14 +50,14 @@ const ICONO: Record<Tono, string> = {
   muted: 'text-muted-foreground',
 };
 
-/** Caja de aviso del diseño: fondo suave, texto normal y solo el ícono con tono. */
+/** Caja de aviso: fondo suave, ícono arriba a la izquierda y texto en su tono. */
 export function Aviso({ tono, icono: Icono, children }: {
   tono: Tono;
   icono: LucideIcon;
   children: ReactNode;
 }) {
   return (
-    <div className={`flex gap-3 rounded-lg px-4 py-3 text-sm text-foreground ${FONDO[tono]}`}>
+    <div className={`flex items-start rounded-lg px-4 py-3 text-sm ${CAJA[tono]}`}>
       <Icono className={`mt-0.5 h-4 w-4 shrink-0 ${ICONO[tono]}`} strokeWidth={2} />
       <div className="min-w-0 space-y-1">{children}</div>
     </div>
@@ -89,8 +103,11 @@ export function Segmentado<T extends string>({ opciones, valor, onCambio, ariaLa
 
 // ── Pago anticipado ──────────────────────────────────────────────────────────
 
-/** Fecha, método y referencia del giro cuando se paga de una vez. */
-export function DatosPagoAnticipado({ fecha, onFecha, metodo, onMetodo, referencia, onReferencia, disabled }: {
+/**
+ * Fecha y método del giro cuando se paga de una vez. La referencia ya no se
+ * pide en pantalla: llega vacía, como cuando el usuario no la escribía.
+ */
+export function DatosPagoAnticipado({ fecha, onFecha, metodo, onMetodo, disabled }: {
   fecha: string;
   onFecha: (v: string) => void;
   metodo: MetodoPagoVacacion;
@@ -100,7 +117,7 @@ export function DatosPagoAnticipado({ fecha, onFecha, metodo, onMetodo, referenc
   disabled: boolean;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-5 rounded-lg bg-muted/60 p-4 sm:grid-cols-3">
+    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
       <div className="space-y-2">
         <Label htmlFor="vac-fecha-pago">Fecha de pago *</Label>
         <Input id="vac-fecha-pago" type="date" value={fecha} onChange={(e) => onFecha(e.target.value)} disabled={disabled} />
@@ -115,18 +132,6 @@ export function DatosPagoAnticipado({ fecha, onFecha, metodo, onMetodo, referenc
             <SelectItem value="CHEQUE">Cheque</SelectItem>
           </SelectContent>
         </Select>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="vac-referencia">
-          Referencia <span className="font-normal text-muted-foreground">(opcional)</span>
-        </Label>
-        <Input
-          id="vac-referencia"
-          placeholder="N.º de comprobante"
-          value={referencia}
-          onChange={(e) => onReferencia(e.target.value)}
-          disabled={disabled}
-        />
       </div>
     </div>
   );
@@ -161,7 +166,7 @@ export function RangoCalendario({ calendario, calculando, diasPago }: {
       <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
         <span className="flex items-center gap-2 font-medium text-foreground">
           <CalendarDays className="h-4 w-4 text-muted-foreground" strokeWidth={2} />
-          {formatFecha(calendario.fecha_inicio)} al {formatFecha(calendario.fecha_fin)}
+          {fechaCorta(calendario.fecha_inicio)} al {fechaCorta(calendario.fecha_fin)}
         </span>
         <span className="text-muted-foreground">{fmtDias(calendario.dias_habiles)} días hábiles</span>
         <span className="font-semibold text-foreground">
@@ -174,12 +179,12 @@ export function RangoCalendario({ calendario, calculando, diasPago }: {
         <p className="text-xs text-muted-foreground">
           No hábiles dentro del rango:{' '}
           {calendario.dias_no_habiles
-            .map((d) => `${formatFecha(d.fecha)} (${DIA_NO_HABIL_LABEL[d.motivo]})`)
+            .map((d) => `${fechaCorta(d.fecha)} (${DIA_NO_HABIL_LABEL[d.motivo]})`)
             .join(', ')}
         </p>
       )}
       <p className="text-xs text-muted-foreground">
-        Se regresa a trabajar el día hábil siguiente al {formatFecha(calendario.fecha_fin)}.
+        Se regresa a trabajar el día hábil siguiente al {fechaCorta(calendario.fecha_fin)}.
       </p>
     </div>
   );
@@ -198,12 +203,12 @@ export function ConsumoSaldo({ disfrute, dinero, disponibles }: {
   const pct = (total / disponibles) * 100;
   return (
     <div className="space-y-2 rounded-lg bg-muted/60 px-4 py-3">
-      <div className="flex flex-wrap justify-between gap-2 text-sm">
+      <div className="flex justify-between gap-2 text-sm">
         <span className="text-muted-foreground">
           Días a liquidar: <strong className="text-foreground">{fmtDias(total)}</strong> de{' '}
           <strong className="text-foreground">{fmtDias(disponibles)}</strong> disponibles
         </span>
-        <span className={`font-semibold tabular-nums ${excede ? 'text-destructive' : 'text-foreground'}`}>
+        <span className={`shrink-0 font-semibold tabular-nums ${excede ? 'text-destructive' : 'text-foreground'}`}>
           {Math.round(pct)} %
         </span>
       </div>
@@ -216,7 +221,7 @@ export function ConsumoSaldo({ disfrute, dinero, disponibles }: {
       <p className="text-xs text-muted-foreground">
         Disfrute: {fmtDias(disfrute)} días
         {dinero > 0 && ` · Dinero: ${fmtDias(dinero)} días`}
-        {' · '}Quedan: {fmtDias(Math.max(disponibles - total, 0))}
+        {' · '}Pendientes: {fmtDias(Math.max(disponibles - total, 0))}
       </p>
     </div>
   );
@@ -246,7 +251,7 @@ export function EstadoAjuste({ calculando, aplicado, sinDias, conError }: {
     return (
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Check className="h-3.5 w-3.5 text-success" />
-        El cálculo de abajo ya usa esta base. Confirme para guardarla con su motivo.
+        El cálculo de abajo ya usa esta base. Confirma para guardarla con su motivo.
       </p>
     );
   }
@@ -255,8 +260,8 @@ export function EstadoAjuste({ calculando, aplicado, sinDias, conError }: {
     <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
       <AlertTriangle className="h-3.5 w-3.5 text-warning" />
       {sinDias
-        ? 'Capture los días a liquidar: el recálculo sale con ellos.'
-        : 'El cálculo todavía no trae la base manual. Revise el motivo y los días.'}
+        ? 'Captura los días a liquidar: el recálculo sale con ellos.'
+        : 'El cálculo todavía no trae la base manual. Revisa el motivo y los días.'}
     </p>
   );
 }
@@ -296,7 +301,7 @@ export function PlanDePago({ preview }: { preview: ComprobanteVacaciones | null 
                 <p className="text-sm text-foreground">
                   {t.etiqueta || `Nómina ${t.nomina_id}`}
                   <span className="ml-2 text-xs text-muted-foreground">
-                    {formatFecha(t.fecha_desde)} al {formatFecha(t.fecha_hasta)} · {fmtDias(t.dias)} días
+                    {fechaCorta(t.fecha_desde)} al {fechaCorta(t.fecha_hasta)} · {fmtDias(t.dias)} días
                   </span>
                 </p>
                 <p className="text-xs text-muted-foreground">

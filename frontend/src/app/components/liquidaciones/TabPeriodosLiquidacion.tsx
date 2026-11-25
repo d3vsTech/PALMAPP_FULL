@@ -18,7 +18,7 @@ import {
 } from '../ui/alert-dialog';
 import {
   Plus, Search, Trash2, AlertTriangle, PiggyBank, Percent, Gift,
-  CheckCircle2, CalendarClock, CircleDollarSign, Loader2,
+  CheckCircle2, Landmark, CalendarClock, CircleDollarSign, Loader2,
 } from 'lucide-react';
 import StatusBadge from '../common/StatusBadge';
 import StatStrip from '../common/StatStrip';
@@ -35,12 +35,8 @@ import {
 } from '../../../api/liquidaciones';
 import type { ApiError } from '../../../api/client';
 import { formatFecha } from '../../utils/fecha';
-
-/** Las liquidaciones se pagan con centavos (2.168.589,72). */
-const fmtCOP = (n: number) =>
-  `$${Number(n ?? 0).toLocaleString('es-CO', { maximumFractionDigits: 2 })}`;
-
-const fmtMillones = (n: number) => `$${(Number(n ?? 0) / 1_000_000).toFixed(2)}M`;
+// Las liquidaciones se pagan con centavos (2.168.589,72): `cop` no redondea.
+import { cop } from '../../lib/formato';
 
 type TipoTab = 'CESANTIAS' | 'INTERESES_CESANTIAS' | 'PRIMA';
 
@@ -65,7 +61,7 @@ const TEXTOS: Record<TipoTab, {
     botonNuevo: 'Nuevo período de cesantías',
     ruta: '/liquidaciones/cesantias',
     cardTotal: 'Total cesantías',
-    cardTotalSub: 'Períodos cerrados',
+    cardTotalSub: 'Todos los períodos',
     cardPagado: 'Consignadas',
     cardPagadoSub: 'Giradas al fondo',
     cardPendienteSub: 'Sin consignar',
@@ -97,7 +93,7 @@ const TEXTOS: Record<TipoTab, {
     botonNuevo: 'Nuevo período de prima',
     ruta: '/liquidaciones/prima',
     cardTotal: 'Total prima',
-    cardTotalSub: 'Períodos cerrados',
+    cardTotalSub: 'Todos los períodos',
     cardPagado: 'Pagadas',
     cardPagadoSub: 'Pagadas al trabajador',
     cardPendienteSub: 'Sin pagar',
@@ -113,6 +109,7 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
   const txt = TEXTOS[tipo];
   const esPrima = tipo === 'PRIMA';
   const IconoTab = tipo === 'CESANTIAS' ? PiggyBank : esPrima ? Gift : Percent;
+  const IconoPagado = tipo === 'CESANTIAS' ? Landmark : CheckCircle2;
 
   const [filtroEstado, setFiltroEstado] = useState('todos');
   const [filtroBusqueda, setFiltroBusqueda] = useState('');
@@ -227,13 +224,13 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
 
       {/* Alerta vencimiento */}
       {alertaLimite && (
-        <div className="flex items-start gap-2 rounded-lg bg-warning-soft p-3 text-sm text-foreground">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+        <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-warning">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
           <span>
             {alertaLimite.vencida ? (
               <>La fecha límite de <strong>{alertaLimite.periodo.descripcion}</strong> ya venció ({formatFecha(alertaLimite.periodo.fecha_limite_legal)}). Riesgo de sanción moratoria.</>
             ) : (
-              <>Faltan <strong>{alertaLimite.periodo.dias_para_limite} días</strong> para la fecha límite de <strong>{alertaLimite.periodo.descripcion}</strong> ({formatFecha(alertaLimite.periodo.fecha_limite_operativa)}). Riesgo de sanción moratoria.</>
+              <>Faltan <strong>{alertaLimite.periodo.dias_para_limite} días</strong> para el vencimiento de <strong>{alertaLimite.periodo.descripcion}</strong> ({formatFecha(alertaLimite.periodo.fecha_limite_operativa)}). Riesgo de sanción moratoria.</>
             )}
           </span>
         </div>
@@ -241,16 +238,10 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
 
       <StatStrip
         items={[
-          { label: txt.cardTotal, value: fmtMillones(resumen?.total_liquidado ?? 0), note: txt.cardTotalSub, icon: IconoTab, tone: 'green' },
-          { label: txt.cardPagado, value: fmtMillones(resumen?.total_consignado ?? 0), note: txt.cardPagadoSub, icon: CheckCircle2, tone: 'green' },
+          { label: txt.cardTotal, value: cop(resumen?.total_liquidado), note: txt.cardTotalSub, icon: IconoTab, tone: 'green' },
+          { label: txt.cardPagado, value: cop(resumen?.total_consignado), note: txt.cardPagadoSub, icon: IconoPagado, tone: 'green' },
           { label: 'Períodos pendientes', value: resumen?.periodos_pendientes ?? 0, note: 'Por liquidar o girar', icon: CalendarClock, tone: 'amber' },
-          {
-            label: 'Monto pendiente',
-            value: pendiente > 0 ? <span className="text-destructive">{fmtMillones(pendiente)}</span> : fmtMillones(pendiente),
-            note: txt.cardPendienteSub,
-            icon: CircleDollarSign,
-            tone: 'amber',
-          },
+          { label: 'Monto pendiente', value: cop(pendiente), note: txt.cardPendienteSub, icon: CircleDollarSign, tone: 'amber' },
         ]}
       />
 
@@ -263,6 +254,17 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
           resultados={periodosFiltrados.length}
           onLimpiar={limpiarFiltros}
         >
+          {/* Prima: semestre antes que estado, como en el diseño. */}
+          {esPrima && (
+            <Select value={filtroSemestre} onValueChange={setFiltroSemestre}>
+              <SelectTrigger className="w-full sm:w-48" aria-label="Semestre"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos los semestres</SelectItem>
+                <SelectItem value="1">1.er semestre (junio)</SelectItem>
+                <SelectItem value="2">2.º semestre (diciembre)</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
           <Select value={filtroEstado} onValueChange={setFiltroEstado}>
             <SelectTrigger className="w-full sm:w-52" aria-label="Estado"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -271,16 +273,6 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
               <SelectItem value="CERRADA">Cerrada</SelectItem>
             </SelectContent>
           </Select>
-          {esPrima && (
-            <Select value={filtroSemestre} onValueChange={setFiltroSemestre}>
-              <SelectTrigger className="w-full sm:w-48" aria-label="Semestre"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos los semestres</SelectItem>
-                <SelectItem value="1">1.er semestre (ene a jun)</SelectItem>
-                <SelectItem value="2">2.º semestre (jul a dic)</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
         </FiltrosFila>
 
         {cargando ? (
@@ -292,7 +284,7 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
           <Card className="gap-0 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-muted/60 text-[13px] font-medium text-muted-foreground">
+                <thead className="whitespace-nowrap bg-muted/60 text-[13px] font-medium text-muted-foreground">
                   <tr>
                     <th className="px-5 py-2.5 text-left font-semibold">Período</th>
                     <th className={`${th} text-left`}>Estado</th>
@@ -312,7 +304,7 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
                     const to = `${txt.ruta}/${periodo.id}`;
                     return (
                       <tr key={periodo.id} className="transition-colors hover:bg-muted/40">
-                        <td className="px-5 py-3">
+                        <td className="min-w-[12rem] px-5 py-3">
                           <Link to={to} className="font-semibold text-foreground hover:text-primary">
                             {periodo.descripcion}
                           </Link>
@@ -332,7 +324,7 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
                           </div>
                         </td>
                         {esPrima && (
-                          <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
+                          <td className="hidden whitespace-nowrap px-4 py-3 text-muted-foreground sm:table-cell">
                             {periodo.semestre === 1 ? '1.er semestre' : periodo.semestre === 2 ? '2.º semestre' : '—'}
                           </td>
                         )}
@@ -342,21 +334,21 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
                             : <span className="text-muted-foreground">—</span>}
                         </td>
                         {esPrima && (
-                          <td className="hidden px-4 py-3 text-right tabular-nums text-muted-foreground lg:table-cell">
+                          <td className="hidden whitespace-nowrap px-4 py-3 text-right tabular-nums text-muted-foreground lg:table-cell">
                             {periodo.dias_promedio != null
-                              ? periodo.dias_promedio.toLocaleString('es-CO', { maximumFractionDigits: 1 })
-                              : '—'}
+                              ? `${periodo.dias_promedio.toLocaleString('es-CO', { maximumFractionDigits: 1 })} días`
+                              : <span className="font-normal text-muted-foreground">—</span>}
                           </td>
                         )}
-                        <td className="px-4 py-3 text-right font-semibold tabular-nums text-foreground">
-                          {borrador ? <span className="font-normal text-muted-foreground">—</span> : fmtCOP(periodo.total_liquidado)}
+                        <td className="whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums text-foreground">
+                          {borrador ? <span className="font-normal text-muted-foreground">—</span> : cop(periodo.total_liquidado)}
                         </td>
                         <td className="hidden px-4 py-3 text-right tabular-nums text-foreground lg:table-cell">
                           {periodo.total_consignado > 0
-                            ? fmtCOP(periodo.total_consignado)
+                            ? cop(periodo.total_consignado)
                             : <span className="text-muted-foreground">—</span>}
                         </td>
-                        <td className="hidden px-4 py-3 text-right tabular-nums sm:table-cell">
+                        <td className="hidden whitespace-nowrap px-4 py-3 text-right tabular-nums sm:table-cell">
                           {/* Operativa (último día hábil); la legal va en el tooltip. */}
                           <span
                             className={periodo.vencida && periodo.monto_pendiente > 0 ? 'font-semibold text-destructive' : 'text-muted-foreground'}
@@ -365,7 +357,7 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
                             {formatFecha(periodo.fecha_limite_operativa)}
                           </span>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="whitespace-nowrap px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
                             {/* Un histórico solo se ve y se elimina; liquidar,
                                 reabrir o pagar responden 409 PERIODO_HISTORICO. */}

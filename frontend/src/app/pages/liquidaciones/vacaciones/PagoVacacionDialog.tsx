@@ -117,14 +117,14 @@ export default function PagoVacacionDialog({ vacacion, onCerrar, onPagada }: Pro
 
         <div className="space-y-4">
           {totalDeducciones > 0 && vacacion && (
-            <div className="space-y-1.5 rounded-lg bg-muted/60 p-3 text-sm">
+            <div className="space-y-1.5 rounded-lg bg-muted/60 px-4 py-3 text-sm">
               <p className="flex justify-between gap-4">
                 <span className="text-muted-foreground">Total devengado</span>
                 <span className="tabular-nums text-foreground">{fmtCOP(vacacion.valor_total)}</span>
               </p>
               <p className="flex justify-between gap-4">
                 <span className="text-muted-foreground">Aportes del trabajador</span>
-                <span className="tabular-nums text-foreground">−{fmtCOP(totalDeducciones)}</span>
+                <span className="tabular-nums text-foreground">− {fmtCOP(totalDeducciones)}</span>
               </p>
               <p className="flex justify-between gap-4 border-t border-border pt-2 font-semibold text-foreground">
                 <span>Neto a girar</span>
@@ -164,9 +164,9 @@ export default function PagoVacacionDialog({ vacacion, onCerrar, onPagada }: Pro
               <Input id="pagovacaci-fecha-de-pago" type="date" value={fechaPago} onChange={(e) => setFechaPago(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Método</Label>
+              <Label htmlFor="pagovacaci-metodo">Método</Label>
               <Select value={metodo} onValueChange={(v) => setMetodo(v as MetodoPagoVacacion)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="pagovacaci-metodo"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {METODOS.map((m) => (
                     <SelectItem key={m.valor} value={m.valor}>{m.label}</SelectItem>
@@ -177,16 +177,17 @@ export default function PagoVacacionDialog({ vacacion, onCerrar, onPagada }: Pro
           </div>
 
           <div className="space-y-1.5">
-            <Label>Referencia <span className="font-normal text-muted-foreground">(opcional)</span></Label>
+            <Label htmlFor="pagovacaci-referencia">Referencia <span className="font-normal text-muted-foreground">(opcional)</span></Label>
             <Input
+              id="pagovacaci-referencia"
               placeholder="Número de transferencia o cheque"
               value={referencia} onChange={(e) => setReferencia(e.target.value)}
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label>Observación <span className="font-normal text-muted-foreground">(opcional)</span></Label>
-            <Textarea rows={2} value={observacion} onChange={(e) => setObservacion(e.target.value)} />
+            <Label htmlFor="pagovacaci-observacion">Observación <span className="font-normal text-muted-foreground">(opcional)</span></Label>
+            <Textarea id="pagovacaci-observacion" rows={2} value={observacion} onChange={(e) => setObservacion(e.target.value)} />
           </div>
         </div>
 

@@ -29,7 +29,7 @@ function FilaAusencia({ ausencia }: { ausencia: AusenciaBloqueante }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-card p-3">
       <div className="min-w-0">
-        <p className="truncate text-sm font-medium">
+        <p className="break-words text-sm font-medium">
           {ausencia.motivo?.nombre ?? ausencia.tipo}
         </p>
         <p className="text-xs text-muted-foreground">
@@ -51,7 +51,7 @@ function FilaVacacion({ vacacion }: { vacacion: VacacionBloqueante }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-card p-3">
       <div className="min-w-0">
-        <p className="truncate text-sm font-medium">
+        <p className="break-words text-sm font-medium">
           Solicitud de vacaciones {vacacion.numero_comprobante}
         </p>
         <p className="text-xs text-muted-foreground">

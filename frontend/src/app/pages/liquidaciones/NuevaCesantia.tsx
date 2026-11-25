@@ -16,7 +16,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
-import { Info, Loader2 } from 'lucide-react';
+import { AlertTriangle, Info, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '../../components/common/PageHeader';
 import SeccionCard from '../../components/liquidaciones/SeccionCard';
@@ -192,16 +192,19 @@ export default function NuevaCesantia() {
 
           {/* Fechas límite del año elegido (legal + operativa, §2.2) */}
           {fechaLimite && (
-            <div className="rounded-lg bg-warning-soft p-3 text-sm text-foreground">
-              Fecha límite de consignación: legal el{' '}
-              <strong>{formatFecha(fechaLimite.fecha_limite_legal, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
-              {!fechaLimite.es_dia_habil && (
-                <>
-                  {' '}(cae en día no hábil) · operativa el{' '}
-                  <strong>{formatFecha(fechaLimite.fecha_limite_operativa, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
-                </>
-              )}
-              . Las cesantías no consignadas a tiempo generan sanción moratoria.
+            <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-warning">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+              <p>
+                Fecha límite de consignación: legal el{' '}
+                <strong>{formatFecha(fechaLimite.fecha_limite_legal, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
+                {!fechaLimite.es_dia_habil && (
+                  <>
+                    {' '}(cae en día no hábil) · operativa el{' '}
+                    <strong>{formatFecha(fechaLimite.fecha_limite_operativa, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
+                  </>
+                )}
+                . Las cesantías no consignadas a tiempo generan sanción moratoria.
+              </p>
             </div>
           )}
 

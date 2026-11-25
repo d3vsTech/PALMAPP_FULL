@@ -28,6 +28,11 @@ interface StatStripProps {
   className?: string;
 }
 
+/** Un valor de texto largo, como un monto completo en pesos, no cabe a tamaño grande. */
+function esLargo(valor: ReactNode): boolean {
+  return (typeof valor === 'string' || typeof valor === 'number') && String(valor).length > 9;
+}
+
 function Trend({ trend, hero }: { trend: NonNullable<StatItem['trend']>; hero: boolean }) {
   const Icon = trend.direction === 'up' ? ArrowUpRight : trend.direction === 'down' ? ArrowDownRight : ArrowRight;
   const good = trend.positive ?? trend.direction === 'up';
@@ -95,7 +100,19 @@ export default function StatStrip({ items, loading = false, className }: StatStr
                   </span>
                 </dt>
                 <dd className="mt-2 flex items-baseline gap-1.5">
-                  <span className={cn('font-bold', hero ? 'text-3xl' : 'text-xl sm:text-3xl', hero ? 'text-white dark:text-foreground' : 'text-foreground')}>{k.value}</span>
+                  <span
+                    className={cn(
+                      'min-w-0 font-bold tabular-nums [overflow-wrap:anywhere]',
+                      // Los montos van completos, sin abreviar: si son largos bajan de
+                      // tamaño para caber en la tarjeta en vez de quedar recortados.
+                      esLargo(k.value)
+                        ? 'text-xl xl:text-2xl'
+                        : hero ? 'text-3xl' : 'text-xl sm:text-3xl',
+                      hero ? 'text-white dark:text-foreground' : 'text-foreground',
+                    )}
+                  >
+                    {k.value}
+                  </span>
                   {k.unit && (
                     <span className={cn('text-sm font-medium', hero ? 'text-white/70 dark:text-muted-foreground' : 'text-muted-foreground')}>
                       {k.unit}

@@ -298,12 +298,12 @@ export default function LiquidarTerceros() {
                   </span>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="truncate">{razonSocial}</h3>
+                      <h3 className="break-words">{razonSocial}</h3>
                       <Badge variant={estaPagada ? 'success' : 'warning'}>
                         {estaPagada ? 'Pagado' : 'Pendiente'}
                       </Badge>
                     </div>
-                    <p className="truncate text-xs text-muted-foreground">
+                    <p className="break-words text-xs text-muted-foreground">
                       NIT {nit}
                       {contacto && ` · ${contacto}`}
                       {telefono && ` · ${telefono}`}

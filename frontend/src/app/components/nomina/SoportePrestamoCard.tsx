@@ -148,7 +148,7 @@ export function SoportePrestamoCard({ prestamoId, documento, onCambio }: Props) 
           <div className="flex flex-wrap items-center gap-3 rounded-lg bg-muted/60 p-3">
             <FileText className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2} />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-foreground">{documento.nombre_archivo}</p>
+              <p className="break-all text-sm font-medium text-foreground">{documento.nombre_archivo}</p>
               <p className="text-xs text-muted-foreground">
                 {[
                   tamanoLegible(documento.archivo_tamano),

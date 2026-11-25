@@ -274,7 +274,7 @@ export default function NuevoPrestamo() {
                       <Avatar nombre={c.nombre_completo} size="sm" />
                       <span className="min-w-0">
                         <span className="block break-words text-sm font-medium text-foreground">{c.nombre_completo}</span>
-                        <span className="block truncate text-xs text-muted-foreground">
+                        <span className="block break-words text-xs text-muted-foreground">
                           {c.documento} · {c.modalidad_pago}
                         </span>
                       </span>
@@ -289,7 +289,7 @@ export default function NuevoPrestamo() {
               <Avatar nombre={empleadoSeleccionado.nombre_completo} size="md" />
               <div className="min-w-0">
                 <p className="break-words text-sm font-semibold text-foreground">{empleadoSeleccionado.nombre_completo}</p>
-                <p className="truncate text-xs text-muted-foreground">
+                <p className="break-words text-xs text-muted-foreground">
                   {empleadoSeleccionado.documento} · {empleadoSeleccionado.modalidad_pago}
                 </p>
               </div>

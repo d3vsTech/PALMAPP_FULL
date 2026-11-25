@@ -16,12 +16,15 @@ import type { DesprendibleLiquidacion, LiquidacionFila } from '../../../../api/l
 import Desprendible from '../../../components/liquidaciones/Desprendible';
 import ConceptosTabla, { type Concepto } from '../../../components/liquidaciones/ConceptosTabla';
 import { formatFecha } from '../../../utils/fecha';
-import { fmtCOP, TEXTOS_PERIODO, type TipoPeriodoDetalle } from './textos';
+import { fmtCOP, METODO_PAGO_LABEL, TEXTOS_PERIODO, CAJA_AVISO, type TipoPeriodoDetalle } from './textos';
 
 interface Props {
   fila: LiquidacionFila;
   tipo: TipoPeriodoDetalle;
   anio: number;
+  semestre: number;
+  /** Dato "Período" del desprendible: el año, o los meses en prima. */
+  periodoLabel: string;
   /** Comprobante completo, si ya se cargó. */
   detalle?: DesprendibleLiquidacion;
   cargandoDetalle: boolean;
@@ -56,26 +59,30 @@ function conceptosFila(
         valor: '—',
         detalle: 'Valor consignado fuera del sistema y registrado desde un archivo. La base salarial de ese año no quedó registrada; del sistema solo salen los días.',
       },
-      { label: 'Días', valor: fila.dias_computados },
+      { label: 'Días laborados', valor: fila.dias_computados },
       total,
     ];
   }
   if (tipo === 'INTERESES_CESANTIAS') {
     return [
       { label: 'Saldo cesantías', valor: fmtCOP(fila.saldo_cesantias ?? fila.base_prestacional) },
-      { label: 'Tasa de interés', valor: `${fila.tasa_aplicada ?? 12}% anual`, detalle: 'Ley 52 de 1975' },
-      { label: 'Días base', valor: fila.dias_base_intereses ?? fila.dias_computados, detalle: formula },
+      { label: 'Tasa de interés', valor: `${fila.tasa_aplicada ?? 12} % anual`, detalle: 'Ley 52 de 1975' },
+      { label: 'Días laborados', valor: fila.dias_base_intereses ?? fila.dias_computados, detalle: formula },
       total,
     ];
   }
-  // El desglose viene del comprobante legal; sin él solo se muestra la base.
-  const componentes: Concepto[] = detalle
-    ? [
-        { label: 'Salario básico', valor: fmtCOP(detalle.base.salario_basico) },
-        { label: 'Auxilio de transporte', valor: fmtCOP(detalle.base.auxilio_transporte) },
-        { label: 'Promedio variables', valor: fmtCOP(detalle.base.promedio_variables) },
-      ]
-    : [];
+  // Los tres componentes de la base son parte fija del desprendible, como en
+  // el diseño: se pintan desde el principio y toman valor cuando llega el
+  // comprobante legal (§6.1), que se pide al abrir el desglose.
+  const componentes: Concepto[] = [
+    {
+      label: 'Salario básico',
+      valor: detalle ? fmtCOP(detalle.base.salario_basico) : '—',
+      detalle: detalle ? undefined : 'Se detalla al abrir el desglose',
+    },
+    { label: 'Auxilio de transporte', valor: detalle ? fmtCOP(detalle.base.auxilio_transporte) : '—' },
+    { label: 'Promedio variables', valor: detalle ? fmtCOP(detalle.base.promedio_variables) : '—' },
+  ];
   return [
     ...componentes,
     {
@@ -83,7 +90,7 @@ function conceptosFila(
       valor: fmtCOP(fila.base_prestacional),
       detalle: (fila.metodo_base && METODO_LABEL[fila.metodo_base]) || 'Base de cálculo',
     },
-    { label: 'Días', valor: fila.dias_computados, detalle: formula },
+    { label: 'Días laborados', valor: fila.dias_computados, detalle: formula },
     total,
   ];
 }
@@ -104,7 +111,7 @@ function EstadoGiro({ fila, tipo }: { fila: LiquidacionFila; tipo: TipoPeriodoDe
         <Badge variant="success">{txt.giradoLabel}</Badge>
         <p className="text-xs text-muted-foreground">
           {fila.fecha_pago ? formatFecha(fila.fecha_pago) : ''}
-          {fila.metodo_pago ? ` · ${fila.metodo_pago}` : ''}
+          {fila.metodo_pago ? ` · ${METODO_PAGO_LABEL[fila.metodo_pago] ?? fila.metodo_pago}` : ''}
           {fila.referencia_pago ? ` · Ref ${fila.referencia_pago}` : ''}
           {tipo === 'CESANTIAS' && fila.fondo_consignacion ? ` · ${fila.fondo_consignacion}` : ''}
         </p>
@@ -118,6 +125,12 @@ function EstadoGiro({ fila, tipo }: { fila: LiquidacionFila; tipo: TipoPeriodoDe
     </div>
   );
 }
+
+/** "SUSPENSION_DISCIPLINARIA" → "Suspension disciplinaria". */
+const tipoDescuento = (tipo: string) => {
+  const t = tipo.replace(/_/g, ' ').toLowerCase();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
 
 /** Desglose legal completo (§6.1): tiempo de servicio, componentes y advertencias. */
 function DesgloseLegal({ detalle, conBaseSalarial }: { detalle: DesprendibleLiquidacion; conBaseSalarial: boolean }) {
@@ -150,7 +163,7 @@ function DesgloseLegal({ detalle, conBaseSalarial }: { detalle: DesprendibleLiqu
         <ConceptosTabla items={tiempo} />
         {detalle.dias.detalle_descuentos.map((d, i) => (
           <p key={i} className="text-xs text-muted-foreground">
-            {d.tipo.replace(/_/g, ' ').toLowerCase()}: {formatFecha(d.desde)} a {formatFecha(d.hasta)} ({d.dias} días)
+            {tipoDescuento(d.tipo)}: {formatFecha(d.desde)} a {formatFecha(d.hasta)} ({d.dias} días)
           </p>
         ))}
       </div>
@@ -161,9 +174,9 @@ function DesgloseLegal({ detalle, conBaseSalarial }: { detalle: DesprendibleLiqu
         </div>
       )}
       {detalle.advertencias.map((a, i) => (
-        <div key={i} className="flex gap-2 rounded-lg bg-warning-soft p-3 text-sm text-foreground">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
-          <span>{a.mensaje ?? a.code}</span>
+        <div key={i} className={CAJA_AVISO}>
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+          <p>{a.mensaje ?? a.code}</p>
         </div>
       ))}
       <p className="text-xs text-muted-foreground">
@@ -174,11 +187,11 @@ function DesgloseLegal({ detalle, conBaseSalarial }: { detalle: DesprendibleLiqu
 }
 
 export default function DesprendibleFilaCard({
-  fila, tipo, anio, detalle, cargandoDetalle, expandido, onToggleDetalle,
+  fila, tipo, anio, semestre, periodoLabel, detalle, cargandoDetalle, expandido, onToggleDetalle,
   descargandoPdf, onDescargarPdf, onRegistrarGiro, onAnularGiro,
 }: Props) {
   const txt = TEXTOS_PERIODO[tipo];
-  const esCesantias = tipo === 'CESANTIAS';
+  const esPrima = tipo === 'PRIMA';
   // Prima comparte con cesantías la base salarial; intereses es el distinto.
   // Un registro histórico (§12) tampoco tiene base.
   const conBaseSalarial = tipo !== 'INTERESES_CESANTIAS' && detalle?.historico !== true;
@@ -189,17 +202,17 @@ export default function DesprendibleFilaCard({
     <div className="print:break-inside-avoid">
       <Desprendible
         nombre={col.nombre_completo}
-        cargo={col.cargo ?? '—'}
-        meta={esCesantias ? { label: 'Fondo', value: col.fondo_cesantias ?? '—' } : undefined}
+        cargo={col.cargo ?? undefined}
+        meta={esPrima
+          ? { label: 'Semestre', value: `${semestre}° · ${anio}` }
+          : { label: 'Fondo', value: col.fondo_cesantias ?? '—' }}
         datos={[
           { label: 'Cédula', value: col.documento },
           {
-            label: conBaseSalarial ? 'Días computados' : 'Días base',
+            label: 'Días laborados',
             value: conBaseSalarial ? fila.dias_computados : (fila.dias_base_intereses ?? fila.dias_computados),
           },
-          conBaseSalarial
-            ? { label: 'Período', value: anio }
-            : { label: 'Tasa', value: `${fila.tasa_aplicada ?? 12}% anual` },
+          { label: 'Período', value: periodoLabel },
         ]}
         conceptos={conceptosFila(fila, tipo, detalle)}
       >

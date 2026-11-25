@@ -12,6 +12,7 @@
  */
 
 import { estiloDetalle } from './estiloDetalle';
+import { formatFecha } from '../../utils/fecha';
 
 export interface FaltaInjustificadaItem {
   fecha: string;
@@ -89,7 +90,7 @@ export function FaltasInjustificadas({
           <tbody className="divide-y divide-border">
             {items.map((f, i) => (
               <tr key={`${f.fecha}-${i}`}>
-                <td className={`${e.td} whitespace-nowrap tabular-nums text-muted-foreground`}>{f.fecha}</td>
+                <td className={`${e.td} whitespace-nowrap tabular-nums text-muted-foreground`}>{formatFecha(f.fecha)}</td>
                 <td className={e.td}>{labelOrigen(f.origen)}</td>
                 <td className={`${e.td} ${f.impacto === 'DIA_DESCONTADO' ? 'text-foreground' : 'text-muted-foreground'}`}>
                   {labelImpacto(f.impacto)}

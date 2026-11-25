@@ -8,9 +8,10 @@ import SeccionCard from '../../../components/liquidaciones/SeccionCard';
 import DatoLista from '../../../components/liquidaciones/DatoLista';
 import ConceptosTabla, { type Concepto } from '../../../components/liquidaciones/ConceptosTabla';
 import type { CalendarioVacaciones, ComprobanteVacaciones } from '../../../../api/vacaciones';
-import { formatFecha } from '../../../utils/fecha';
 import { fmtCOP, fmtDias } from './comunes';
-import { Aviso } from './PiezasNuevaVacacion';
+import { Aviso, fechaCorta, fechaLarga } from './PiezasNuevaVacacion';
+
+const SIN_FECHA = <span className="font-normal text-muted-foreground">Sin definir</span>;
 
 /** Disfrute y compensación. Se pagan días comerciales (D1, v1.10). */
 function conceptosDias(preview: ComprobanteVacaciones): Concepto[] {
@@ -66,9 +67,11 @@ function conceptosTotales(preview: ComprobanteVacaciones): Concepto[] {
   return items;
 }
 
-export function ResumenVacacion({ preview, calendario, listo }: {
+export function ResumenVacacion({ preview, calendario, formaPago, listo }: {
   preview: ComprobanteVacaciones;
   calendario: CalendarioVacaciones | null;
+  /** Texto ya armado por la página: nómina, anticipado o pendiente. */
+  formaPago: string;
   listo: boolean;
 }) {
   return (
@@ -81,9 +84,9 @@ export function ResumenVacacion({ preview, calendario, listo }: {
         <DatoLista
           className="lg:grid-cols-3"
           items={[
-            { label: 'Inicio de vacaciones', value: calendario ? formatFecha(calendario.fecha_inicio) : '—' },
-            { label: 'Fin de vacaciones', value: calendario ? formatFecha(calendario.fecha_fin) : '—' },
-            { label: 'Regreso a trabajar', value: calendario ? 'El día hábil siguiente' : '—' },
+            { label: 'Inicio de vacaciones', value: calendario ? fechaLarga(calendario.fecha_inicio) : SIN_FECHA },
+            { label: 'Fin de vacaciones', value: calendario ? fechaLarga(calendario.fecha_fin) : SIN_FECHA },
+            { label: 'Forma de pago', value: formaPago },
           ]}
         />
       </div>
@@ -103,7 +106,10 @@ export function SaldoVacacion({ preview }: { preview: ComprobanteVacaciones }) {
           items={[
             { label: 'Saldo antes', value: `${fmtDias(saldo.dias_disponibles_exigibles_antes)} días` },
             { label: 'Saldo después', value: `${fmtDias(saldo.dias_disponibles_exigibles_despues)} días` },
-            { label: 'Próximo vencimiento', value: formatFecha(saldo.fecha_vencimiento_despues) },
+            {
+              label: 'Próximo vencimiento',
+              value: saldo.fecha_vencimiento_despues ? fechaLarga(saldo.fecha_vencimiento_despues) : SIN_FECHA,
+            },
           ]}
         />
         {preview.periodos_afectados.length > 0 && (
@@ -112,7 +118,7 @@ export function SaldoVacacion({ preview }: { preview: ComprobanteVacaciones }) {
             {preview.periodos_afectados.map((p) => (
               <div key={p.periodo} className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                 <Badge variant="outline">Período {p.periodo}</Badge>
-                <span className="text-muted-foreground">{formatFecha(p.inicio)} al {formatFecha(p.fin)}</span>
+                <span className="text-muted-foreground">{fechaCorta(p.inicio)} al {fechaCorta(p.fin)}</span>
                 <span className="text-foreground">
                   {fmtDias(p.dias_disfrute)} disfrute · {fmtDias(p.dias_dinero)} dinero
                 </span>

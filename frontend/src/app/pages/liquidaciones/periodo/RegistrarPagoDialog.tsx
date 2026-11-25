@@ -25,7 +25,7 @@ import {
 } from '../../../../api/liquidaciones';
 import type { ApiError } from '../../../../api/client';
 import { formatFecha } from '../../../utils/fecha';
-import { fmtCOP, type TipoPeriodoDetalle, TEXTOS_PERIODO } from './textos';
+import { fmtCOP, METODO_PAGO_LABEL, type TipoPeriodoDetalle, TEXTOS_PERIODO } from './textos';
 
 const METODOS: MetodoPago[] = ['TRANSFERENCIA', 'EFECTIVO', 'CHEQUE', 'PILA'];
 
@@ -157,7 +157,7 @@ export default function RegistrarPagoDialog({ periodoId, tipo, objetivo, onClose
               <SelectTrigger id="registrarp-metodo"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {METODOS.map(m => (
-                  <SelectItem key={m} value={m}>{m.charAt(0) + m.slice(1).toLowerCase()}</SelectItem>
+                  <SelectItem key={m} value={m}>{METODO_PAGO_LABEL[m]}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

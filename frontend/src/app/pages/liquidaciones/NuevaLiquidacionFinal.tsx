@@ -58,6 +58,8 @@ const CONCEPTOS: Array<{
   titulo: string;
   descripcion: string;
   unidadDias?: string;
+  /** Etiqueta corta del subtotal, como en el diseño. */
+  etiquetaTotal?: string;
 }> = [
   {
     codigo: 'CESANTIAS',
@@ -66,14 +68,16 @@ const CONCEPTOS: Array<{
   },
   {
     codigo: 'INTERESES_CESANTIAS',
-    titulo: 'Intereses de cesantías',
+    titulo: 'Intereses sobre cesantías',
     descripcion: '12 % anual sobre la cesantía liquidada.',
+    etiquetaTotal: 'Total intereses',
   },
   {
     codigo: 'PRIMA',
     titulo: 'Prima de servicios',
     descripcion: 'Proporcional al semestre en curso, sea cual sea el motivo del retiro.',
     unidadDias: 'días del semestre',
+    etiquetaTotal: 'Total prima',
   },
   {
     codigo: 'VACACIONES',
@@ -81,6 +85,7 @@ const CONCEPTOS: Array<{
     descripcion:
       'Días acumulados que se pagan en dinero, no días de descanso. Por eso llevan decimales.',
     unidadDias: 'días acumulados',
+    etiquetaTotal: 'Total vacaciones',
   },
   {
     codigo: 'INDEMNIZACION',
@@ -88,6 +93,9 @@ const CONCEPTOS: Array<{
     descripcion: 'Solo con los motivos que la generan, según el tipo de contrato.',
   },
 ];
+
+/** Primera letra en mayúscula, para estados que llegan en minúscula. */
+const capitalizar = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
 export default function NuevaLiquidacionFinal() {
   const navigate = useNavigate();
@@ -248,10 +256,12 @@ export default function NuevaLiquidacionFinal() {
 
   if (cargandoEdicion) {
     return (
-      <Card className="flex-row items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Cargando la liquidación...
-      </Card>
+      <div className="mx-auto max-w-4xl">
+        <Card className="flex-row items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
+          Cargando la liquidación...
+        </Card>
+      </div>
     );
   }
 
@@ -278,7 +288,7 @@ export default function NuevaLiquidacionFinal() {
         <PageHeader
           eyebrow="Liquidaciones"
           title="Nueva liquidación"
-          description="Elija qué necesita hacer."
+          description="Selecciona el tipo de liquidación que deseas realizar."
           backTo={volverListado}
         />
 
@@ -355,7 +365,7 @@ export default function NuevaLiquidacionFinal() {
 
       <SeccionCard
         title="Colaborador"
-        description={esSimulacion ? 'Elige el colaborador que vas a consultar.' : 'Elige el colaborador que vas a liquidar.'}
+        description={esSimulacion ? 'Busca al colaborador que vas a consultar.' : 'Busca al colaborador que vas a liquidar.'}
       >
         <div className="space-y-5">
           <TablaColaboradores
@@ -368,15 +378,14 @@ export default function NuevaLiquidacionFinal() {
 
           {cargandoFicha && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
               Cargando la ficha...
             </div>
           )}
 
           {ficha && !cargandoFicha && (
-            <div className="space-y-4 rounded-lg bg-muted/60 px-4 py-4">
+            <div className="rounded-lg bg-muted/60 px-4 py-4">
               <DatoLista
-                className="sm:grid-cols-4"
                 items={[
                   { label: 'Cédula', value: ficha.empleado.documento },
                   { label: 'Cargo', value: ficha.empleado.cargo ?? '—' },
@@ -385,17 +394,12 @@ export default function NuevaLiquidacionFinal() {
                     label: 'Tipo de contrato',
                     value: ficha.contrato ? TIPO_CONTRATO_LABEL[ficha.contrato.tipo_contrato] : 'Sin contrato',
                   },
-                ]}
-              />
-              <DatoLista
-                className="border-t border-border pt-4 sm:grid-cols-3"
-                items={[
                   { label: 'Vacaciones sin tomar', value: `${fmtDias(ficha.vacaciones.saldo_dias)} días` },
                   { label: 'Préstamos vigentes', value: ficha.prestamos.length },
                   {
                     label: 'Última nómina',
                     value: ficha.nomina.ultima_nomina
-                      ? `${ficha.nomina.ultima_nomina.estado.toLowerCase()} · ${fmtFecha(ficha.nomina.ultima_nomina.fecha_fin)}`
+                      ? `${capitalizar(ficha.nomina.ultima_nomina.estado.toLowerCase())} · ${fmtFecha(ficha.nomina.ultima_nomina.fecha_fin)}`
                       : 'Sin nóminas',
                   },
                 ]}
@@ -452,11 +456,11 @@ export default function NuevaLiquidacionFinal() {
                           </p>
                         )}
                         {(v.nominas_pendientes?.length ?? 0) === 0 && (v.dias_sin_nomina ?? 0) === 0 && (
-                          <p>Pague el saldo desde el histórico de vacaciones.</p>
+                          <p>Paga el saldo desde el histórico de vacaciones.</p>
                         )}
                       </div>
                     ) : (
-                      <p className="text-muted-foreground">Páguela o anúlela antes de aprobar el retiro.</p>
+                      <p className="text-muted-foreground">Págala o anúlala antes de aprobar el retiro.</p>
                     )}
                   </div>
                 </div>
@@ -464,8 +468,9 @@ export default function NuevaLiquidacionFinal() {
             </div>
           )}
 
-          {/* Datos del retiro */}
-          {ficha && (
+          {/* Datos del retiro: se ven desde el inicio, como el diseño, y se
+              habilitan al elegir al colaborador. */}
+          {(
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
               {esSimulacion ? (
                 <div className="space-y-2">
@@ -475,6 +480,7 @@ export default function NuevaLiquidacionFinal() {
                     type="date"
                     value={f.form.fechaCorte}
                     onChange={(e) => f.setCampo('fechaCorte', e.target.value)}
+                    disabled={!ficha}
                   />
                 </div>
               ) : (
@@ -486,6 +492,7 @@ export default function NuevaLiquidacionFinal() {
                       type="date"
                       value={f.form.fechaRetiro}
                       onChange={(e) => f.setCampo('fechaRetiro', e.target.value)}
+                      disabled={!ficha}
                     />
                   </div>
 
@@ -496,12 +503,13 @@ export default function NuevaLiquidacionFinal() {
                       onValueChange={(valor) =>
                         f.setCampo('motivoRetiro', valor as MotivoRetiroCodigo)
                       }
+                      disabled={!ficha}
                     >
                       <SelectTrigger id="motivoRetiro">
                         <SelectValue placeholder="Selecciona un motivo" />
                       </SelectTrigger>
                       <SelectContent>
-                        {ficha.motivos.map((m) => (
+                        {(ficha?.motivos ?? []).map((m) => (
                           <SelectItem key={m.codigo} value={m.codigo}>
                             {m.etiqueta}
                             {m.indemniza ? ' (con indemnización)' : ''}
@@ -516,6 +524,7 @@ export default function NuevaLiquidacionFinal() {
                     <Select
                       value={f.form.tipoContrato}
                       onValueChange={(valor) => f.setCampo('tipoContrato', valor as TipoContrato)}
+                      disabled={!ficha}
                     >
                       <SelectTrigger id="tipoContrato">
                         <SelectValue />
@@ -541,11 +550,12 @@ export default function NuevaLiquidacionFinal() {
                         type="date"
                         value={f.form.fechaFinPactada}
                         onChange={(e) => f.setCampo('fechaFinPactada', e.target.value)}
+                        disabled={!ficha}
                       />
                     </div>
                   )}
 
-                  {f.form.tipoContrato !== (ficha.contrato?.tipo_contrato ?? 'INDEFINIDO') && (
+                  {ficha && f.form.tipoContrato !== (ficha.contrato?.tipo_contrato ?? 'INDEFINIDO') && (
                     <div className="space-y-2 sm:col-span-2">
                       <Label htmlFor="motivoOverride">Motivo del cambio de contrato *</Label>
                       <Input
@@ -565,6 +575,7 @@ export default function NuevaLiquidacionFinal() {
                       value={f.form.diasIndemnizacion}
                       onChange={(e) => f.setCampo('diasIndemnizacion', e.target.value)}
                       placeholder="Se calculan solos"
+                      disabled={!ficha}
                     />
                     <p className="text-xs text-muted-foreground">
                       Solo hace falta en obra o labor, contrato vencido sin renovar, o vínculos
@@ -578,16 +589,16 @@ export default function NuevaLiquidacionFinal() {
         </div>
       </SeccionCard>
 
-      {/* Conceptos */}
-      {ficha && (
+      {/* Conceptos: la tarjeta está desde el inicio, como el diseño. */}
+      {(
         <SeccionCard
           title={
             <span className="flex items-center gap-2">
               Conceptos de liquidación
-              {cargandoPreview && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+              {cargandoPreview && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" strokeWidth={2} />}
             </span>
           }
-          description="El sistema calcula cada concepto. Ajústelo a mano solo si hace falta."
+          description="El sistema calcula cada concepto. Ajústalo a mano solo si hace falta."
           contentClassName="space-y-6"
         >
           {errorPreview && (
@@ -599,14 +610,16 @@ export default function NuevaLiquidacionFinal() {
 
           {!preview && !errorPreview && (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              {esSimulacion
-                ? 'Elija la fecha de corte para ver el estado de cuenta.'
-                : 'Elija la fecha y el motivo del retiro para ver el cálculo.'}
+              {!ficha
+                ? 'Elige un colaborador para ver el cálculo.'
+                : esSimulacion
+                  ? 'Elige la fecha de corte para ver el estado de cuenta.'
+                  : 'Elige la fecha y el motivo del retiro para ver el cálculo.'}
             </p>
           )}
 
           {preview &&
-            CONCEPTOS.map(({ codigo, titulo, descripcion, unidadDias }) => {
+            CONCEPTOS.map(({ codigo, titulo, descripcion, unidadDias, etiquetaTotal }) => {
               const concepto = preview.conceptos.devengados.find((c) => c.codigo === codigo);
               // La indemnización solo existe con los motivos que la generan.
               const oculto = codigo === 'INDEMNIZACION' && !concepto;
@@ -617,6 +630,7 @@ export default function NuevaLiquidacionFinal() {
                   titulo={titulo}
                   descripcion={descripcion}
                   unidadDias={unidadDias}
+                  etiquetaTotal={etiquetaTotal}
                   campos={CAMPOS_AJUSTE[codigo]}
                   concepto={concepto}
                   ajuste={f.ajustes[codigo]}
@@ -635,7 +649,7 @@ export default function NuevaLiquidacionFinal() {
         <>
           <SeccionCard
             title="Devengados adicionales"
-            description="El salario del último período lo paga la nómina. Agréguelo aquí solo si esa nómina no lo va a cubrir, o se pagaría dos veces."
+            description="El salario del último período lo paga la nómina. Agrégalo aquí solo si esa nómina no lo va a cubrir, o se pagaría dos veces."
           >
             <PanelDevengadosManuales
               items={f.devengados}
@@ -666,12 +680,12 @@ export default function NuevaLiquidacionFinal() {
         </>
       )}
 
-      {/* Total y acciones */}
-      {preview && totales && (
+      {/* Total y acciones: el resumen acompaña al formulario desde el inicio. */}
+      {(
         <>
           {/* Bloqueantes y avisos solo en la liquidación real: son las
               barandas de aprobar. El estado de cuenta no aprueba nada. */}
-          {!esSimulacion && (
+          {preview && !esSimulacion && (
             <div className="space-y-3 empty:hidden">
               {preview.bloqueantes.map((b, i) => {
                 const forzable = esBloqueanteForzable(b);
@@ -692,8 +706,8 @@ export default function NuevaLiquidacionFinal() {
                 );
               })}
               {preview.advertencias.map((a, i) => (
-                <div key={`${a.code}-${i}`} className="flex gap-2 rounded-lg bg-muted/60 p-3">
-                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2} />
+                <div key={`${a.code}-${i}`} className="flex gap-2 rounded-lg bg-info-soft p-3">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-info" strokeWidth={2} />
                   <p className="text-sm text-foreground">{a.mensaje}</p>
                 </div>
               ))}
@@ -703,13 +717,13 @@ export default function NuevaLiquidacionFinal() {
           <SeccionCard title="Resumen" contentClassName="space-y-5">
             <ConceptosTabla
               items={[
-                { label: 'Total devengado', valor: fmtCOP(totales.total_devengado) },
+                { label: 'Total devengado', valor: fmtCOP(totales?.total_devengado ?? 0) },
                 {
                   label: 'Total deducciones',
-                  valor: fmtCOP(totales.total_deducciones),
-                  negativo: totales.total_deducciones > 0,
+                  valor: fmtCOP(totales?.total_deducciones ?? 0),
+                  negativo: (totales?.total_deducciones ?? 0) > 0,
                 },
-                { label: 'Neto a pagar', valor: fmtCOP(totales.total_neto), total: true },
+                { label: 'Neto a pagar', valor: fmtCOP(totales?.total_neto ?? 0), total: true },
               ]}
             />
 
@@ -722,6 +736,7 @@ export default function NuevaLiquidacionFinal() {
                   onChange={(e) => f.setCampo('observaciones', e.target.value)}
                   placeholder="Notas que quedan en el comprobante"
                   rows={2}
+                  disabled={!ficha}
                 />
               </div>
             )}
@@ -733,13 +748,13 @@ export default function NuevaLiquidacionFinal() {
                 Cancelar
               </Button>
               {esSimulacion ? (
-                <Button onClick={() => void descargarSimulacion()} disabled={descargando}>
-                  {descargando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download strokeWidth={2} />}
+                <Button onClick={() => void descargarSimulacion()} disabled={descargando || !preview}>
+                  {descargando ? <Loader2 className="animate-spin" strokeWidth={2} /> : <Download strokeWidth={2} />}
                   Descargar estado de cuenta
                 </Button>
               ) : (
                 <Button onClick={() => void guardar()} disabled={!puedeGuardar}>
-                  {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save strokeWidth={2} />}
+                  {guardando ? <Loader2 className="animate-spin" strokeWidth={2} /> : <Save strokeWidth={2} />}
                   {modoEdicion ? 'Guardar cambios' : 'Guardar borrador'}
                 </Button>
               )}
@@ -747,7 +762,7 @@ export default function NuevaLiquidacionFinal() {
 
             {!esSimulacion && bloqueantesDuros.length > 0 && (
               <p className="text-right text-xs text-muted-foreground">
-                Resuelva los puntos en rojo para poder guardar.
+                Resuelve los puntos en rojo para poder guardar.
               </p>
             )}
           </div>

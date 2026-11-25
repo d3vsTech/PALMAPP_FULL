@@ -7,9 +7,13 @@
  * de un error no haya que hacerlo dos veces.
  */
 import { useState } from 'react';
-import { AlertTriangle, Download, FileSpreadsheet, Info, Loader2, Upload, X, type LucideIcon } from 'lucide-react';
+import {
+  AlertCircle, AlertTriangle, CheckCircle2, Download, FileSpreadsheet, Info, Loader2, RefreshCw,
+  Upload, X, type LucideIcon,
+} from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
+import { Checkbox } from '../../../components/ui/checkbox';
 import { Card, CardContent, CardHeader } from '../../../components/ui/card';
 import { cn } from '../../../components/ui/utils';
 import type { ApiError } from '../../../../api/client';
@@ -63,9 +67,21 @@ const VARIANTE_FILA: Record<EstadoFilaHistorico, 'success' | 'warning' | 'destru
   ERROR: 'destructive',
 };
 
-/** Estado de una fila del archivo, con la variante del diseño. */
+const ICONO_FILA: Record<EstadoFilaHistorico, LucideIcon> = {
+  OK: CheckCircle2,
+  SOBRESCRIBIR: RefreshCw,
+  ERROR: AlertCircle,
+};
+
+/** Estado de una fila del archivo, con la variante y el ícono del diseño. */
 export function BadgeEstadoFila({ estado, children }: { estado: EstadoFilaHistorico; children: React.ReactNode }) {
-  return <Badge variant={VARIANTE_FILA[estado]}>{children}</Badge>;
+  const Icono = ICONO_FILA[estado];
+  return (
+    <Badge variant={VARIANTE_FILA[estado]}>
+      <Icono />
+      {children}
+    </Badge>
+  );
 }
 
 type TonoAviso = 'warning' | 'destructive' | 'success' | 'info';
@@ -146,6 +162,15 @@ interface PropsSelector {
   onQuitar: () => void;
   inputRef: React.RefObject<HTMLInputElement>;
   accept: string;
+  /** Mientras se sube no se puede cambiar ni quitar el archivo. */
+  bloqueado?: boolean;
+}
+
+/** Tamaño del archivo como lo muestra el diseño: B, KB o MB. */
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /** El archivo ya elegido: ícono, nombre, formato y las acciones Cambiar y Quitar. */
@@ -153,12 +178,14 @@ function ArchivoElegido({
   archivo,
   detalle,
   analisis,
+  bloqueado = false,
   onCambiar,
   onQuitar,
 }: {
   archivo: File;
   detalle?: React.ReactNode;
   analisis?: ArchivoHistorico;
+  bloqueado?: boolean;
   onCambiar: () => void;
   onQuitar: () => void;
 }) {
@@ -169,13 +196,16 @@ function ArchivoElegido({
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="truncate font-semibold text-foreground">{archivo.name}</p>
+          <p className="min-w-0 max-w-full break-all font-semibold text-foreground">{archivo.name}</p>
           <ChipFormato archivo={analisis} />
         </div>
-        {detalle && <p className="text-sm text-muted-foreground">{detalle}</p>}
+        <p className="text-sm text-muted-foreground">
+          {formatBytes(archivo.size)}
+          {detalle && <> · {detalle}</>}
+        </p>
       </div>
       <div className="flex shrink-0 items-center gap-1">
-        <Button variant="outline" size="sm" onClick={onCambiar}>
+        <Button variant="outline" size="sm" onClick={onCambiar} disabled={bloqueado}>
           Cambiar
         </Button>
         <Button
@@ -183,6 +213,7 @@ function ArchivoElegido({
           size="icon"
           aria-label="Quitar archivo"
           onClick={onQuitar}
+          disabled={bloqueado}
           className="text-muted-foreground hover:text-destructive"
         >
           <X strokeWidth={2} />
@@ -201,6 +232,7 @@ export function SelectorArchivo({
   onQuitar,
   inputRef,
   accept,
+  bloqueado = false,
 }: PropsSelector) {
   return (
     <>
@@ -220,6 +252,7 @@ export function SelectorArchivo({
           archivo={archivo}
           detalle={detalle}
           analisis={analisis}
+          bloqueado={bloqueado}
           onCambiar={() => inputRef.current?.click()}
           onQuitar={onQuitar}
         />
@@ -238,6 +271,7 @@ export function PasoCard({
   titulo,
   subtitulo,
   accion,
+  contenidoClassName = 'space-y-4',
   children,
 }: {
   n: number;
@@ -245,6 +279,8 @@ export function PasoCard({
   subtitulo?: string;
   /** Botón del encabezado, alineado a la derecha (ej. "Descargar plantilla"). */
   accion?: React.ReactNode;
+  /** Separación del contenido. El diseño usa space-y-2 en el paso 1 y space-y-6 en el 3. */
+  contenidoClassName?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -261,7 +297,7 @@ export function PasoCard({
         </div>
         {accion && <div className="sm:shrink-0">{accion}</div>}
       </CardHeader>
-      <CardContent className="space-y-4">{children}</CardContent>
+      <CardContent className={contenidoClassName}>{children}</CardContent>
     </Card>
   );
 }
@@ -285,6 +321,8 @@ interface PropsZona {
   onQuitar: () => void;
   inputRef: React.RefObject<HTMLInputElement>;
   accept: string;
+  /** Mientras se sube no se puede cambiar ni quitar el archivo. */
+  bloqueado?: boolean;
 }
 
 /**
@@ -300,6 +338,7 @@ export function ZonaArchivo({
   onQuitar,
   inputRef,
   accept,
+  bloqueado = false,
 }: PropsZona) {
   const [encima, setEncima] = useState(false);
 
@@ -365,6 +404,7 @@ export function ZonaArchivo({
           archivo={archivo}
           detalle={detalle}
           analisis={analisis}
+          bloqueado={bloqueado}
           onCambiar={() => inputRef.current?.click()}
           onQuitar={onQuitar}
         />
@@ -390,7 +430,7 @@ export function BotonesPlantilla({
   onDescargar: (formato: 'xlsx' | 'csv') => void;
 }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <Button
         variant="outline"
         onClick={() => onDescargar('xlsx')}
@@ -436,13 +476,16 @@ export interface ColumnaPlantilla {
 export function VistaPreviaPlantilla({
   columnas,
   filas,
+  formatos,
 }: {
   columnas: ColumnaPlantilla[];
   filas: string[][];
+  /** Línea del diseño bajo la tabla, ej. ".xlsx, .xls y .csv". Opcional. */
+  formatos?: string;
 }) {
   return (
     <div className="space-y-2">
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <div className="overflow-auto rounded-lg border border-border">
         <table className="w-full text-sm">
           <thead className="bg-muted/60 text-xs font-semibold text-muted-foreground">
             <tr>
@@ -461,13 +504,8 @@ export function VistaPreviaPlantilla({
             {filas.map((fila, i) => (
               <tr key={i}>
                 {fila.map((celda, j) => (
-                  <td
-                    key={j}
-                    className={`whitespace-nowrap px-4 py-2.5 ${
-                      celda ? 'text-muted-foreground' : 'text-muted-foreground/40'
-                    }`}
-                  >
-                    {celda || '(vacío)'}
+                  <td key={j} className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">
+                    {celda}
                   </td>
                 ))}
               </tr>
@@ -475,6 +513,9 @@ export function VistaPreviaPlantilla({
           </tbody>
         </table>
       </div>
+      {formatos && (
+        <p className="text-xs text-muted-foreground">Formatos aceptados: {formatos}</p>
+      )}
       <p className="text-xs text-muted-foreground">
         <span className="text-destructive">*</span> La celda no puede ir vacía. En las demás
         columnas la cabecera debe existir igual, y si la celda va vacía el sistema pone el
@@ -502,12 +543,148 @@ export function EstadoValidacion({
         </p>
       )}
       {error && (
-        <p className="flex gap-2 rounded-lg bg-destructive-soft p-3 text-sm text-foreground">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" strokeWidth={2} />
+        <Aviso tono="destructive" icono={AlertCircle}>
           {error}
-        </p>
+        </Aviso>
       )}
     </>
+  );
+}
+
+const plural = (n: number, singular: string, varios: string) => (n === 1 ? singular : varios);
+
+/** Badge del encabezado del paso 3, como en el diseño. */
+export function BadgeDetectados({ total }: { total: number }) {
+  return (
+    <Badge variant="default" className="sm:mt-1">
+      {total} {plural(total, 'registro detectado', 'registros detectados')}
+    </Badge>
+  );
+}
+
+/** Casilla para reemplazar lo que ya estaba cargado. */
+export function CasillaSobrescribir({
+  checked,
+  onChange,
+  titulo,
+  children,
+}: {
+  checked: boolean;
+  onChange: (valor: boolean) => void;
+  titulo: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3 rounded-lg bg-muted/60 p-3">
+      <Checkbox
+        checked={checked}
+        onCheckedChange={(v) => onChange(v === true)}
+        className="mt-0.5"
+      />
+      <span className="text-sm text-foreground">
+        <span className="font-medium">{titulo}</span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">{children}</span>
+      </span>
+    </label>
+  );
+}
+
+/**
+ * Barra final del paso 3: el resumen a la izquierda y Cancelar y Subir a la
+ * derecha. Con filas en error el resumen no promete una subida que no va a pasar.
+ */
+export function BarraSubida({
+  total,
+  modulo,
+  bloqueado,
+  cargando,
+  deshabilitado,
+  onCancelar,
+  onSubir,
+}: {
+  total: number;
+  /** Cierra la frase "al módulo de ...". */
+  modulo: string;
+  bloqueado: boolean;
+  cargando: boolean;
+  deshabilitado: boolean;
+  onCancelar: () => void;
+  onSubir: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm text-muted-foreground">
+        {bloqueado ? (
+          'Corrige las filas con error para poder subir el histórico.'
+        ) : (
+          <>
+            Se subirán{' '}
+            <span className="font-semibold text-foreground">
+              {total} {plural(total, 'registro', 'registros')}
+            </span>{' '}
+            al módulo de {modulo}.
+          </>
+        )}
+      </p>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button variant="outline" onClick={onCancelar} disabled={cargando}>
+          Cancelar
+        </Button>
+        <Button onClick={onSubir} disabled={deshabilitado}>
+          {cargando ? <Loader2 className="animate-spin" strokeWidth={2} /> : <Upload strokeWidth={2} />}
+          {cargando ? 'Subiendo…' : 'Subir histórico'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Una cifra del resumen de éxito, como en el diseño. */
+function CifraExito({ valor, etiqueta }: { valor: React.ReactNode; etiqueta: string }) {
+  return (
+    <div className="rounded-lg bg-muted/60 px-3 py-3">
+      <dd className="text-2xl font-bold text-foreground">{valor}</dd>
+      <dt className="mt-1 text-xs text-muted-foreground">{etiqueta}</dt>
+    </div>
+  );
+}
+
+/**
+ * Estado de éxito del diseño, al pie del paso 3 para no perder la tabla.
+ * El cargue es todo o nada: si llegó aquí, no quedó ninguna fila con error.
+ */
+export function ExitoCargue({
+  total,
+  modulo,
+  children,
+}: {
+  total: number;
+  modulo: string;
+  /** Los botones: primero el outline, después el principal. */
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-6 py-6 text-center">
+      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-success-soft text-success">
+        <CheckCircle2 className="h-6 w-6" strokeWidth={2} />
+      </span>
+      <div className="space-y-1 px-6">
+        <h3>Histórico cargado</h3>
+        <p className="text-sm text-muted-foreground">
+          Se subieron{' '}
+          <span className="font-semibold text-foreground">
+            {total} {plural(total, 'registro', 'registros')}
+          </span>{' '}
+          al módulo de {modulo}.
+        </p>
+      </div>
+      <dl className="grid w-full max-w-sm grid-cols-3 gap-3 px-6">
+        <CifraExito valor={total} etiqueta="Registros subidos" />
+        <CifraExito valor={0} etiqueta="Con errores" />
+        <CifraExito valor="100 %" etiqueta="Completado" />
+      </dl>
+      <div className="flex flex-col-reverse gap-2 px-6 sm:flex-row">{children}</div>
+    </div>
   );
 }
 
@@ -518,6 +695,33 @@ export function CabecerasIgnoradas({ cabeceras }: { cabeceras: string[] }) {
     <p className="flex items-start gap-2 text-xs text-muted-foreground">
       <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
       Se ignoraron estas columnas porque el sistema no las usa: {cabeceras.join(', ')}.
+    </p>
+  );
+}
+
+/**
+ * La observación de la fila.
+ *
+ * Es una columna de la plantilla en los cuatro cargues y queda guardada con el
+ * registro; en liquidación final incluso se imprime en el comprobante. Si no se
+ * muestra aquí, el usuario no tiene dónde ver qué texto quedó pegado a cada
+ * fila antes de subir el archivo.
+ */
+export function CeldaObservacion({ texto }: { texto: string | null | undefined }) {
+  if (!texto) return <span className="text-muted-foreground">—</span>;
+  return (
+    <p className="max-w-[14rem] whitespace-normal break-words text-xs text-muted-foreground">
+      {texto}
+    </p>
+  );
+}
+
+/** Días de mora de un pago, cuando el backend los contó. */
+export function LineaMora({ dias }: { dias: number | null | undefined }) {
+  if (!dias || dias <= 0) return null;
+  return (
+    <p className="text-xs text-warning">
+      {dias} {dias === 1 ? 'día' : 'días'} de mora
     </p>
   );
 }
@@ -542,18 +746,18 @@ export function IncidenciasFila({
       {errores.map((x, i) => (
         <p
           key={`e-${x.code}-${i}`}
-          className="mt-1 flex items-start gap-1.5 text-xs text-destructive"
+          className="mt-1 flex items-start gap-1.5 text-xs text-foreground"
         >
-          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0 text-destructive" strokeWidth={2} />
           {x.mensaje || etiquetasError[x.code] || x.code}
         </p>
       ))}
       {advertencias.map((x, i) => (
         <p
           key={`a-${x.code}-${i}`}
-          className="mt-1 flex items-start gap-1.5 text-xs text-warning"
+          className="mt-1 flex items-start gap-1.5 text-xs text-foreground"
         >
-          <Info className="mt-0.5 h-3 w-3 shrink-0" />
+          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-warning" strokeWidth={2} />
           {x.mensaje || etiquetasAdvertencia[x.code] || x.code}
         </p>
       ))}
@@ -585,7 +789,7 @@ export function CeldaColaborador({
         <p className="text-sm text-muted-foreground">
           {delArchivo || 'Sin colaborador'}
         </p>
-        <p className="truncate text-xs text-muted-foreground">
+        <p className="break-words text-xs text-muted-foreground">
           {documentoArchivo ? `en el archivo: ${documentoArchivo}` : 'sin cédula'}
         </p>
       </div>
@@ -593,12 +797,12 @@ export function CeldaColaborador({
   }
   return (
     <div className="min-w-0">
-      <p className="truncate text-sm font-medium">{nombre}</p>
-      <p className="truncate text-xs text-muted-foreground">CC {documento}</p>
+      <p className="break-words text-sm font-medium">{nombre}</p>
+      <p className="break-words text-xs text-muted-foreground">CC {documento}</p>
       {/* El nombre del archivo solo se muestra cuando no es el de la ficha: la
           advertencia dice que algo pasa, esto dice qué decía el archivo. */}
       {delArchivo && !mismoNombre(delArchivo, nombre) && (
-        <p className="truncate text-xs text-warning">
+        <p className="break-words text-xs text-warning">
           en el archivo: {delArchivo}
         </p>
       )}

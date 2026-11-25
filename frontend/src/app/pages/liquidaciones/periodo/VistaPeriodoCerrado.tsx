@@ -31,7 +31,9 @@ import {
 import type { ApiError } from '../../../../api/client';
 import { formatFecha } from '../../../utils/fecha';
 import { comparePersonaByFirstName } from '../../../utils/personas';
-import { fmtCOP, descargarBlob, nombrePdf, semestreLabel, TEXTOS_PERIODO, type TipoPeriodoDetalle } from './textos';
+import {
+  fmtCOP, descargarBlob, nombrePdf, semestreLabel, TEXTOS_PERIODO, CAJA_AVISO, type TipoPeriodoDetalle,
+} from './textos';
 import { imprimirPdf } from '../../../lib/pdf/imprimirPdf';
 import RegistrarPagoDialog, { type ObjetivoPago } from './RegistrarPagoDialog';
 import DesprendibleFilaCard from './DesprendibleFilaCard';
@@ -57,6 +59,13 @@ function EstadoPeriodoBadge({ estado, completo }: { estado: string; completo: st
       {estado === 'COMPLETO' ? completo : 'Liquidado'}
     </Badge>
   );
+}
+
+/** Subtítulo del encabezado: lo que distingue al período según el tipo. */
+function subtituloCerrado(tipo: TipoPeriodoDetalle, periodo: LiquidacionPeriodoDetalle, fondos: string, tasa: number): string {
+  if (tipo === 'PRIMA') return `${semestreLabel(periodo.semestre) || 'Semestre'} · Prima de servicios (art. 306 CST)`;
+  if (tipo === 'INTERESES_CESANTIAS') return `Intereses sobre cesantías · Tasa: ${tasa} % anual (Ley 52 de 1975)`;
+  return `Liquidación de cesantías · Fondos: ${fondos || '—'}`;
 }
 
 export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) {
@@ -201,6 +210,10 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
   };
 
   const eyebrow = txt.nombre.charAt(0).toUpperCase() + txt.nombre.slice(1);
+  // Prima: "jul – dic 2026", como el dato Período del desprendible del diseño.
+  const periodoDesprendible = esPrima
+    ? `${formatFecha(periodo.fecha_inicio, { month: 'short' })} – ${formatFecha(periodo.fecha_fin, { month: 'short', year: 'numeric' })}`
+    : String(periodo.anio);
 
   return (
     <div className="space-y-6 print:space-y-3">
@@ -209,7 +222,7 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
         title={periodo.descripcion}
         description={
           <>
-            {txt.subtituloWizard} · Cerrada el {periodo.cerrado_at ? formatFecha(periodo.cerrado_at) : '—'}
+            {subtituloCerrado(tipo, periodo, fondos, tasa)} · Cerrada el {periodo.cerrado_at ? formatFecha(periodo.cerrado_at) : '—'}
             {periodo.cerrado_por ? ` por ${periodo.cerrado_por.name}` : ''}
           </>
         }
@@ -233,7 +246,7 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
               Imprimir
             </Button>
             <Button
-              variant="outline"
+              variant={pendientes.length > 0 ? 'outline' : 'default'}
               onClick={() => void pedirPdfPeriodo('descargar')}
               disabled={descargandoPeriodo}
               className="print:hidden"
@@ -271,8 +284,8 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
               value: esCesantias
                 ? (fondos || '—')
                 : esPrima
-                  ? (semestreLabel(periodo.semestre) || '—')
-                  : `${tasa}% anual (fija por ley)`,
+                  ? (semestreLabel(periodo.semestre) ? `${semestreLabel(periodo.semestre)} ${periodo.anio}` : '—')
+                  : `${tasa} % anual (fija por ley)`,
             },
             {
               label: 'Fecha límite',
@@ -304,9 +317,9 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
       {periodo.advertencias_globales.length > 0 && (
         <div className="space-y-2">
           {periodo.advertencias_globales.map((a, i) => (
-            <div key={i} className="flex gap-2 rounded-lg bg-warning-soft p-3 text-sm text-foreground">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
-              <span>{a.mensaje ?? a.code}</span>
+            <div key={i} className={CAJA_AVISO}>
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+              <p>{a.mensaje ?? a.code}</p>
             </div>
           ))}
         </div>
@@ -326,6 +339,8 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
             fila={fila}
             tipo={tipo}
             anio={periodo.anio}
+            semestre={periodo.semestre}
+            periodoLabel={periodoDesprendible}
             detalle={detalles[fila.id]}
             cargandoDetalle={cargandoDetalle === fila.id}
             expandido={expandidas.includes(fila.id)}
@@ -341,7 +356,7 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
       <TotalResumen
         conteoLabel="Total colaboradores"
         conteo={filas.length}
-        totalLabel={`Total ${txt.colValor.toLowerCase()} liquidado`}
+        totalLabel={periodo.estado_pago === 'COMPLETO' ? txt.totalGiradoLabel : txt.totalLiquidadoLabel}
         total={fmtCOP(periodo.totales.liquidado)}
       />
 

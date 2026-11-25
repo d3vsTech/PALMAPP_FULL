@@ -469,12 +469,12 @@ export default function Nomina() {
           <Card className="gap-0 overflow-hidden">
             <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-muted/60 text-[13px] font-medium text-muted-foreground">
+                  <thead className="whitespace-nowrap bg-muted/60 text-[13px] font-medium text-muted-foreground">
                     <tr>
                       <th className="px-5 py-2.5 text-left font-semibold">Período</th>
                       <th className="px-4 py-2.5 text-left font-semibold">Estado</th>
-                      <th className="hidden px-4 py-2.5 text-right font-semibold md:table-cell">Devengado</th>
-                      <th className="hidden px-4 py-2.5 text-right font-semibold md:table-cell">Deducciones</th>
+                      <th className="hidden px-4 py-2.5 text-right font-semibold lg:table-cell">Devengado</th>
+                      <th className="hidden px-4 py-2.5 text-right font-semibold xl:table-cell">Deducciones</th>
                       <th className="px-4 py-2.5 text-right font-semibold">Neto</th>
                       <th className="px-5 py-2.5 text-right font-semibold">
                         <span className="sr-only">Acciones</span>
@@ -495,7 +495,7 @@ export default function Nomina() {
                       const total = res ? res.neto : totalReal;
                       return (
                         <tr key={n.id} className="transition-colors hover:bg-muted/40">
-                          <td className="px-5 py-3">
+                          <td className="min-w-[13rem] px-5 py-3">
                             <Link
                               to={`/nomina/${n.id}`}
                               className="font-semibold text-foreground hover:text-primary"
@@ -520,10 +520,10 @@ export default function Nomina() {
                           {/* `estimado` marca las cifras mientras quede una
                               fila pendiente de liquidar. Se dice una vez, en
                               el neto, y no tres veces con una flecha. */}
-                          <td className="hidden px-4 py-3 text-right tabular-nums text-foreground md:table-cell">
+                          <td className="hidden px-4 py-3 text-right tabular-nums text-foreground lg:table-cell">
                             {cop(dev)}
                           </td>
-                          <td className="hidden px-4 py-3 text-right tabular-nums text-foreground md:table-cell">
+                          <td className="hidden px-4 py-3 text-right tabular-nums text-foreground xl:table-cell">
                             {cop(ded)}
                           </td>
                           <td className="px-4 py-3 text-right font-semibold tabular-nums text-foreground">
@@ -532,7 +532,7 @@ export default function Nomina() {
                               <span className="block text-xs font-normal text-muted-foreground">Estimado</span>
                             )}
                           </td>
-                          <td className="px-5 py-3 text-right">
+                          <td className="whitespace-nowrap px-5 py-3 text-right">
                             <div className="flex items-center justify-end gap-1">
                               {/* §10.1 — Liquidar sigue disponible mientras la
                                   nómina no esté CERRADA; editar y eliminar

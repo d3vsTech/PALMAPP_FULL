@@ -20,7 +20,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
-import { Info, Loader2 } from 'lucide-react';
+import { AlertTriangle, Info, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '../../components/common/PageHeader';
 import SeccionCard from '../../components/liquidaciones/SeccionCard';
@@ -163,7 +163,7 @@ export default function NuevaPrima() {
       <PageHeader
         eyebrow="Liquidaciones"
         title="Nuevo período de prima"
-        description="Define el semestre. Los colaboradores se agregan al momento de liquidar."
+        description="Define el semestre de prima de servicios. Los colaboradores se agregan al liquidar."
         backTo="/liquidaciones?tab=prima"
       />
 
@@ -196,7 +196,7 @@ export default function NuevaPrima() {
               <Label htmlFor="descripcion">Descripción</Label>
               <Input
                 id="descripcion"
-                placeholder={`Prima de servicios ${etiquetaSemestre} ${formData.anio || anioActual}`}
+                placeholder={`Prima ${etiquetaSemestre} ${formData.anio || anioActual}`}
                 value={formData.descripcion}
                 onChange={(e) => handleChange('descripcion', e.target.value)}
               />
@@ -238,16 +238,19 @@ export default function NuevaPrima() {
 
           {/* Fechas límite del semestre elegido (legal + operativa, §2.2) */}
           {fechaLimite && (
-            <div className="rounded-lg bg-warning-soft p-3 text-sm text-foreground">
-              Fecha límite de pago: legal el{' '}
-              <strong>{formatFecha(fechaLimite.fecha_limite_legal, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
-              {!fechaLimite.es_dia_habil && (
-                <>
-                  {' '}(cae en día no hábil) · operativa el{' '}
-                  <strong>{formatFecha(fechaLimite.fecha_limite_operativa, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
-                </>
-              )}
-              . La prima se paga dentro del mismo año del semestre (CST art. 306).
+            <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-warning">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+              <p>
+                Fecha límite de pago: legal el{' '}
+                <strong>{formatFecha(fechaLimite.fecha_limite_legal, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
+                {!fechaLimite.es_dia_habil && (
+                  <>
+                    {' '}(cae en día no hábil) · operativa el{' '}
+                    <strong>{formatFecha(fechaLimite.fecha_limite_operativa, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
+                  </>
+                )}
+                . La prima se paga dentro del mismo año del semestre (CST art. 306).
+              </p>
             </div>
           )}
 

@@ -17,7 +17,6 @@ import PageHeader from '../../../components/common/PageHeader';
 import StatStrip from '../../../components/common/StatStrip';
 import { Button } from '../../../components/ui/button';
 import { Label } from '../../../components/ui/label';
-import { Checkbox } from '../../../components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -25,13 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../../components/ui/select';
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Info,
-  Loader2,
-  Upload,
-} from 'lucide-react';
+import { AlertCircle, AlertTriangle, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../../contexts/AuthContext';
 import {
@@ -49,11 +42,17 @@ import {
 import { descargarBlob, fmtCOP, fmtFecha } from '../final/comunes';
 import {
   Aviso,
+  BadgeDetectados,
   BadgeEstadoFila,
+  BarraSubida,
+  CasillaSobrescribir,
+  ExitoCargue,
   CabecerasIgnoradas,
   CeldaColaborador,
+  CeldaObservacion,
   EstadoValidacion,
   IncidenciasFila,
+  LineaMora,
   BotonesPlantilla,
   PasoCard,
   Regla,
@@ -212,6 +211,7 @@ export default function CargaHistoricoCesantias() {
   );
   const listoParaCargar =
     Boolean(archivo) && Boolean(analisis) && !hayErrores && !validando && !cargando && !cargado;
+  const aCargar = (resumen?.validas ?? 0) + (resumen?.a_sobrescribir ?? 0);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -219,7 +219,7 @@ export default function CargaHistoricoCesantias() {
         backTo="/liquidaciones?tab=cesantias"
         eyebrow="Cesantías"
         title="Cargar histórico de cesantías"
-        description="Registre lo que ya consignó y pagó antes de usar el sistema. Un archivo por año."
+        description="Registra lo que ya consignaste y pagaste antes de usar el sistema. Un archivo por año."
       />
 
       {/* Paso 1: plantilla + el año, que en cesantías no va dentro del
@@ -228,6 +228,7 @@ export default function CargaHistoricoCesantias() {
         n={1}
         titulo="Descarga la plantilla"
         subtitulo="Prepara tus datos con las columnas que espera el sistema."
+        contenidoClassName="space-y-2"
         accion={
           <BotonesPlantilla
             descargando={descargandoPlantilla}
@@ -235,12 +236,11 @@ export default function CargaHistoricoCesantias() {
           />
         }
       >
-        <VistaPreviaPlantilla columnas={COLUMNAS_PLANTILLA} filas={FILAS_EJEMPLO} />
+        <VistaPreviaPlantilla columnas={COLUMNAS_PLANTILLA} filas={FILAS_EJEMPLO} formatos=".xlsx, .xls y .csv" />
 
         <p className="text-xs text-muted-foreground">
           La plantilla trae estas columnas y la cédula en formato de texto, que es lo que
-          evita que Excel le quite los ceros de la izquierda. Formatos aceptados:{' '}
-          <strong className="text-foreground">.xlsx, .xls, .csv</strong>. Las fechas se leen
+          evita que Excel le quite los ceros de la izquierda. Las fechas se leen
           como día/mes: <strong className="text-foreground">10/02/2024 es el 10 de febrero</strong>.
         </p>
       </PasoCard>
@@ -279,6 +279,7 @@ export default function CargaHistoricoCesantias() {
           analisis={analisis?.archivo}
           inputRef={inputRef}
           accept={ACCEPT_ARCHIVO}
+          bloqueado={cargando}
           onArchivo={elegirArchivo}
           onQuitar={limpiar}
           detalle={
@@ -300,9 +301,9 @@ export default function CargaHistoricoCesantias() {
         {analisis && <CabecerasIgnoradas cabeceras={analisis.archivo.cabeceras_ignoradas} />}
 
         {analisis?.periodos.cesantias && !cargado && (
-          <Aviso tono="warning" icono={Info}>
+          <Aviso tono="info" icono={Info}>
             El año {analisis.anio} ya tiene un histórico cargado con{' '}
-            {analisis.periodos.cesantias.total_colaboradores} colaboradores. Lo que suba ahora
+            {analisis.periodos.cesantias.total_colaboradores} colaboradores. Lo que subas ahora
             se agrega a ese mismo período.
           </Aviso>
         )}
@@ -313,7 +314,9 @@ export default function CargaHistoricoCesantias() {
         <PasoCard
           n={3}
           titulo="Revisa los datos"
-          subtitulo="Confirma que todo esté bien antes de cargarlo."
+          subtitulo="Confirma que todo esté bien antes de subirlo."
+          accion={<BadgeDetectados total={analisis.archivo.filas_leidas} />}
+          contenidoClassName="space-y-6"
         >
             <StatStrip
               items={[
@@ -342,69 +345,54 @@ export default function CargaHistoricoCesantias() {
             ))}
 
             {hayYaCargados && (
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg bg-warning-soft p-4">
-                <Checkbox
-                  checked={sobrescribir}
-                  onCheckedChange={(v) => cambiarSobrescribir(v === true)}
-                  className="mt-0.5"
-                />
-                <div>
-                  <p className="text-sm font-medium text-foreground">Reemplazar a los que ya estaban cargados</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Hay colaboradores con ese año ya registrado. Sin marcar esta casilla el
-                    archivo no se puede cargar.
-                  </p>
-                </div>
-              </label>
+              <CasillaSobrescribir
+                checked={sobrescribir}
+                onChange={cambiarSobrescribir}
+                titulo="Reemplazar a los que ya estaban cargados"
+              >
+                Hay colaboradores con ese año ya registrado. Sin marcar esta casilla el
+                archivo no se puede subir.
+              </CasillaSobrescribir>
             )}
 
             <TablaFilas filas={analisis.filas} />
 
             {hayErrores && (
-              <Aviso tono="destructive" icono={AlertTriangle}>
+              <Aviso tono="destructive" icono={AlertCircle}>
                 Hay {resumen.con_error} fila{resumen.con_error === 1 ? '' : 's'} con error. El
-                cargue es todo o nada: corrija el Excel y vuelva a subirlo.
+                cargue es todo o nada: corrige el Excel y vuelve a subirlo.
               </Aviso>
             )}
 
             {cargado ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-success-soft p-4">
-                <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-                  <CheckCircle2 className="h-4 w-4 text-success" strokeWidth={2} />
-                  Histórico de {analisis.anio} cargado.
-                </p>
-                <div className="flex gap-2">
-                  {analisis.periodos.cesantias && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        navigate(`/liquidaciones/cesantias/${analisis.periodos.cesantias!.id}`)
-                      }
-                    >
-                      Ver cesantías
-                    </Button>
-                  )}
-                  <Button size="sm" onClick={limpiar}>
-                    Cargar otro año
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex justify-end">
-                <Button
-                  onClick={() => void cargar()}
-                  disabled={!listoParaCargar || !puedeCargar}
-                >
-                  {cargando ? (
-                    <Loader2 className="animate-spin" strokeWidth={2} />
-                  ) : (
-                    <Upload strokeWidth={2} />
-                  )}
-                  Cargar {resumen.validas + resumen.a_sobrescribir} colaborador
-                  {resumen.validas + resumen.a_sobrescribir === 1 ? '' : 'es'}
+              <ExitoCargue total={aCargar} modulo="cesantías">
+                <Button variant="outline" onClick={limpiar}>
+                  Cargar otro archivo
                 </Button>
-              </div>
+                {/* Siempre hay salida: con el período a la vista se entra a él,
+                    y sin él a la pestaña. */}
+                <Button
+                  onClick={() =>
+                    navigate(
+                      analisis.periodos.cesantias
+                        ? `/liquidaciones/cesantias/${analisis.periodos.cesantias.id}`
+                        : '/liquidaciones?tab=cesantias',
+                    )
+                  }
+                >
+                  Ir a cesantías
+                </Button>
+              </ExitoCargue>
+            ) : (
+              <BarraSubida
+                total={aCargar}
+                modulo="cesantías"
+                bloqueado={hayErrores}
+                cargando={cargando}
+                deshabilitado={!listoParaCargar || !puedeCargar}
+                onCancelar={limpiar}
+                onSubir={() => void cargar()}
+              />
             )}
         </PasoCard>
       )}
@@ -431,7 +419,7 @@ export default function CargaHistoricoCesantias() {
             </Regla>
             <Regla n={4}>
               <strong className="text-foreground">Fecha de consignación</strong>, opcional.
-              AÑO-MES-DÍA o DÍA/MES/AÑO. Si la deja vacía se usa el 14 de febrero del año
+              AÑO-MES-DÍA o DÍA/MES/AÑO. Si la dejas vacía se usa el 14 de febrero del año
               siguiente, que es la fecha límite legal.
             </Regla>
             <Regla n={5}>
@@ -473,14 +461,14 @@ export default function CargaHistoricoCesantias() {
               así que la de instrucciones de la plantilla se ignora.
             </Regla>
             <Regla n={13}>
-              También se acepta CSV. Si lo guarda desde Excel en español el separador es el punto
-              y coma; el sistema lo detecta solo y le dice arriba cómo lo leyó.
+              También se acepta CSV. Si lo guardas desde Excel en español el separador es el punto
+              y coma; el sistema lo detecta solo y te dice arriba cómo lo leyó.
             </Regla>
           </div>
 
           <Aviso tono="warning" icono={AlertTriangle}>
             Las fechas se leen como día/mes. <strong>10/02/2024 es el 10 de febrero</strong>, no el
-            2 de octubre. Revíselas en la tabla antes de cargar.
+            2 de octubre. Revísalas en la tabla antes de subir.
           </Aviso>
         </CardContent>
       </Card>
@@ -500,19 +488,13 @@ function TablaFilas({ filas }: { filas: FilaHistorico[] }) {
       <table className="w-full text-sm">
         <thead className={THEAD}>
           <tr>
-            <th className={TH}>Fila</th>
-            <th className={TH}>
-              Colaborador
-            </th>
-            <th className={`${TH} hidden md:table-cell`}>
-              Días
-            </th>
-            <th className={`${TH} text-right`}>
-              Cesantías
-            </th>
-            <th className={`${TH} text-right`}>
-              Intereses
-            </th>
+            <th className={`${TH} w-8`}>#</th>
+            <th className={TH}>Colaborador</th>
+            <th className={`${TH} hidden md:table-cell`}>Días</th>
+            <th className={`${TH} text-right`}>Cesantías</th>
+            <th className={`${TH} hidden lg:table-cell`}>Fondo</th>
+            <th className={`${TH} text-right`}>Intereses</th>
+            <th className={`${TH} hidden xl:table-cell`}>Observación</th>
             <th className={TH}>Estado</th>
           </tr>
         </thead>
@@ -522,7 +504,7 @@ function TablaFilas({ filas }: { filas: FilaHistorico[] }) {
               key={f.fila}
               className={f.estado === 'ERROR' ? 'bg-destructive-soft/40' : undefined}
             >
-              <td className={`${TD} text-muted-foreground`}>{f.fila}</td>
+              <td className={`${TD} text-xs text-muted-foreground`}>{f.fila}</td>
 
               <td className={TD}>
                 <CeldaColaborador
@@ -554,6 +536,17 @@ function TablaFilas({ filas }: { filas: FilaHistorico[] }) {
                     {f.cesantias.fecha_por_defecto && ' (por defecto)'}
                   </p>
                 )}
+                <LineaMora dias={f.cesantias?.dias_mora} />
+              </td>
+
+              {/* El fondo es columna de la plantilla y, vacía, lo toma de la
+                  ficha: sin verlo aquí nadie sabe a qué fondo quedó. */}
+              <td className={`${TD} hidden text-xs lg:table-cell`}>
+                {f.cesantias?.fondo ? (
+                  <span className="break-words text-foreground">{f.cesantias.fondo}</span>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
               </td>
 
               <td className={`${TD} text-right`}>
@@ -566,6 +559,23 @@ function TablaFilas({ filas }: { filas: FilaHistorico[] }) {
                     {f.intereses.fecha_por_defecto && ' (por defecto)'}
                   </p>
                 )}
+                {/* El 12 % legal al lado de lo cargado: la advertencia dice que
+                    difieren, esta línea dice de cuánto es la diferencia. */}
+                {f.intereses?.esperado != null &&
+                  f.intereses.valor != null &&
+                  f.intereses.esperado !== f.intereses.valor && (
+                    <p className="text-xs text-warning">legal: {fmtCOP(f.intereses.esperado)}</p>
+                  )}
+                {f.intereses?.dias_base != null && (
+                  <p className="text-xs text-muted-foreground">
+                    sobre {f.intereses.dias_base} días
+                  </p>
+                )}
+                <LineaMora dias={f.intereses?.dias_mora} />
+              </td>
+
+              <td className={`${TD} hidden xl:table-cell`}>
+                <CeldaObservacion texto={f.observacion} />
               </td>
 
               <td className={TD}>

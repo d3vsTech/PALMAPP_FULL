@@ -34,6 +34,8 @@ interface Props {
   onLimpiar: () => void;
   /** Cómo se llaman los días de este concepto: "acumulados", "del semestre". */
   unidadDias?: string;
+  /** Etiqueta del subtotal. Por defecto "Total" más el título. */
+  etiquetaTotal?: string;
   /** Se oculta el bloque completo cuando el concepto no aplica. */
   oculto?: boolean;
   soloLectura?: boolean;
@@ -49,6 +51,7 @@ export function BloqueConcepto({
   onAjuste,
   onLimpiar,
   unidadDias = 'días',
+  etiquetaTotal,
   oculto = false,
   soloLectura = false,
 }: Props) {
@@ -59,9 +62,12 @@ export function BloqueConcepto({
   const faltaMotivo = ajusteFaltaMotivo(ajuste);
   const valor = concepto?.valor ?? 0;
   const subtitulo = subtituloDe(concepto, unidadDias);
+  const rotuloTotal = etiquetaTotal ?? `Total ${titulo.toLowerCase()}`;
+  // Igual que el diseño: dos campos van en dos columnas, más en tres.
+  const columnas = campos.length === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3';
 
   return (
-    <div className="space-y-3 border-t border-border pt-5 first:border-t-0 first:pt-0">
+    <div className="space-y-3">
       <div className="min-w-0">
         <p className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
           {titulo}
@@ -72,7 +78,7 @@ export function BloqueConcepto({
 
       <div className="flex items-center justify-between gap-4 rounded-lg bg-muted/60 px-4 py-2.5 text-sm">
         <span className="text-muted-foreground">
-          Total {titulo.toLowerCase()}
+          {rotuloTotal}
           {subtitulo && ` · ${subtitulo}`}
         </span>
         <span className="font-semibold tabular-nums text-foreground">{fmtCOP(valor)}</span>
@@ -98,19 +104,19 @@ export function BloqueConcepto({
             onClick={() => setAbierto((v) => !v)}
             className="text-muted-foreground"
           >
-            <Pencil className="h-3.5 w-3.5" />
+            <Pencil strokeWidth={2} />
             Ajustar a mano
-            {abierto ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            {abierto ? <ChevronUp strokeWidth={2} /> : <ChevronDown strokeWidth={2} />}
           </Button>
 
           {abierto && (
             <div className="space-y-4 rounded-lg bg-muted/60 p-4">
               <p className="text-xs text-muted-foreground">
-                Lo que escriba aquí reemplaza el dato con el que el sistema calcula. Queda
+                Lo que escribas aquí reemplaza el dato con el que el sistema calcula. Queda
                 guardado en el comprobante con su motivo.
               </p>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className={`grid grid-cols-1 gap-4 ${columnas}`}>
                 {campos.map(({ campo, label, tipo = 'number' }) => (
                   <div key={String(campo)} className="space-y-2">
                     <Label htmlFor={`${codigo}-${String(campo)}`}>
@@ -139,7 +145,7 @@ export function BloqueConcepto({
                 />
                 {faltaMotivo && (
                   <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+                    <AlertTriangle className="h-3.5 w-3.5 text-destructive" strokeWidth={2} />
                     Sin motivo el ajuste no se aplica.
                   </p>
                 )}
@@ -153,7 +159,7 @@ export function BloqueConcepto({
                   onClick={onLimpiar}
                   className="text-muted-foreground"
                 >
-                  <RotateCcw className="h-3.5 w-3.5" />
+                  <RotateCcw strokeWidth={2} />
                   Volver al valor calculado
                 </Button>
               )}
@@ -185,7 +191,7 @@ function subtituloDe(
 export const CAMPOS_AJUSTE: Record<CodigoAjustable, CampoAjuste[]> = {
   CESANTIAS: [
     { campo: 'salario_basico', label: 'Salario básico' },
-    { campo: 'auxilio_transporte', label: 'Aux. transporte' },
+    { campo: 'auxilio_transporte', label: 'Auxilio de transporte' },
     { campo: 'promedio_variables', label: 'Promedio variables' },
     { campo: 'dias_computados', label: 'Días' },
     { campo: 'fecha_computo_desde', label: 'Calcular desde', tipo: 'date' },
@@ -195,15 +201,15 @@ export const CAMPOS_AJUSTE: Record<CodigoAjustable, CampoAjuste[]> = {
     { campo: 'dias_base_intereses', label: 'Días' },
   ],
   PRIMA: [
-    { campo: 'salario_basico', label: 'Salario básico' },
-    { campo: 'auxilio_transporte', label: 'Aux. transporte' },
+    { campo: 'salario_basico', label: 'Salario' },
+    { campo: 'auxilio_transporte', label: 'Auxilio de transporte' },
     { campo: 'promedio_variables', label: 'Promedio variables' },
     { campo: 'dias_computados', label: 'Días' },
     { campo: 'fecha_computo_desde', label: 'Calcular desde', tipo: 'date' },
   ],
   VACACIONES: [
-    { campo: 'base_mensual', label: 'Salario base' },
-    { campo: 'dias', label: 'Días a compensar' },
+    { campo: 'base_mensual', label: 'Salario' },
+    { campo: 'dias', label: 'Días' },
   ],
   INDEMNIZACION: [
     { campo: 'base', label: 'Salario base' },

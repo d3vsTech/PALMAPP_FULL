@@ -32,29 +32,13 @@ import {
   type VacacionItem,
 } from '../../../api/vacaciones';
 import type { ApiError } from '../../../api/client';
-import { formatFecha } from '../../utils/fecha';
 import {
-  ESTADO_VACACION_LABEL, ORIGEN_LABEL, descargarBlob, fmtCOP, fmtDias,
+  ESTADO_VACACION_LABEL, ESTADO_VACACION_VARIANTE, ORIGEN_LABEL,
+  descargarBlob, fmtCOP, fmtDias, fmtFechaCorta,
 } from './vacaciones/comunes';
 import PagoVacacionDialog from './vacaciones/PagoVacacionDialog';
 import AnularVacacionDialog, { type ModoAnulacion } from './vacaciones/AnularVacacionDialog';
 import PageHeader from '../../components/common/PageHeader';
-
-type VarianteBadge = 'success' | 'warning' | 'destructive' | 'secondary' | 'info';
-
-// PR-N4 - PENDIENTE es una solicitud venida de Novedades: pide acción.
-const VARIANTE_ESTADO: Record<EstadoVacacion, VarianteBadge> = {
-  APROBADA: 'warning',
-  PAGADA: 'success',
-  CANCELADA: 'destructive',
-  PENDIENTE: 'warning',
-};
-
-// PR-L15 - El modo de pago no es un estado: es quien pone la plata.
-const VARIANTE_MODO_PAGO: Record<ModoPagoVacacion, VarianteBadge> = {
-  DIRECTO: 'secondary',
-  NOMINA: 'info',
-};
 
 /**
  * PR-L15 — `modo_pago = NOMINA` no gira plata desde el modulo: cada nomina
@@ -219,7 +203,7 @@ export default function VacacionesHistorico() {
             <Input type="date" value={filtroHasta} onChange={(e) => setFiltroHasta(e.target.value)} className="sm:w-40" />
           </label>
           <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-            <SelectTrigger className="w-full sm:w-48" aria-label="Estado"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="col-span-2 w-full sm:col-span-1 sm:w-48" aria-label="Estado"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos los estados</SelectItem>
               <SelectItem value="PENDIENTE">Solicitudes pendientes</SelectItem>
@@ -229,7 +213,7 @@ export default function VacacionesHistorico() {
             </SelectContent>
           </Select>
           <Select value={filtroOrigen} onValueChange={setFiltroOrigen}>
-            <SelectTrigger className="w-full sm:w-48" aria-label="Origen"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="col-span-2 w-full sm:col-span-1 sm:w-48" aria-label="Origen"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todo origen</SelectItem>
               <SelectItem value="SISTEMA">Liquidadas aquí</SelectItem>
@@ -237,7 +221,7 @@ export default function VacacionesHistorico() {
             </SelectContent>
           </Select>
           <Select value={filtroModoPago} onValueChange={setFiltroModoPago}>
-            <SelectTrigger className="w-full sm:w-48" aria-label="Forma de pago"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="col-span-2 w-full sm:col-span-1 sm:w-48" aria-label="Forma de pago"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Toda forma de pago</SelectItem>
               <SelectItem value="DIRECTO">{MODO_PAGO_LABEL.DIRECTO}</SelectItem>
@@ -245,7 +229,7 @@ export default function VacacionesHistorico() {
             </SelectContent>
           </Select>
           <Select value={filtroInterrupcion} onValueChange={setFiltroInterrupcion}>
-            <SelectTrigger className="w-full sm:w-52" aria-label="Interrupción"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="col-span-2 w-full sm:col-span-1 sm:w-52" aria-label="Interrupción"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Interrumpidas o no</SelectItem>
               <SelectItem value="interrumpidas">Interrumpidas</SelectItem>
@@ -261,7 +245,7 @@ export default function VacacionesHistorico() {
         <button
           type="button"
           onClick={() => { setFiltroInterrupcion('reintegro'); setPagina(1); }}
-          className="flex w-full gap-2 rounded-lg bg-warning-soft p-4 text-left text-sm text-foreground transition-colors hover:bg-warning-soft/70"
+          className="flex w-full gap-2 rounded-lg bg-warning-soft p-3 text-left text-sm text-foreground transition-colors hover:bg-warning-soft/70"
         >
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
           <span>
@@ -276,15 +260,13 @@ export default function VacacionesHistorico() {
       <Card className="gap-0 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-muted/60 text-[13px] font-medium text-muted-foreground">
+            <thead className="whitespace-nowrap bg-muted/60 text-[13px] font-medium text-muted-foreground">
               <tr>
                 <th className="px-5 py-2.5 text-left font-semibold">Colaborador</th>
-                <th className="hidden px-4 py-2.5 text-left font-semibold lg:table-cell">Comprobante</th>
                 <th className="hidden px-4 py-2.5 text-right font-semibold md:table-cell">Días disfrute</th>
                 <th className="hidden px-4 py-2.5 text-right font-semibold md:table-cell">Días dinero</th>
-                <th className="hidden px-4 py-2.5 text-left font-semibold lg:table-cell">Rango</th>
-                <th className="hidden px-4 py-2.5 text-left font-semibold xl:table-cell">Forma de pago</th>
-                <th className="hidden px-4 py-2.5 text-left font-semibold sm:table-cell">Pago</th>
+                <th className="hidden px-4 py-2.5 text-left font-semibold lg:table-cell">Inicio vacaciones</th>
+                <th className="hidden px-4 py-2.5 text-left font-semibold sm:table-cell">Fecha de pago</th>
                 <th className="px-4 py-2.5 text-right font-semibold">Total</th>
                 <th className="hidden px-4 py-2.5 text-left font-semibold sm:table-cell">Estado</th>
                 <th className="px-4 py-2.5"><span className="sr-only">Acciones</span></th>
@@ -293,7 +275,7 @@ export default function VacacionesHistorico() {
             <tbody className="divide-y divide-border">
               {cargando ? (
                 <tr>
-                  <td colSpan={10} className="px-5 py-12 text-center">
+                  <td colSpan={8} className="px-5 py-12 text-center">
                     <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Cargando registros...
@@ -302,7 +284,7 @@ export default function VacacionesHistorico() {
                 </tr>
               ) : filas.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-5 py-12 text-center text-muted-foreground">
+                  <td colSpan={8} className="px-5 py-12 text-center text-muted-foreground">
                     {hayFiltros
                       ? 'No se encontraron registros con los filtros aplicados.'
                       : 'Todavía no hay vacaciones liquidadas.'}
@@ -341,7 +323,7 @@ export default function VacacionesHistorico() {
             {/* PR-N4 — Sin liquidar, la nómina del período paga esos días
                 como trabajados. Merece su propio contador. */}
             {meta && (meta.totales.solicitudes_pendientes ?? 0) > 0 && (
-              <span className="font-medium text-warning">
+              <span className="font-medium text-foreground">
                 {' · '}{meta.totales.solicitudes_pendientes} solicitud
                 {meta.totales.solicitudes_pendientes !== 1 ? 'es' : ''} por resolver
               </span>
@@ -410,40 +392,36 @@ interface FilaHistoricoProps {
 function FilaHistorico({ h, descargando, onLiquidar, onVer, onPagar, onDescargar, onAnular }: FilaHistoricoProps) {
   return (
     <tr className="transition-colors hover:bg-muted/40">
-      <td className="px-5 py-3">
+      <td className="min-w-[12rem] px-5 py-3">
         <span className="font-semibold text-foreground">{h.empleado.nombre_completo}</span>
         <span className="block text-xs text-muted-foreground">{h.empleado.cargo ?? `C.C. ${h.empleado.documento}`}</span>
-        <span className="mt-1 block sm:hidden">
-          <Badge variant={VARIANTE_ESTADO[h.estado]}>{ESTADO_VACACION_LABEL[h.estado]}</Badge>
+        {/* El comprobante y su origen van bajo el nombre, sin columna propia. */}
+        <span className="block text-xs text-muted-foreground">
+          {h.numero_comprobante}
+          {h.origen !== 'SISTEMA' && ` · ${ORIGEN_LABEL[h.origen]}`}
         </span>
-      </td>
-      <td className="hidden px-4 py-3 lg:table-cell">
-        <span className="text-foreground">{h.numero_comprobante}</span>
-        {h.origen !== 'SISTEMA' && (
-          <span className="block text-xs text-muted-foreground">{ORIGEN_LABEL[h.origen]}</span>
-        )}
         {h.interrumpida && (
           <span className="block text-xs text-warning">
             Interrumpida
             {h.interrupcion?.reintegro?.estado === 'PENDIENTE' ? ' · reintegro pendiente' : ''}
           </span>
         )}
+        <span className="mt-1 block sm:hidden">
+          <Badge variant={ESTADO_VACACION_VARIANTE[h.estado]}>{ESTADO_VACACION_LABEL[h.estado]}</Badge>
+        </span>
       </td>
       <td className="hidden px-4 py-3 text-right tabular-nums text-foreground md:table-cell">{fmtDias(h.dias_habiles)}</td>
       <td className="hidden px-4 py-3 text-right tabular-nums text-foreground md:table-cell">
         {h.dias_dinero > 0 ? fmtDias(h.dias_dinero) : <span className="text-muted-foreground">—</span>}
       </td>
       <td className="hidden whitespace-nowrap px-4 py-3 text-muted-foreground lg:table-cell">
-        {h.fecha_inicio ? `${formatFecha(h.fecha_inicio)} – ${formatFecha(h.fecha_fin)}` : '—'}
-      </td>
-      <td className="hidden px-4 py-3 xl:table-cell">
-        {h.estado === 'PENDIENTE' ? (
-          <span className="text-muted-foreground">—</span>
-        ) : (
-          <Badge variant={VARIANTE_MODO_PAGO[h.modo_pago ?? 'DIRECTO']}>{MODO_PAGO_LABEL[h.modo_pago ?? 'DIRECTO']}</Badge>
+        {fmtFechaCorta(h.fecha_inicio)}
+        {/* El fin del disfrute se conserva como subtítulo de la fila. */}
+        {h.fecha_inicio && h.fecha_fin && (
+          <span className="block text-xs">hasta {fmtFechaCorta(h.fecha_fin)}</span>
         )}
       </td>
-      <td className="hidden px-4 py-3 sm:table-cell">
+      <td className="hidden whitespace-nowrap px-4 py-3 sm:table-cell">
         {/* En NOMINA la fecha de pago llega solo cuando el ultimo tramo
             cierra: hasta entonces lo util es cuanto pagaron y cuanto falta. */}
         {porNomina(h) && h.estado !== 'CANCELADA' ? (
@@ -454,17 +432,21 @@ function FilaHistorico({ h, descargando, onLiquidar, onVer, onPagar, onDescargar
                 {fmtCOP(saldo(h))} pendiente
               </span>
             ) : (
-              <span className="block text-xs text-muted-foreground">{formatFecha(h.pago.fecha_pago)}</span>
+              <span className="block text-xs text-muted-foreground">{fmtFechaCorta(h.pago.fecha_pago)}</span>
             )}
           </>
         ) : (
-          <span className="text-muted-foreground">{formatFecha(h.pago.fecha_pago)}</span>
+          <span className="text-muted-foreground">{fmtFechaCorta(h.pago.fecha_pago)}</span>
         )}
       </td>
       <td className="px-4 py-3 text-right font-semibold tabular-nums text-foreground">{fmtCOP(h.valor_total)}</td>
       <td className="hidden px-4 py-3 sm:table-cell">
         <div className="flex flex-col items-start gap-1">
-          <Badge variant={VARIANTE_ESTADO[h.estado]}>{ESTADO_VACACION_LABEL[h.estado]}</Badge>
+          <Badge variant={ESTADO_VACACION_VARIANTE[h.estado]}>{ESTADO_VACACION_LABEL[h.estado]}</Badge>
+          {/* Forma de pago bajo el estado: el diseño no le da columna. */}
+          {h.estado !== 'PENDIENTE' && (
+            <span className="text-xs text-muted-foreground">{MODO_PAGO_LABEL[h.modo_pago ?? 'DIRECTO']}</span>
+          )}
           {saldoVencido(h) && (
             <span
               className="inline-flex items-center gap-1 text-xs text-destructive"
@@ -476,7 +458,7 @@ function FilaHistorico({ h, descargando, onLiquidar, onVer, onPagar, onDescargar
           )}
         </div>
       </td>
-      <td className="px-4 py-3">
+      <td className="whitespace-nowrap px-4 py-3">
         <AccionesFila h={h} descargando={descargando} onLiquidar={onLiquidar} onVer={onVer} onPagar={onPagar} onDescargar={onDescargar} onAnular={onAnular} />
       </td>
     </tr>

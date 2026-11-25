@@ -48,18 +48,19 @@ export function PanelDevengadosManuales({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
+              size="icon"
               onClick={() => onQuitar(d.key)}
               aria-label="Quitar"
+              title="Quitar"
               className="text-muted-foreground hover:text-destructive"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 strokeWidth={2} />
             </Button>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             {d.codigo === 'OTRO_DEVENGADO' && (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor={`dev-nombre-${d.key}`}>Nombre *</Label>
                 <Input id={`dev-nombre-${d.key}`}
                   value={d.nombre}
@@ -70,7 +71,7 @@ export function PanelDevengadosManuales({
             )}
 
             {d.codigo === 'SALARIO_PENDIENTE' && (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor={`dev-dias-${d.key}`}>Días</Label>
                 <Input id={`dev-dias-${d.key}`}
                   type="number"
@@ -81,7 +82,7 @@ export function PanelDevengadosManuales({
               </div>
             )}
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor={`dev-valor-${d.key}`}>Valor</Label>
               <Input id={`dev-valor-${d.key}`}
                 type="number"
@@ -91,7 +92,7 @@ export function PanelDevengadosManuales({
               />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor={`dev-motivo-${d.key}`}>Motivo *</Label>
               <Input id={`dev-motivo-${d.key}`}
                 value={d.motivo}
@@ -103,7 +104,7 @@ export function PanelDevengadosManuales({
 
           {!d.motivo.trim() && (
             <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+              <AlertTriangle className="h-3.5 w-3.5 text-destructive" strokeWidth={2} />
               Sin motivo este concepto no se agrega.
             </p>
           )}
@@ -117,9 +118,8 @@ export function PanelDevengadosManuales({
           size="sm"
           disabled={yaHaySalarioPendiente}
           onClick={() => onAgregar('SALARIO_PENDIENTE')}
-          
         >
-          <Plus className="h-3.5 w-3.5" />
+          <Plus strokeWidth={2} />
           Salario pendiente
         </Button>
         <Button
@@ -127,9 +127,8 @@ export function PanelDevengadosManuales({
           variant="outline"
           size="sm"
           onClick={() => onAgregar('OTRO_DEVENGADO')}
-          
         >
-          <Plus className="h-3.5 w-3.5" />
+          <Plus strokeWidth={2} />
           Otro devengado
         </Button>
       </div>
@@ -172,14 +171,14 @@ export function PanelDeducciones({
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-foreground">Descontar salud y pensión</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Solo sobre el salario pendiente. Las cesantías, los intereses, la prima, las
             vacaciones compensadas y la indemnización no cotizan.
           </p>
         </div>
-        <Switch checked={seguridadSocial} onCheckedChange={onSeguridadSocial} />
+        <Switch className="shrink-0" checked={seguridadSocial} onCheckedChange={onSeguridadSocial} aria-label="Descontar salud y pensión" />
       </div>
 
       <div className="space-y-3">
@@ -200,7 +199,7 @@ export function PanelDeducciones({
                 seleccion[p.prestamo_id] ? 'border-primary bg-primary-soft' : 'border-border hover:bg-muted/40'
               }`}
             >
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 <Checkbox
                   checked={seleccion[p.prestamo_id] ?? false}
                   onCheckedChange={(v) => onPrestamo(p.prestamo_id, v === true)}
@@ -212,7 +211,7 @@ export function PanelDeducciones({
                   </p>
                 </div>
               </div>
-              <span className="text-sm font-semibold tabular-nums text-foreground">{fmtCOP(p.saldo_pendiente)}</span>
+              <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{fmtCOP(p.saldo_pendiente)}</span>
             </label>
           ))
         )}
@@ -222,7 +221,7 @@ export function PanelDeducciones({
         <div className="flex items-center justify-between">
           <p className="text-[13px] font-medium text-muted-foreground">Otras deducciones</p>
           <Button type="button" variant="outline" size="sm" onClick={onAgregarOtra}>
-            <Plus className="h-3.5 w-3.5" />
+            <Plus strokeWidth={2} />
             Agregar
           </Button>
         </div>
@@ -230,7 +229,7 @@ export function PanelDeducciones({
         {otras.map((o) => (
           <div key={o.key} className="space-y-4 rounded-lg bg-muted/60 p-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor={`ded-concepto-${o.key}`}>Concepto *</Label>
                 <Input id={`ded-concepto-${o.key}`}
                   value={o.nombre}
@@ -238,7 +237,7 @@ export function PanelDeducciones({
                   placeholder="Dotación no devuelta"
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor={`ded-valor-${o.key}`}>Valor *</Label>
                 <Input id={`ded-valor-${o.key}`}
                   type="number"
@@ -246,7 +245,7 @@ export function PanelDeducciones({
                   onChange={(e) => onEditarOtra(o.key, 'valor', e.target.value)}
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor={`ded-motivo-${o.key}`}>Motivo</Label>
                 <Input id={`ded-motivo-${o.key}`}
                   value={o.motivo}
@@ -254,8 +253,8 @@ export function PanelDeducciones({
                 />
               </div>
             </div>
-            <div className="flex items-center justify-between">
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+            <div className="flex items-center justify-between gap-3">
+              <label className="flex min-w-0 cursor-pointer items-center gap-2 text-sm text-foreground">
                 <Checkbox
                   checked={o.autorizacion_escrita}
                   onCheckedChange={(v) => onEditarOtra(o.key, 'autorizacion_escrita', v === true)}
@@ -265,12 +264,13 @@ export function PanelDeducciones({
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
+                size="icon"
                 onClick={() => onQuitarOtra(o.key)}
                 aria-label="Quitar"
+                title="Quitar"
                 className="text-muted-foreground hover:text-destructive"
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 strokeWidth={2} />
               </Button>
             </div>
           </div>
@@ -279,8 +279,8 @@ export function PanelDeducciones({
 
       {hayDescuento && (
         <label
-          className={`flex cursor-pointer items-start gap-3 rounded-lg p-4 transition-colors ${
-            autorizacionEscrita ? 'border border-primary bg-primary-soft' : 'bg-destructive-soft'
+          className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${
+            autorizacionEscrita ? 'border-primary bg-primary-soft' : 'border-border hover:bg-muted/40'
           }`}
         >
           <Checkbox

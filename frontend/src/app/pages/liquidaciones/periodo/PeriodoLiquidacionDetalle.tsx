@@ -46,7 +46,9 @@ import Pasos from '../../../components/liquidaciones/Pasos';
 import Desprendible from '../../../components/liquidaciones/Desprendible';
 import TotalResumen from '../../../components/liquidaciones/TotalResumen';
 import type { Concepto } from '../../../components/liquidaciones/ConceptosTabla';
-import { fmtCOP, TEXTOS_PERIODO, type TipoPeriodoDetalle } from './textos';
+import {
+  fmtCOP, semestreLabel, TEXTOS_PERIODO, CAJA_AVISO, CAJA_NOTA, CAJA_ERROR, type TipoPeriodoDetalle,
+} from './textos';
 import VistaPeriodoCerrado from './VistaPeriodoCerrado';
 
 const PASOS = ['Información del período', 'Seleccionar colaboradores', 'Confirmación'];
@@ -59,8 +61,6 @@ const METODO_LABEL: Record<string, string> = {
 
 /** "cesantías" → "Cesantías", para el eyebrow del encabezado. */
 const mayuscula = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-
-const cajaAviso = 'flex gap-2 rounded-lg bg-warning-soft p-3 text-sm text-foreground';
 
 // ── Desprendible del paso 3 ──────────────────────────────────────────────────
 
@@ -76,8 +76,8 @@ function conceptosPreview(fila: PreviewFilaLiquidacion, tipo: TipoPeriodoDetalle
   if (tipo === 'INTERESES_CESANTIAS') {
     return [
       { label: 'Saldo cesantías', valor: fmtCOP(fila.origen?.saldo_cesantias ?? fila.base.base_prestacional) },
-      { label: 'Tasa de interés', valor: `${fila.resultado.tasa_aplicada ?? 12}% anual`, detalle: 'Ley 52 de 1975' },
-      { label: 'Días base', valor: fila.resultado.dias, detalle: formula },
+      { label: 'Tasa de interés', valor: `${fila.resultado.tasa_aplicada ?? 12} % anual`, detalle: 'Ley 52 de 1975' },
+      { label: 'Días laborados', valor: fila.resultado.dias, detalle: formula },
       total,
     ];
   }
@@ -90,17 +90,17 @@ function conceptosPreview(fila: PreviewFilaLiquidacion, tipo: TipoPeriodoDetalle
       valor: fmtCOP(fila.base.base_prestacional),
       detalle: (fila.base.metodo_base && METODO_LABEL[fila.base.metodo_base]) || 'Base de cálculo',
     },
-    { label: 'Días', valor: fila.resultado.dias, detalle: formula },
+    { label: 'Días laborados', valor: fila.resultado.dias, detalle: formula },
     total,
   ];
 }
 
 /** Días computados con el descuento entre paréntesis cuando lo hay. */
 function diasDato(fila: PreviewFilaLiquidacion, conBaseSalarial: boolean): Dato {
-  if (!conBaseSalarial) return { label: 'Días base', value: fila.resultado.dias };
+  if (!conBaseSalarial) return { label: 'Días laborados', value: fila.resultado.dias };
   const d = fila.dias;
   return {
-    label: 'Días computados',
+    label: 'Días laborados',
     value: (
       <>
         {d.dias_computados}
@@ -123,33 +123,41 @@ function AvisosFila({ fila }: { fila: PreviewFilaLiquidacion }) {
     <div className="space-y-2 px-5 pb-4">
       {/* §2.8: el último tramo del semestre aún no tiene nómina cerrada. */}
       {diasProyectados > 0 && (
-        <div className={cajaAviso}>
-          <Clock className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
-          <div>
+        <div className={CAJA_AVISO}>
+          <Clock className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+          <div className="space-y-0.5">
             <p className="font-medium">Valor provisional: {diasProyectados} día(s) proyectados</p>
-            <p className="text-muted-foreground">
+            <p>
               Los últimos {diasProyectados} día(s) del semestre todavía no tienen nómina cerrada. Se calculan con el promedio de lo ya liquidado para poder pagar a tiempo. Al cerrar esa nómina puedes reabrir el período y recalcular para dejar el valor definitivo.
             </p>
           </div>
         </div>
       )}
       {fila.bloqueantes.map((b) => (
-        <div key={b} className="flex gap-2 rounded-lg bg-destructive-soft p-3 text-sm font-medium text-foreground">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" strokeWidth={2} />
-          {BLOQUEANTE_LABEL[b] ?? b}
+        <div key={b} className={`${CAJA_ERROR} font-medium`}>
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+          <p>{BLOQUEANTE_LABEL[b] ?? b}</p>
         </div>
       ))}
       {advertencias.map((a, i) => (
-        <div key={i} className={cajaAviso}>
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
-          {a.mensaje ?? a.code}
+        <div key={i} className={CAJA_AVISO}>
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+          <p>{a.mensaje ?? a.code}</p>
         </div>
       ))}
     </div>
   );
 }
 
-function DesprendiblePreview({ fila, tipo }: { fila: PreviewFilaLiquidacion; tipo: TipoPeriodoDetalle }) {
+interface DesprendiblePreviewProps {
+  fila: PreviewFilaLiquidacion;
+  tipo: TipoPeriodoDetalle;
+  /** Prima muestra el semestre en la cabecera, como el diseño. */
+  semestre: number;
+  anio: number;
+}
+
+function DesprendiblePreview({ fila, tipo, semestre, anio }: DesprendiblePreviewProps) {
   // Prima comparte con cesantías la base salarial de tres componentes
   // (§2.8); el caso distinto es intereses, que parte de un saldo y una tasa.
   const conBaseSalarial = tipo !== 'INTERESES_CESANTIAS';
@@ -157,8 +165,10 @@ function DesprendiblePreview({ fila, tipo }: { fila: PreviewFilaLiquidacion; tip
   return (
     <Desprendible
       nombre={col.nombre_completo}
-      cargo={col.cargo ?? '—'}
-      meta={{ label: 'Fondo', value: col.fondo_cesantias ?? '—' }}
+      cargo={col.cargo ?? undefined}
+      meta={tipo === 'PRIMA'
+        ? { label: 'Semestre', value: `${semestre}° · ${anio}` }
+        : { label: 'Fondo', value: col.fondo_cesantias ?? '—' }}
       datos={[
         { label: 'Cédula', value: col.documento },
         diasDato(fila, conBaseSalarial),
@@ -425,16 +435,24 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
     .sort((a, b) => comparePersonaByFirstName(a.empleado, b.empleado));
   const fechaLarga = (f: string) => formatFecha(f, { day: 'numeric', month: 'long', year: 'numeric' });
   const todosMarcados = elegibles.length > 0 && marcados.length === elegibles.length;
+  // En la nota gris de prima la fecha resalta en el color del texto, como el diseño.
+  const fuerte = esPrima ? 'text-foreground' : undefined;
+  // Fondos que ya traen las filas agregadas; vacío mientras no haya nadie.
+  const fondosFilas = Array.from(
+    new Set(filasAgregadas.map(f => f.empleado.fondo_cesantias).filter((x): x is string => !!x)),
+  ).join(', ');
 
+  // Prima lleva el semestre en segundo lugar y la descripción al final.
   const datosPeriodo: Dato[] = [
     { label: 'Año', value: periodo.anio },
-    { label: 'Descripción', value: periodo.descripcion },
-    ...(esPrima
-      ? [{ label: 'Semestre', value: periodo.semestre === 1 ? '1° semestre (ene – jun)' : '2° semestre (jul – dic)' }]
-      : []),
+    esPrima
+      ? { label: 'Semestre', value: semestreLabel(periodo.semestre) || '—' }
+      : { label: 'Descripción', value: periodo.descripcion },
     { label: 'Fecha de inicio', value: formatFecha(periodo.fecha_inicio) },
     { label: 'Fecha de fin', value: formatFecha(periodo.fecha_fin) },
-    ...(esIntereses ? [{ label: 'Tasa de interés', value: '12% anual (Ley 52 de 1975, fija por ley)' }] : []),
+    ...(esPrima ? [{ label: 'Descripción', value: periodo.descripcion }] : []),
+    ...(esCesantias ? [{ label: 'Fondos de cesantías', value: fondosFilas || '—' }] : []),
+    ...(esIntereses ? [{ label: 'Tasa de interés', value: '12 % anual (Ley 52 de 1975, fija por ley)' }] : []),
     ...(esIntereses && periodo.periodo_base
       ? [{
           label: 'Cesantías base',
@@ -451,7 +469,9 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
         title={periodo.descripcion}
         description={
           <>
-            {txt.subtituloWizard} · Fecha límite: {formatFecha(periodo.fecha_limite_operativa)}
+            {esPrima ? semestreLabel(periodo.semestre) : txt.subtituloWizard}
+            {esPrima ? ' · Límite: ' : ' · Fecha límite: '}
+            {formatFecha(periodo.fecha_limite_operativa)}
             <span title={`Fecha legal: ${formatFecha(periodo.fecha_limite_legal)}`}> (legal {formatFecha(periodo.fecha_limite_legal)})</span>
           </>
         }
@@ -465,16 +485,18 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
         <SeccionCard title="Información del período" description="Revisa los datos antes de continuar.">
           <div className="space-y-5">
             <DatoLista items={datosPeriodo} />
-            <div className={cajaAviso}>
-              <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+            <div className={esPrima ? CAJA_NOTA : CAJA_AVISO}>
+              {esPrima
+                ? <Info className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+                : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />}
               <p>
-                Fecha límite: legal el <strong>{fechaLarga(periodo.fecha_limite_legal)}</strong>, operativa el <strong>{fechaLarga(periodo.fecha_limite_operativa)}</strong>. {txt.avisoLimite}
+                {txt.limiteLabel}: <strong className={fuerte}>{fechaLarga(periodo.fecha_limite_legal)}</strong>, operativa el <strong className={fuerte}>{fechaLarga(periodo.fecha_limite_operativa)}</strong>. {txt.avisoLimite}
               </p>
             </div>
             {periodo.advertencias_globales.map((a, i) => (
-              <div key={i} className={cajaAviso}>
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
-                <span>{a.mensaje ?? a.code}</span>
+              <div key={i} className={CAJA_AVISO}>
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+                <p>{a.mensaje ?? a.code}</p>
               </div>
             ))}
           </div>
@@ -488,7 +510,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
             <div className="space-y-0.5">
               <h3>Seleccionar personal</h3>
               <p className="text-sm text-muted-foreground">
-                Agrega los colaboradores a este período de {txt.nombre}
+                Agrega los colaboradores a este período de {txt.nombreCorto}
                 {filasAgregadas.length > 0 && (
                   <span className="text-foreground"> · {filasAgregadas.length} ya en el período</span>
                 )}
@@ -513,7 +535,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
                     type="button"
                     onClick={() => quitarFila(f.id)}
                     disabled={quitandoFila === f.id}
-                    className="rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className="rounded-sm p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                     title="Quitar del período"
                     aria-label={`Quitar a ${f.empleado.nombre_completo}`}
                   >
@@ -538,15 +560,15 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
           ) : (
             <div className="overflow-x-auto border-t border-border">
               <table className="w-full text-sm">
-                <thead className="bg-muted/60 text-[13px] font-medium text-muted-foreground">
+                <thead className="whitespace-nowrap bg-muted/60 text-[13px] font-medium text-muted-foreground">
                   <tr>
                     <th className="w-12 px-5 py-2.5">
                       <Checkbox checked={todosMarcados} onCheckedChange={toggleTodos} aria-label="Seleccionar todos" />
                     </th>
                     <th className="px-4 py-2.5 text-left font-semibold">Nombre</th>
-                    <th className="hidden px-4 py-2.5 text-left font-semibold sm:table-cell">Cargo</th>
                     {esIntereses ? (
                       <>
+                        <th className="hidden px-4 py-2.5 text-left font-semibold sm:table-cell">Fondo</th>
                         <th className="px-4 py-2.5 text-right font-semibold">Saldo cesantías</th>
                         <th className="hidden px-4 py-2.5 text-right font-semibold sm:table-cell">Días base</th>
                         <th className="px-4 py-2.5 text-right font-semibold">Intereses estimados</th>
@@ -575,7 +597,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
                     return (
                       <tr key={col.id} {...comoBoton(() => toggleMarcado(col.id))}
                         className={`cursor-pointer transition-colors ${sel ? 'bg-primary-soft' : 'hover:bg-muted/40'}`}>
-                        <td className="px-5 py-3">
+                        <td className="celda-seleccion px-5 py-3">
                           <Checkbox
                             checked={sel}
                             onCheckedChange={() => toggleMarcado(col.id)}
@@ -585,11 +607,13 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
                         </td>
                         <td className="px-4 py-3">
                           <span className="font-medium text-foreground">{col.nombre_completo}</span>
-                          <span className="block text-xs text-muted-foreground">{col.documento}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {[col.cargo, col.documento].filter(Boolean).join(' · ')}
+                          </span>
                         </td>
-                        <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">{col.cargo ?? '—'}</td>
                         {esIntereses ? (
                           <>
+                            <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">{col.fondo_cesantias ?? '—'}</td>
                             <td className="px-4 py-3 text-right tabular-nums text-foreground">{fmtCOP(col.saldo_cesantias ?? 0)}</td>
                             <td className="hidden px-4 py-3 text-right tabular-nums text-foreground sm:table-cell">{col.dias_base_intereses ?? '—'}</td>
                             <td className="px-4 py-3 text-right tabular-nums">
@@ -628,7 +652,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
 
           {/* Excluidos con motivo (§3.1) */}
           {excluidos.length > 0 && (
-            <div className="space-y-1.5 border-t border-border bg-muted/30 px-5 py-4">
+            <div className="space-y-1.5 border-t border-border px-5 py-4">
               <p className="text-[13px] font-medium text-muted-foreground">
                 {excluidos.length} colaborador{excluidos.length !== 1 ? 'es' : ''} no elegible{excluidos.length !== 1 ? 's' : ''}
               </p>
@@ -650,7 +674,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
           <div className="space-y-1">
             <h2>Confirmación</h2>
             <p className="text-sm text-muted-foreground">
-              Desprendibles de liquidación de {txt.nombre} · {preview?.totales.colaboradores ?? 0} colaborador{(preview?.totales.colaboradores ?? 0) !== 1 ? 'es' : ''}
+              {txt.desprendiblesLabel} · {preview?.totales.colaboradores ?? 0} colaborador{(preview?.totales.colaboradores ?? 0) !== 1 ? 'es' : ''}
             </p>
           </div>
 
@@ -664,15 +688,16 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
           {!cargandoPreview && [...(preview?.filas ?? [])]
             .sort((a, b) => comparePersonaByFirstName(a.empleado, b.empleado))
             .map((fila) => (
-            <DesprendiblePreview key={fila.fila_id} fila={fila} tipo={tipo} />
+            <DesprendiblePreview key={fila.fila_id} fila={fila} tipo={tipo} semestre={periodo.semestre} anio={periodo.anio} />
           ))}
 
-          {!cargandoPreview && preview && (
+          {/* El cierre del paso va siempre, como el diseño; en 0 mientras no haya preview. */}
+          {!cargandoPreview && (
             <TotalResumen
               conteoLabel="Colaboradores liquidados"
-              conteo={preview.totales.colaboradores}
+              conteo={preview?.totales.colaboradores ?? 0}
               totalLabel={txt.totalPreviewLabel}
-              total={fmtCOP(preview.totales.valor)}
+              total={fmtCOP(preview?.totales.valor ?? 0)}
             />
           )}
         </div>

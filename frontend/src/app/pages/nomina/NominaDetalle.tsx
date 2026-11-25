@@ -1336,12 +1336,12 @@ export default function NominaDetalle() {
                       </span>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="truncate">{grupo.tercero_nombre}</h3>
+                          <h3 className="break-words">{grupo.tercero_nombre}</h3>
                           <Badge variant={pagado ? 'success' : 'warning'}>
                             {pagado ? 'Pagado' : 'Pendiente'}
                           </Badge>
                         </div>
-                        <p className="truncate text-xs text-muted-foreground">
+                        <p className="break-words text-xs text-muted-foreground">
                           {nit && <>NIT {nit}</>}
                           {nit && representante && ' · '}
                           {representante}
@@ -1577,6 +1577,7 @@ export default function NominaDetalle() {
                       <tr>
                         <th className={`${th} pl-5 text-left`}>Colaborador</th>
                         <th className={`${th} hidden text-left sm:table-cell`}>Tipo</th>
+                        <th className={`${th} hidden text-right lg:table-cell`}>Salario base</th>
                         {abierta && (
                           <>
                             <th className={`${th} text-right`} title="Lo que va a cobrar">
@@ -1587,12 +1588,12 @@ export default function NominaDetalle() {
                         )}
                         {!abierta && (
                           <>
-                            <th className={`${th} hidden text-right lg:table-cell`}>Jornales</th>
-                            <th className={`${th} hidden text-right lg:table-cell`}>Cosechas</th>
+                            <th className={`${th} hidden text-right xl:table-cell`}>Jornales</th>
+                            <th className={`${th} hidden text-right xl:table-cell`}>Cosechas</th>
                             <th className={`${th} hidden text-right md:table-cell`} title="Incluye auxilio de transporte">
                               Devengado
                             </th>
-                            <th className={`${th} hidden text-right md:table-cell`}>Deducciones</th>
+                            <th className={`${th} hidden text-right lg:table-cell`}>Deducciones</th>
                             <th className={`${th} text-right`}>Neto</th>
                           </>
                         )}
@@ -1637,7 +1638,7 @@ export default function NominaDetalle() {
                         const devengado = toNumber(emp.total_devengado) + auxilio;
                         return (
                           <tr key={emp.id} className="transition-colors hover:bg-muted/40">
-                            <td className={`${td} pl-5`}>
+                            <td className={`${td} min-w-[14rem] pl-5`}>
                               <div className="flex items-center gap-3">
                                 <Avatar nombre={nombre} size="sm" className="hidden sm:inline-flex" />
                                 <div className="min-w-0">
@@ -1661,6 +1662,10 @@ export default function NominaDetalle() {
                                   {emp.salario_tipo ?? '—'}
                                 </Badge>
                               )}
+                            </td>
+                            <td className={`${td} hidden text-right tabular-nums text-muted-foreground lg:table-cell`}>
+                              {/* Operario de tercero: no tiene salario base propio. */}
+                              {esOperario ? '—' : fmtPesos(toNumber(emp.salario_base))}
                             </td>
                             {abierta && (
                             <td className={`${td} text-right`}>
@@ -1707,10 +1712,10 @@ export default function NominaDetalle() {
                             )}
                             {!abierta && (
                               <>
-                                <td className={`${td} hidden text-right tabular-nums text-muted-foreground lg:table-cell`}>
+                                <td className={`${td} hidden text-right tabular-nums text-muted-foreground xl:table-cell`}>
                                   {fmtPesos(jornales)}
                                 </td>
-                                <td className={`${td} hidden text-right tabular-nums text-muted-foreground lg:table-cell`}>
+                                <td className={`${td} hidden text-right tabular-nums text-muted-foreground xl:table-cell`}>
                                   {fmtPesos(cosechas)}
                                 </td>
                                 <td className={`${td} hidden text-right tabular-nums md:table-cell`}>
@@ -1723,7 +1728,7 @@ export default function NominaDetalle() {
                                     {fmtPesos(devengado)}
                                   </span>
                                 </td>
-                                <td className={`${td} hidden text-right tabular-nums md:table-cell`}>
+                                <td className={`${td} hidden text-right tabular-nums lg:table-cell`}>
                                   {fmtPesos(toNumber(emp.total_deducciones))}
                                 </td>
                                 <td className={`${td} text-right font-semibold tabular-nums text-foreground`}>
@@ -1807,16 +1812,18 @@ export default function NominaDetalle() {
                             Total {empleadosMostrar.length} colaborador{empleadosMostrar.length === 1 ? '' : 'es'}
                           </td>
                           <td className="hidden sm:table-cell" />
-                          <td className={`${td} hidden text-right tabular-nums lg:table-cell`}>
+                          {/* Salario base: no se suma, es el dato de cada fila. */}
+                          <td className="hidden lg:table-cell" />
+                          <td className={`${td} hidden text-right tabular-nums xl:table-cell`}>
                             {fmtPesos(totalesTabla.jornales)}
                           </td>
-                          <td className={`${td} hidden text-right tabular-nums lg:table-cell`}>
+                          <td className={`${td} hidden text-right tabular-nums xl:table-cell`}>
                             {fmtPesos(totalesTabla.cosechas)}
                           </td>
                           <td className={`${td} hidden text-right tabular-nums md:table-cell`}>
                             {fmtPesos(totalesTabla.devengado)}
                           </td>
-                          <td className={`${td} hidden text-right tabular-nums md:table-cell`}>
+                          <td className={`${td} hidden text-right tabular-nums lg:table-cell`}>
                             {fmtPesos(totalesTabla.deducciones)}
                           </td>
                           <td className={`${td} text-right tabular-nums`}>

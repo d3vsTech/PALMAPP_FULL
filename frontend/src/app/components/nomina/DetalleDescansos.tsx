@@ -11,6 +11,7 @@
  */
 
 import { estiloDetalle } from './estiloDetalle';
+import { formatFecha } from '../../utils/fecha';
 
 export interface DescansoItem {
   fecha: string;
@@ -92,7 +93,7 @@ export function DetalleDescansos({
               const valorRecargo = Number(d.valor_recargo ?? 0);
               return (
                 <tr key={d.fecha}>
-                  <td className={`${e.td} whitespace-nowrap tabular-nums text-muted-foreground`}>{d.fecha}</td>
+                  <td className={`${e.td} whitespace-nowrap tabular-nums text-muted-foreground`}>{formatFecha(d.fecha)}</td>
                   <td className={e.td}>{d.tipo === 'DOMINICAL' ? 'Dominical' : 'Festivo'}</td>
                   <td className={`${e.td} ${esPagado ? 'text-muted-foreground' : 'text-foreground'}`}>
                     {esPagado
