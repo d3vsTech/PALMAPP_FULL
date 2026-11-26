@@ -338,7 +338,7 @@ export default function CargaMasivaProductos() {
               <Button
                 onClick={descargarPlantilla}
                 disabled={descargandoPlantilla}
-                className="w-full gap-2"
+                className="w-full"
               >
                 {descargandoPlantilla
                   ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -512,7 +512,7 @@ export default function CargaMasivaProductos() {
                   {/* Acciones post-finalización */}
                   {esTerminal && (
                     <div className="flex gap-2">
-                      <Button variant="outline" onClick={reiniciar} className="flex-1 gap-2">
+                      <Button variant="outline" onClick={reiniciar} className="flex-1">
                         <RefreshCw className="h-4 w-4" />
                         Subir otro archivo
                       </Button>

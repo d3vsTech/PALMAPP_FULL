@@ -6,52 +6,35 @@
 import type {
   EstadoVacacion, EstadoVencimiento, ModoPagoVacacion, OrigenVacacion,
 } from '../../../../api/vacaciones';
+import { formatFecha } from '../../../utils/fecha';
 
 export { fmtCOP, getIniciales, descargarBlob } from '../periodo/textos';
 
+/** Variantes de Badge del diseño (components/liquidaciones/EstadoBadges). */
+export type VarianteBadge = 'secondary' | 'success' | 'warning' | 'info' | 'destructive';
+
 /** El semáforo lo decide el backend; aquí solo se pinta. */
 export interface EstiloSemaforo {
-  dot: string;
-  badge: string;
+  variant: VarianteBadge;
   label: string;
 }
 
 export const SEMAFORO: Record<EstadoVencimiento, EstiloSemaforo> = {
-  VENCIDA: {
-    dot: 'bg-destructive',
-    badge: 'bg-destructive/10 text-destructive border-destructive/30',
-    label: 'Vencida',
-  },
-  URGENTE: {
-    dot: 'bg-red-500',
-    badge: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800/30',
-    label: 'Urgente',
-  },
-  PROXIMA: {
-    dot: 'bg-amber-400',
-    badge: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/30',
-    label: 'Próxima',
-  },
-  CON_TIEMPO: {
-    dot: 'bg-emerald-500',
-    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800/30',
-    label: 'Con tiempo',
-  },
-  AL_DIA: {
-    dot: 'bg-muted-foreground',
-    badge: 'bg-muted/50 text-muted-foreground border-border',
-    label: 'Al día',
-  },
+  VENCIDA: { variant: 'destructive', label: 'Vencida' },
+  URGENTE: { variant: 'destructive', label: 'Urgente' },
+  PROXIMA: { variant: 'warning', label: 'Próxima' },
+  CON_TIEMPO: { variant: 'success', label: 'Con tiempo' },
+  AL_DIA: { variant: 'secondary', label: 'Al día' },
 };
 
 // PR-N4 — PENDIENTE pasó a ser un estado real: una solicitud venida de
-// Novedades, sin valores y sin consumir saldo. Se pinta en ámbar fuerte
-// porque pide acción: liquidarla o rechazarla.
-export const ESTADO_VACACION_BADGE: Record<EstadoVacacion, string> = {
-  APROBADA: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/30',
-  PAGADA: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800/30',
-  CANCELADA: 'bg-destructive/10 text-destructive border-destructive/30',
-  PENDIENTE: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800/30',
+// Novedades, sin valores y sin consumir saldo. Va en ámbar porque pide
+// acción: liquidarla o rechazarla.
+export const ESTADO_VACACION_VARIANTE: Record<EstadoVacacion, VarianteBadge> = {
+  APROBADA: 'warning',
+  PAGADA: 'success',
+  CANCELADA: 'destructive',
+  PENDIENTE: 'warning',
 };
 
 export const ESTADO_VACACION_LABEL: Record<EstadoVacacion, string> = {
@@ -63,9 +46,9 @@ export const ESTADO_VACACION_LABEL: Record<EstadoVacacion, string> = {
 
 // PR-L15 — El modo de pago no es un estado: es quien pone la plata. En
 // NOMINA el modulo no gira nada, cada nomina paga su tramo del disfrute.
-export const MODO_PAGO_BADGE: Record<ModoPagoVacacion, string> = {
-  DIRECTO: 'bg-muted/50 text-muted-foreground border-border',
-  NOMINA: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/30 dark:text-sky-400 dark:border-sky-800/30',
+export const MODO_PAGO_VARIANTE: Record<ModoPagoVacacion, VarianteBadge> = {
+  DIRECTO: 'secondary',
+  NOMINA: 'info',
 };
 
 export const ORIGEN_LABEL: Record<OrigenVacacion, string> = {
@@ -73,6 +56,11 @@ export const ORIGEN_LABEL: Record<OrigenVacacion, string> = {
   HISTORICO: 'Registro histórico',
   LIQUIDACION_FINAL: 'Compensada al retiro',
 };
+
+/** Fechas de las tablas como en el diseño: "15 de ene de 2024". */
+const FECHA_CORTA: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short', year: 'numeric' };
+
+export const fmtFechaCorta = (raw?: string | null) => formatFecha(raw, FECHA_CORTA);
 
 /** Días enteros o con media unidad: 7,5 se escribe con coma. */
 export const fmtDias = (n: number) =>

@@ -58,7 +58,7 @@ export const navItems: NavItem[] = [
   { label: 'Liquidaciones', href: '/liquidaciones', icon: FileText, seccion: 'personal', permiso: 'liquidaciones.ver' },
   { label: 'Agente IA', href: '/agente-ia', icon: Sparkles, seccion: 'herramientas' },
   { label: 'Tienda de insumos', href: '/market', icon: ShoppingCart, seccion: 'herramientas' },
-  { label: 'Gestión de usuarios', href: '/usuarios', icon: UserCog, seccion: 'herramientas', permiso: 'usuarios.ver' },
+  { label: 'Usuarios', href: '/usuarios', icon: UserCog, seccion: 'herramientas', permiso: 'usuarios.ver' },
   { label: 'Configuración', href: '/configuracion', icon: Settings, seccion: 'herramientas', permiso: 'configuracion.editar' },
 ];
 

@@ -182,7 +182,7 @@ export default function MiPerfilSuperAdmin() {
           </div>
         )}
 
-        <div className="flex justify-end">
+        <div className="barra-acciones flex justify-end">
           <Button type="submit" isLoading={guardando}>
             {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" strokeWidth={2} />}
             Guardar cambios

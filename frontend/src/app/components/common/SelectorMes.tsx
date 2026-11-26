@@ -34,11 +34,16 @@ export function SelectorAnio({ valor, onChange }: { valor: number; onChange: (an
   );
 }
 
-/** Mes y año como dos listas. `valor` y `onChange` hablan en `YYYY-MM`. */
+/**
+ * Mes y año como dos listas. `valor` y `onChange` hablan en `YYYY-MM`.
+ *
+ * Van juntos en una fila propia: sueltos en el filtro, el ancho mínimo que el
+ * tema le pone a cada lista en celular los mandaba a renglones distintos.
+ */
 export function SelectorMes({ valor, onChange }: { valor: string; onChange: (mes: string) => void }) {
   const [anio, mes] = valor.split('-');
   return (
-    <>
+    <div className="selectores-cortos flex items-center gap-2">
       <Select value={mes} onValueChange={(m) => onChange(`${anio}-${m}`)}>
         <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
         <SelectContent>
@@ -48,7 +53,7 @@ export function SelectorMes({ valor, onChange }: { valor: string; onChange: (mes
         </SelectContent>
       </Select>
       <SelectorAnio valor={Number(anio)} onChange={(a) => onChange(`${a}-${mes}`)} />
-    </>
+    </div>
   );
 }
 

@@ -1,9 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { ConfigSection, ConfigEmpty, ConfigRowActions } from './ConfigSection';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Plus, Trash2, Edit } from 'lucide-react';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../ui/table';
+import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -169,17 +177,17 @@ export function EntidadesBancariasTab() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {entidadEdit ? 'Editar Entidad Bancaria' : 'Nueva Entidad Bancaria'}
+              {entidadEdit ? 'Editar entidad bancaria' : 'Nueva entidad bancaria'}
             </DialogTitle>
             <DialogDescription>
-              Banco o entidad financiera
+              Banco o entidad financiera con la que se pagan los colaboradores.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label htmlFor="nombre">
-                Nombre de la Entidad <span className="text-destructive">*</span>
+                Nombre de la entidad <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="nombre"
@@ -192,7 +200,7 @@ export function EntidadesBancariasTab() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="codigo">Código Bancario (Opcional)</Label>
+              <Label htmlFor="codigo">Código bancario (opcional)</Label>
               <Input
                 id="codigo"
                 placeholder="001"
@@ -204,7 +212,7 @@ export function EntidadesBancariasTab() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="contacto">Contacto (Opcional)</Label>
+              <Label htmlFor="contacto">Contacto (opcional)</Label>
               <Input
                 id="contacto"
                 placeholder="01-8000-912345"
@@ -226,56 +234,70 @@ export function EntidadesBancariasTab() {
       </Dialog>
 
       <TabLoadingGate loading={loading} message="Cargando entidades bancarias…">
-      <Card className="border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Entidades Bancarias</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">Bancos y entidades financieras</p>
-            </div>
-            <Button onClick={() => handleOpenModal()}>
-              <Plus className="mr-2 h-4 w-4" />
-              Nueva Entidad
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6">
-          <div className="space-y-3">
-            {[...entidades].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((entidad) => (
-              <div
-                key={entidad.id}
-                className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border"
-              >
-                <div className="flex-1">
-                  <p className="font-semibold">{entidad.nombre}</p>
-                  <div className="flex gap-4 mt-1 text-sm text-muted-foreground">
-                    {entidad.codigo && <span>Código: {entidad.codigo}</span>}
-                    {entidad.contacto && <span>Contacto: {entidad.contacto}</span>}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleOpenModal(entidad)}
-                    className="h-8 w-8 p-0"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => eliminarEntidad(entidad)}
-                    className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <ConfigSection
+        title="Entidades bancarias"
+        description="Bancos y entidades financieras."
+        flush
+        actions={
+          <Button onClick={() => handleOpenModal()}>
+            <Plus strokeWidth={2} />
+            Nueva entidad
+          </Button>
+        }
+      >
+        {entidades.length === 0 ? (
+          <ConfigEmpty
+            title="Sin entidades bancarias"
+            description="Agrega los bancos con los que pagas a los colaboradores."
+            action={
+              <Button onClick={() => handleOpenModal()}>
+                <Plus strokeWidth={2} />
+                Agregar entidad
+              </Button>
+            }
+          />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-5">Entidad</TableHead>
+                <TableHead className="hidden sm:table-cell">Código</TableHead>
+                <TableHead className="hidden sm:table-cell">Contacto</TableHead>
+                <TableHead className="w-24" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[...entidades]
+                .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' }))
+                .map((entidad) => (
+                  <TableRow key={entidad.id}>
+                    <TableCell className="pl-5">
+                      <span className="font-semibold text-foreground">{entidad.nombre}</span>
+                      <span className="block text-xs text-muted-foreground sm:hidden">
+                        {[entidad.codigo && `Código ${entidad.codigo}`, entidad.contacto]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                    </TableCell>
+                    <TableCell className="hidden tabular-nums text-muted-foreground sm:table-cell">
+                      {entidad.codigo || '—'}
+                    </TableCell>
+                    <TableCell className="hidden tabular-nums text-muted-foreground sm:table-cell">
+                      {entidad.contacto || '—'}
+                    </TableCell>
+                    <TableCell className="pr-3 text-right">
+                      <ConfigRowActions
+                        label={entidad.nombre}
+                        onEdit={() => handleOpenModal(entidad)}
+                        onDelete={() => eliminarEntidad(entidad)}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+            </TableBody>
+          </Table>
+        )}
+      </ConfigSection>
       </TabLoadingGate>
     </>
   );

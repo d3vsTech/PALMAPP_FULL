@@ -23,8 +23,8 @@ export default function PageHeader({ title, description, eyebrow, actions, backT
   }, [backTo]);
 
   return (
-    <header className={cn('mb-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-between', className)}>
-      <div className="flex min-w-0 items-start gap-3">
+    <header className={cn('mb-2 flex flex-col gap-4 md:flex-row md:flex-wrap md:items-end md:justify-between', className)}>
+      <div className="flex min-w-0 items-start gap-3 md:min-w-[18rem] md:flex-1">
         {backTo && (
           <Link
             to={backTo}
@@ -38,7 +38,7 @@ export default function PageHeader({ title, description, eyebrow, actions, backT
           {eyebrow && (
             <p className="text-[13px] font-medium text-muted-foreground">{eyebrow}</p>
           )}
-          <h1 className="md:truncate">{title}</h1>
+          <h1 className="break-words [&_[data-slot=badge]]:font-sans [&_[data-slot=badge]]:tracking-normal">{title}</h1>
           {description && <p className="text-[15px] text-muted-foreground">{description}</p>}
         </div>
       </div>

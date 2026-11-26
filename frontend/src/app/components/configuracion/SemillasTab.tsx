@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '../ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import { Badge } from '../ui/badge';
+import { ConfigSection, ConfigEmpty, ConfigRowActions } from './ConfigSection';
 import {
   Table,
   TableBody,
@@ -9,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -228,14 +229,14 @@ export function SemillasTab() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {semillaEdit ? 'Editar Semilla' : 'Nueva Semilla'}
+              {semillaEdit ? 'Editar semilla' : 'Nueva semilla'}
             </DialogTitle>
             <DialogDescription>
-              Define una variedad de palma para el sistema
+              Define una variedad de palma para el sistema.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label htmlFor="tipo">
                 Tipo <span className="text-destructive">*</span>
@@ -265,7 +266,7 @@ export function SemillasTab() {
               </Label>
               <Input
                 id="nombre"
-                placeholder="Ej: Elaeis Guineensis"
+                placeholder="Ej.: Elaeis guineensis"
                 value={formData.nombre}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, nombre: e.target.value }))
@@ -284,80 +285,59 @@ export function SemillasTab() {
       </Dialog>
 
       <TabLoadingGate loading={loading} message="Cargando semillas…">
-      <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>
-                Catálogo de Semillas
-              </CardTitle>
-              <CardDescription>
-                Variedades de palma que se siembran en la finca
-              </CardDescription>
-            </div>
-            <Button onClick={() => handleOpenModal()}>
-              <Plus className="mr-2 h-4 w-4" />
-              Nueva Semilla
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {semillas.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <h3 className="mb-2 text-lg font-semibold">No hay semillas registradas</h3>
-              <p className="mb-4 text-sm text-muted-foreground">
-                Comienza agregando tu primera variedad de palma
-              </p>
+      <ConfigSection
+        title="Catálogo de semillas"
+        description="Variedades de palma que se siembran en la finca."
+        flush
+        actions={
+          <Button onClick={() => handleOpenModal()}>
+            <Plus strokeWidth={2} />
+            Nueva semilla
+          </Button>
+        }
+      >
+        {semillas.length === 0 ? (
+          <ConfigEmpty
+            title="No hay semillas registradas"
+            description="Agrega la primera variedad de palma."
+            action={
               <Button onClick={() => handleOpenModal()}>
-                <Plus className="mr-2 h-4 w-4" />
-                Agregar Semilla
+                <Plus strokeWidth={2} />
+                Nueva semilla
               </Button>
-            </div>
-          ) : (
-            <div className="rounded-lg border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+            }
+          />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-5">Nombre</TableHead>
+                <TableHead>Tipo</TableHead>
+                <TableHead className="w-24" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[...semillas]
+                .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' }))
+                .map((semilla) => (
+                  <TableRow key={semilla.id}>
+                    <TableCell className="pl-5 font-semibold text-foreground">{semilla.nombre}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{semilla.tipo}</Badge>
+                    </TableCell>
+                    <TableCell className="pr-3">
+                      <ConfigRowActions
+                        label={semilla.nombre}
+                        onEdit={() => handleOpenModal(semilla)}
+                        onDelete={() => handleDelete(semilla.id, semilla.nombre)}
+                      />
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {[...semillas].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((semilla) => (
-                    <TableRow key={semilla.id} className="hover:bg-muted/50 transition-colors">
-                      <TableCell>
-                        <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                          {semilla.tipo}
-                        </span>
-                      </TableCell>
-                      <TableCell className="font-medium">{semilla.nombre}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleOpenModal(semilla)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(semilla.id, semilla.nombre)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                ))}
+            </TableBody>
+          </Table>
+        )}
+      </ConfigSection>
       </TabLoadingGate>
     </>
   );

@@ -11,21 +11,22 @@
 import { useState } from 'react';
 import { ChevronDown, HelpCircle } from 'lucide-react';
 import { AYUDA_COLUMNAS, AYUDA_TIPOS, type AyudaColumna } from './columnasAyuda';
+import { THEAD, TH } from '../../liquidaciones/historico/comunes';
 
 const CABECERAS = ['Columna', 'Tipo', 'Qué va', 'Ejemplo'];
 
 function Fila({ ayuda }: { ayuda: AyudaColumna }) {
   return (
-    <tr className="border-b border-border/40 last:border-0">
-      <td className="px-3 py-2 align-top">
-        <span className="font-mono text-xs font-medium text-foreground">{ayuda.columna}</span>
+    <tr>
+      <td className="px-4 py-2.5 align-top">
+        <span className="text-xs font-medium text-foreground">{ayuda.columna}</span>
         {ayuda.obligatoria && (
           <span className="ml-1.5 align-middle text-xs font-semibold text-destructive">*</span>
         )}
       </td>
-      <td className="px-3 py-2 align-top text-xs text-muted-foreground">{ayuda.tipo}</td>
-      <td className="px-3 py-2 align-top text-xs text-muted-foreground">{ayuda.queVa}</td>
-      <td className="px-3 py-2 align-top font-mono text-xs text-muted-foreground">
+      <td className="px-4 py-2.5 align-top text-xs text-muted-foreground">{ayuda.tipo}</td>
+      <td className="px-4 py-2.5 align-top text-xs text-muted-foreground">{ayuda.queVa}</td>
+      <td className="px-4 py-2.5 align-top text-xs text-muted-foreground">
         {ayuda.ejemplo}
       </td>
     </tr>
@@ -40,10 +41,11 @@ export function AyudaColumnas() {
       <button
         type="button"
         onClick={() => setAbierto((v) => !v)}
-        className="flex w-full items-center justify-between gap-3 bg-muted/20 px-4 py-3 text-left hover:bg-muted/40"
+        aria-expanded={abierto}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
       >
         <span className="flex min-w-0 items-center gap-2">
-          <HelpCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <HelpCircle className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2} />
           <span className="min-w-0">
             <span className="block text-sm font-medium text-foreground">
               Qué va en cada columna
@@ -62,21 +64,16 @@ export function AyudaColumnas() {
 
       {abierto && (
         <>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto border-t border-border">
             <table className="w-full min-w-[640px] text-sm">
-              <thead>
-                <tr className="border-y border-border bg-muted/30">
+              <thead className={THEAD}>
+                <tr>
                   {CABECERAS.map((c) => (
-                    <th
-                      key={c}
-                      className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground"
-                    >
-                      {c}
-                    </th>
+                    <th key={c} className={TH}>{c}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-border">
                 {AYUDA_COLUMNAS.map((ayuda) => (
                   <Fila key={ayuda.columna} ayuda={ayuda} />
                 ))}
@@ -84,7 +81,7 @@ export function AyudaColumnas() {
             </table>
           </div>
 
-          <div className="space-y-1.5 border-t border-border bg-muted/10 px-4 py-3">
+          <div className="space-y-1.5 border-t border-border bg-muted/60 px-4 py-3">
             <p className="text-xs font-medium text-foreground">
               <span className="text-destructive">*</span> obligatoria. Cómo se escribe cada tipo:
             </p>

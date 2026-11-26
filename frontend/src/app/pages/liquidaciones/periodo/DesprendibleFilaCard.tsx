@@ -7,19 +7,24 @@
  * El desglose se pide solo al abrirlo para no disparar una petición por
  * colaborador al entrar al período.
  */
-import { Card, CardContent } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
+import { Badge } from '../../../components/ui/badge';
 import {
-  TrendingUp, Loader2, FileDown, Banknote, Undo2, ChevronDown, ChevronUp, AlertTriangle,
+  Loader2, FileDown, Banknote, Undo2, ChevronDown, ChevronUp, AlertTriangle,
 } from 'lucide-react';
 import type { DesprendibleLiquidacion, LiquidacionFila } from '../../../../api/liquidaciones';
+import Desprendible from '../../../components/liquidaciones/Desprendible';
+import ConceptosTabla, { type Concepto } from '../../../components/liquidaciones/ConceptosTabla';
 import { formatFecha } from '../../../utils/fecha';
-import { fmtCOP, getIniciales, TEXTOS_PERIODO, type TipoPeriodoDetalle } from './textos';
+import { fmtCOP, METODO_PAGO_LABEL, TEXTOS_PERIODO, CAJA_AVISO, type TipoPeriodoDetalle } from './textos';
 
 interface Props {
   fila: LiquidacionFila;
   tipo: TipoPeriodoDetalle;
   anio: number;
+  semestre: number;
+  /** Dato "Período" del desprendible: el año, o los meses en prima. */
+  periodoLabel: string;
   /** Comprobante completo, si ya se cargó. */
   detalle?: DesprendibleLiquidacion;
   cargandoDetalle: boolean;
@@ -31,274 +36,208 @@ interface Props {
   onAnularGiro: () => void;
 }
 
-/** Fila de "etiqueta ... valor" del cuerpo del desprendible. */
-function Linea({ label, valor, fuerte }: { label: string; valor: React.ReactNode; fuerte?: boolean }) {
+const METODO_LABEL: Record<string, string> = {
+  ULTIMO_SALARIO: 'Último salario',
+  PROMEDIO: 'Promedio devengado',
+  MANUAL: 'Ajuste manual',
+};
+
+/** Conceptos del cálculo según el tipo: base salarial, histórico o intereses. */
+function conceptosFila(
+  fila: LiquidacionFila,
+  tipo: TipoPeriodoDetalle,
+  detalle: DesprendibleLiquidacion | undefined,
+): Concepto[] {
+  const txt = TEXTOS_PERIODO[tipo];
+  const formula = `Fórmula: ${detalle?.resultado.formula_aplicada ?? txt.formulaGenerica}`;
+  const total: Concepto = { label: `Total ${txt.colValor.toLowerCase()}`, valor: fmtCOP(fila.valor_final), total: true };
+
+  if (detalle?.historico === true) {
+    return [
+      {
+        label: 'Base de cálculo',
+        valor: '—',
+        detalle: 'Valor consignado fuera del sistema y registrado desde un archivo. La base salarial de ese año no quedó registrada; del sistema solo salen los días.',
+      },
+      { label: 'Días laborados', valor: fila.dias_computados },
+      total,
+    ];
+  }
+  if (tipo === 'INTERESES_CESANTIAS') {
+    return [
+      { label: 'Saldo cesantías', valor: fmtCOP(fila.saldo_cesantias ?? fila.base_prestacional) },
+      { label: 'Tasa de interés', valor: `${fila.tasa_aplicada ?? 12} % anual`, detalle: 'Ley 52 de 1975' },
+      { label: 'Días laborados', valor: fila.dias_base_intereses ?? fila.dias_computados, detalle: formula },
+      total,
+    ];
+  }
+  // Los tres componentes de la base son parte fija del desprendible, como en
+  // el diseño: se pintan desde el principio y toman valor cuando llega el
+  // comprobante legal (§6.1), que se pide al abrir el desglose.
+  const componentes: Concepto[] = [
+    {
+      label: 'Salario básico',
+      valor: detalle ? fmtCOP(detalle.base.salario_basico) : '—',
+      detalle: detalle ? undefined : 'Se detalla al abrir el desglose',
+    },
+    { label: 'Auxilio de transporte', valor: detalle ? fmtCOP(detalle.base.auxilio_transporte) : '—' },
+    { label: 'Promedio variables', valor: detalle ? fmtCOP(detalle.base.promedio_variables) : '—' },
+  ];
+  return [
+    ...componentes,
+    {
+      label: 'Base prestacional',
+      valor: fmtCOP(fila.base_prestacional),
+      detalle: (fila.metodo_base && METODO_LABEL[fila.metodo_base]) || 'Base de cálculo',
+    },
+    { label: 'Días laborados', valor: fila.dias_computados, detalle: formula },
+    total,
+  ];
+}
+
+/** Estado del giro: consignado con su referencia o pendiente. */
+function EstadoGiro({ fila, tipo }: { fila: LiquidacionFila; tipo: TipoPeriodoDetalle }) {
+  const txt = TEXTOS_PERIODO[tipo];
+  if (fila.estado_pago === 'PENDIENTE') {
+    return (
+      <div className="border-t border-border px-5 py-3">
+        <Badge variant="warning">{txt.pendienteGiroLabel}</Badge>
+      </div>
+    );
+  }
   return (
-    <div className="flex justify-between items-center">
-      <span className={`text-xs uppercase tracking-wide font-medium ${fuerte ? 'font-bold text-primary' : 'text-muted-foreground'}`}>
-        {label}
-      </span>
-      <span className={`text-sm ${fuerte ? 'font-bold text-primary' : 'font-medium'}`}>{valor}</span>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3">
+      <div className="space-y-1">
+        <Badge variant="success">{txt.giradoLabel}</Badge>
+        <p className="text-xs text-muted-foreground">
+          {fila.fecha_pago ? formatFecha(fila.fecha_pago) : ''}
+          {fila.metodo_pago ? ` · ${METODO_PAGO_LABEL[fila.metodo_pago] ?? fila.metodo_pago}` : ''}
+          {fila.referencia_pago ? ` · Ref ${fila.referencia_pago}` : ''}
+          {tipo === 'CESANTIAS' && fila.fondo_consignacion ? ` · ${fila.fondo_consignacion}` : ''}
+        </p>
+      </div>
+      <div className="text-right">
+        <p className="text-sm font-semibold tabular-nums text-foreground">{fmtCOP(fila.valor_pagado ?? fila.valor_final)}</p>
+        {fila.dias_mora != null && fila.dias_mora > 0 && (
+          <p className="text-xs text-warning">{fila.dias_mora} día(s) de mora</p>
+        )}
+      </div>
     </div>
   );
 }
 
+/** "SUSPENSION_DISCIPLINARIA" → "Suspension disciplinaria". */
+const tipoDescuento = (tipo: string) => {
+  const t = tipo.replace(/_/g, ' ').toLowerCase();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
+
+/** Desglose legal completo (§6.1): tiempo de servicio, componentes y advertencias. */
+function DesgloseLegal({ detalle, conBaseSalarial }: { detalle: DesprendibleLiquidacion; conBaseSalarial: boolean }) {
+  const tiempo: Concepto[] = [
+    { label: 'Desde', valor: formatFecha(detalle.dias.fecha_computo_desde) },
+    { label: 'Hasta', valor: formatFecha(detalle.dias.fecha_computo_hasta) },
+    { label: 'Días de vinculación', valor: detalle.dias.dias_vinculacion },
+    ...(detalle.dias.dias_descontados > 0
+      ? [{ label: 'Días descontados', valor: detalle.dias.dias_descontados }]
+      : []),
+  ];
+  const c = detalle.base.componentes;
+  const componentes: Concepto[] = [
+    { label: 'Ordinario', valor: fmtCOP(c.ordinario) },
+    { label: 'Variables', valor: fmtCOP(c.variables) },
+    { label: 'Auxilio devengado', valor: fmtCOP(c.auxilio_devengado) },
+    ...(c.bonificaciones_excluidas > 0
+      ? [{ label: 'Bonificaciones excluidas', valor: fmtCOP(c.bonificaciones_excluidas) }]
+      : []),
+    { label: 'Meses base', valor: detalle.base.meses_base },
+    { label: 'Cobertura de nóminas', valor: `${detalle.base.cobertura_nominas_pct}%` },
+    ...((detalle.base.dias_proyectados ?? 0) > 0
+      ? [{ label: 'Tramo final proyectado', valor: `${detalle.base.dias_proyectados} día(s)` }]
+      : []),
+  ];
+  return (
+    <>
+      <div>
+        <p className="text-[13px] font-medium text-muted-foreground">Tiempo de servicio</p>
+        <ConceptosTabla items={tiempo} />
+        {detalle.dias.detalle_descuentos.map((d, i) => (
+          <p key={i} className="text-xs text-muted-foreground">
+            {tipoDescuento(d.tipo)}: {formatFecha(d.desde)} a {formatFecha(d.hasta)} ({d.dias} días)
+          </p>
+        ))}
+      </div>
+      {conBaseSalarial && (
+        <div>
+          <p className="text-[13px] font-medium text-muted-foreground">Componentes del período</p>
+          <ConceptosTabla items={componentes} />
+        </div>
+      )}
+      {detalle.advertencias.map((a, i) => (
+        <div key={i} className={CAJA_AVISO}>
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+          <p>{a.mensaje ?? a.code}</p>
+        </div>
+      ))}
+      <p className="text-xs text-muted-foreground">
+        Comprobante {detalle.numero_comprobante} · Liquidado el {detalle.liquidacion.fecha_humana} por {detalle.liquidacion.liquidado_por}
+      </p>
+    </>
+  );
+}
+
 export default function DesprendibleFilaCard({
-  fila, tipo, anio, detalle, cargandoDetalle, expandido, onToggleDetalle,
+  fila, tipo, anio, semestre, periodoLabel, detalle, cargandoDetalle, expandido, onToggleDetalle,
   descargandoPdf, onDescargarPdf, onRegistrarGiro, onAnularGiro,
 }: Props) {
   const txt = TEXTOS_PERIODO[tipo];
-  const esCesantias = tipo === 'CESANTIAS';
-  const esIntereses = tipo === 'INTERESES_CESANTIAS';
+  const esPrima = tipo === 'PRIMA';
   // Prima comparte con cesantías la base salarial; intereses es el distinto.
-  // Un registro histórico (§12) tampoco tiene base: el valor se consignó fuera
-  // del sistema y la base de la época no quedó registrada.
-  const esHistorico = detalle?.historico === true;
-  const conBaseSalarial = !esIntereses && !esHistorico;
+  // Un registro histórico (§12) tampoco tiene base.
+  const conBaseSalarial = tipo !== 'INTERESES_CESANTIAS' && detalle?.historico !== true;
   const col = fila.empleado;
   const girada = fila.estado_pago !== 'PENDIENTE';
 
-  const metodoLabel = fila.metodo_base === 'ULTIMO_SALARIO'
-    ? 'Último salario'
-    : fila.metodo_base === 'PROMEDIO'
-      ? 'Promedio devengado'
-      : fila.metodo_base === 'MANUAL'
-        ? 'Ajuste manual'
-        : null;
-
   return (
-    <Card className="border-border overflow-hidden print:break-inside-avoid">
-      {/* Encabezado del desprendible */}
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-background">
-        <div className="h-9 w-9 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center justify-center text-xs font-bold shrink-0">
-          {getIniciales(col.nombre_completo)}
-        </div>
-        <div className="min-w-0">
-          <p className="font-semibold text-sm truncate">{col.nombre_completo}</p>
-          <p className="text-xs text-muted-foreground truncate">{col.cargo ?? '—'}</p>
-        </div>
-        {esCesantias && (
-          <div className="ml-auto text-right shrink-0">
-            <p className="text-xs text-muted-foreground">Fondo</p>
-            <p className="text-sm font-medium">{col.fondo_cesantias ?? '—'}</p>
-          </div>
-        )}
-      </div>
+    <div className="print:break-inside-avoid">
+      <Desprendible
+        nombre={col.nombre_completo}
+        cargo={col.cargo ?? undefined}
+        meta={esPrima
+          ? { label: 'Semestre', value: `${semestre}° · ${anio}` }
+          : { label: 'Fondo', value: col.fondo_cesantias ?? '—' }}
+        datos={[
+          { label: 'Cédula', value: col.documento },
+          {
+            label: 'Días laborados',
+            value: conBaseSalarial ? fila.dias_computados : (fila.dias_base_intereses ?? fila.dias_computados),
+          },
+          { label: 'Período', value: periodoLabel },
+        ]}
+        conceptos={conceptosFila(fila, tipo, detalle)}
+      >
+        <EstadoGiro fila={fila} tipo={tipo} />
 
-      {/* Barra de datos */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 divide-x divide-border bg-muted/20 border-b border-border">
-        <div className="px-5 py-3">
-          <p className="text-xs text-muted-foreground mb-0.5">Cédula</p>
-          <p className="text-sm font-medium">{col.documento}</p>
-        </div>
-        <div className="px-5 py-3">
-          <p className="text-xs text-muted-foreground mb-0.5">{conBaseSalarial ? 'Días Computados' : 'Días Base'}</p>
-          <p className="text-sm font-medium">
-            {conBaseSalarial ? fila.dias_computados : (fila.dias_base_intereses ?? fila.dias_computados)}
-          </p>
-        </div>
-        <div className="px-5 py-3">
-          <p className="text-xs text-muted-foreground mb-0.5">{conBaseSalarial ? 'Período' : 'Tasa'}</p>
-          <p className="text-sm font-medium">
-            {conBaseSalarial ? anio : `${fila.tasa_aplicada ?? 12}% anual`}
-          </p>
-        </div>
-      </div>
-
-      <CardContent className="p-0">
-        {/* Base de cálculo */}
-        <div className="bg-primary/5 border-b border-primary/10">
-          <div className="flex items-center gap-2 px-5 pt-4 pb-2">
-            <TrendingUp className="h-4 w-4 text-primary" />
-            <span className="text-sm font-semibold text-primary">Base de Cálculo</span>
-            {metodoLabel && (
-              <span className="text-[10px] uppercase tracking-wide text-muted-foreground ml-auto">{metodoLabel}</span>
-            )}
-          </div>
-
-          {esHistorico ? (
-            <div className="px-5 pb-4">
-              <p className="text-sm text-muted-foreground">
-                Valor consignado fuera del sistema y registrado desde un archivo. La base
-                salarial de ese año no quedó registrada; del sistema solo salen los días.
-              </p>
-            </div>
-          ) : conBaseSalarial ? (
-            <>
-              {/* El desglose viene del comprobante legal; sin él se muestra
-                  la base prestacional que ya trae el período. */}
-              {detalle && (
-                <div className="px-5 pb-1 space-y-2">
-                  <Linea label="Salario Básico" valor={fmtCOP(detalle.base.salario_basico)} />
-                  <Linea
-                    label="Auxilio de Transporte"
-                    valor={detalle.base.auxilio_transporte > 0
-                      ? fmtCOP(detalle.base.auxilio_transporte)
-                      : <span className="text-muted-foreground">$0</span>}
-                  />
-                  <Linea
-                    label="Promedio Variables"
-                    valor={detalle.base.promedio_variables > 0
-                      ? fmtCOP(detalle.base.promedio_variables)
-                      : <span className="text-muted-foreground">$0</span>}
-                  />
-                </div>
-              )}
-              <div className={`mx-5 ${detalle ? 'my-3' : 'mt-1 mb-3'} border-t border-primary/20`} />
-              <div className="px-5 pb-4">
-                <Linea label="Base Prestacional" valor={fmtCOP(fila.base_prestacional)} fuerte />
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="px-5 pb-1 space-y-2">
-                <Linea label="Saldo Cesantías" valor={fmtCOP(fila.saldo_cesantias ?? fila.base_prestacional)} />
-                <Linea
-                  label="Tasa de Interés"
-                  valor={<>{fila.tasa_aplicada ?? 12}% anual <span className="text-muted-foreground text-xs">(Ley 52/75)</span></>}
-                />
-                <Linea label="Días Base" valor={fila.dias_base_intereses ?? fila.dias_computados} />
-              </div>
-              <div className="mx-5 my-3 border-t border-primary/20" />
-              <div className="flex justify-between items-center px-5 pb-4">
-                <span className="text-xs uppercase tracking-wide font-bold text-primary">Fórmula</span>
-                <span className="text-xs text-primary">
-                  {detalle?.resultado.formula_aplicada ?? txt.formulaGenerica}
-                </span>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Resultado */}
-        {conBaseSalarial && (
-          <div className="px-5 pt-4 pb-2 space-y-2">
-            <Linea label="Días" valor={fila.dias_computados} />
-            <div className="flex justify-between items-center">
-              <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Fórmula</span>
-              <span className="text-xs text-muted-foreground">
-                {detalle?.resultado.formula_aplicada ?? txt.formulaGenerica}
-              </span>
-            </div>
-          </div>
-        )}
-        <div className={`mx-5 border-t-2 border-primary/20 ${conBaseSalarial ? '' : 'mt-4'}`} />
-        <div className="flex justify-between items-center px-5 py-4">
-          <span className="text-sm uppercase tracking-wide font-bold">{txt.totalCardLabel}</span>
-          <span className="text-xl font-bold text-primary">{fmtCOP(fila.valor_final)}</span>
-        </div>
-
-        {/* Estado del giro */}
-        <div className={`px-5 py-3 border-t border-border ${girada ? 'bg-success/5' : 'bg-orange-50'}`}>
-          {girada ? (
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div>
-                <p className="text-xs uppercase tracking-wide font-semibold text-success">{txt.giradoLabel}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {fila.fecha_pago ? formatFecha(fila.fecha_pago) : ''}
-                  {fila.metodo_pago ? ` · ${fila.metodo_pago}` : ''}
-                  {fila.referencia_pago ? ` · Ref ${fila.referencia_pago}` : ''}
-                  {esCesantias && fila.fondo_consignacion ? ` · ${fila.fondo_consignacion}` : ''}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-bold text-success">{fmtCOP(fila.valor_pagado ?? fila.valor_final)}</p>
-                {fila.dias_mora != null && fila.dias_mora > 0 && (
-                  <p className="text-xs text-orange-600">{fila.dias_mora} día(s) de mora</p>
-                )}
-              </div>
-            </div>
-          ) : (
-            <p className="text-xs uppercase tracking-wide font-semibold text-orange-700">
-              {txt.pendienteGiroLabel}
-            </p>
-          )}
-        </div>
-
-        {/* Desglose legal completo (§6.1) */}
         {expandido && (
-          <div className="px-5 py-4 border-t border-border bg-muted/10 space-y-4">
+          <div className="space-y-4 border-t border-border px-5 py-4">
             {cargandoDetalle && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Cargando desglose...
               </div>
             )}
-
-            {detalle && (
-              <>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                    Tiempo de servicio
-                  </p>
-                  <div className="space-y-1.5">
-                    <Linea label="Desde" valor={formatFecha(detalle.dias.fecha_computo_desde)} />
-                    <Linea label="Hasta" valor={formatFecha(detalle.dias.fecha_computo_hasta)} />
-                    <Linea label="Días de vinculación" valor={detalle.dias.dias_vinculacion} />
-                    {detalle.dias.dias_descontados > 0 && (
-                      <Linea label="Días descontados" valor={detalle.dias.dias_descontados} />
-                    )}
-                  </div>
-                  {detalle.dias.detalle_descuentos.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      {detalle.dias.detalle_descuentos.map((d, i) => (
-                        <p key={i} className="text-xs text-muted-foreground">
-                          {d.tipo.replace(/_/g, ' ').toLowerCase()}: {formatFecha(d.desde)} a {formatFecha(d.hasta)} ({d.dias} días)
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {conBaseSalarial && (
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                      Componentes del período
-                    </p>
-                    <div className="space-y-1.5">
-                      <Linea label="Ordinario" valor={fmtCOP(detalle.base.componentes.ordinario)} />
-                      <Linea label="Variables" valor={fmtCOP(detalle.base.componentes.variables)} />
-                      <Linea label="Auxilio devengado" valor={fmtCOP(detalle.base.componentes.auxilio_devengado)} />
-                      {detalle.base.componentes.bonificaciones_excluidas > 0 && (
-                        <Linea label="Bonificaciones excluidas" valor={fmtCOP(detalle.base.componentes.bonificaciones_excluidas)} />
-                      )}
-                      <Linea label="Meses base" valor={detalle.base.meses_base} />
-                      <Linea label="Cobertura de nóminas" valor={`${detalle.base.cobertura_nominas_pct}%`} />
-                      {(detalle.base.dias_proyectados ?? 0) > 0 && (
-                        <Linea label="Tramo final proyectado" valor={`${detalle.base.dias_proyectados} día(s)`} />
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {detalle.advertencias.length > 0 && (
-                  <div className="space-y-1.5">
-                    {detalle.advertencias.map((a, i) => (
-                      <p key={i} className="text-xs text-orange-700 flex items-start gap-1.5">
-                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                        {a.mensaje ?? a.code}
-                      </p>
-                    ))}
-                  </div>
-                )}
-
-                <p className="text-xs text-muted-foreground">
-                  Comprobante {detalle.numero_comprobante} · Liquidado el {detalle.liquidacion.fecha_humana} por {detalle.liquidacion.liquidado_por}
-                </p>
-              </>
-            )}
+            {detalle && <DesgloseLegal detalle={detalle} conBaseSalarial={conBaseSalarial} />}
           </div>
         )}
 
-        {/* Acciones */}
-        <div className="flex items-center gap-2 px-5 py-3 border-t border-border flex-wrap print:hidden">
-          <Button variant="ghost" size="sm" onClick={onToggleDetalle} className="gap-1.5">
-            {expandido ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3 print:hidden">
+          <Button variant="ghost" size="sm" onClick={onToggleDetalle}>
+            {expandido ? <ChevronUp strokeWidth={2} /> : <ChevronDown strokeWidth={2} />}
             {expandido ? 'Ocultar desglose' : 'Ver desglose'}
           </Button>
-          <div className="ml-auto flex gap-2 flex-wrap">
-            <Button variant="outline" size="sm" onClick={onDescargarPdf} disabled={descargandoPdf} className="gap-1.5">
-              {descargandoPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={onDescargarPdf} disabled={descargandoPdf}>
+              {descargandoPdf ? <Loader2 className="animate-spin" /> : <FileDown strokeWidth={2} />}
               Desprendible PDF
             </Button>
             {girada ? (
@@ -306,20 +245,20 @@ export default function DesprendibleFilaCard({
                 variant="ghost"
                 size="sm"
                 onClick={onAnularGiro}
-                className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10"
+                className="text-muted-foreground hover:text-destructive"
               >
-                <Undo2 className="h-4 w-4" />
+                <Undo2 strokeWidth={2} />
                 Anular
               </Button>
             ) : (
-              <Button size="sm" onClick={onRegistrarGiro} className="gap-1.5">
-                <Banknote className="h-4 w-4" />
+              <Button size="sm" onClick={onRegistrarGiro}>
+                <Banknote strokeWidth={2} />
                 {txt.girarFila}
               </Button>
             )}
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </Desprendible>
+    </div>
   );
 }

@@ -15,12 +15,14 @@ export { fmtCOP, getIniciales, descargarBlob } from '../periodo/textos';
 
 // ─── Estados ──────────────────────────────────────────────────────────────────
 
-export const ESTADO_BADGE: Record<EstadoLiquidacionFinal, string> = {
-  BORRADOR: 'bg-muted text-muted-foreground border-muted',
-  APROBADA:
-    'bg-primary/5 text-primary border-blue-200 dark:bg-primary/10 dark:border-blue-900/30',
-  PAGADA: 'bg-success/10 text-success border-success/30',
-  ANULADA: 'bg-destructive/10 text-destructive border-destructive/30',
+export type VarianteEstadoLiquidacion = 'secondary' | 'info' | 'success' | 'destructive';
+
+/** Variante del Badge por estado, igual que EstadoBadges del diseño. */
+export const ESTADO_BADGE: Record<EstadoLiquidacionFinal, VarianteEstadoLiquidacion> = {
+  BORRADOR: 'secondary',
+  APROBADA: 'info',
+  PAGADA: 'success',
+  ANULADA: 'destructive',
 };
 
 /** Frase corta bajo el estado, para que la tabla explique qué falta. */

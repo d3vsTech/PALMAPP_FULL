@@ -80,7 +80,7 @@ function SelectorEstadoFinal({
           onClick={() => onCambiar(op.valor)}
           className={`rounded-lg border p-3 text-left transition-colors ${
             estado === op.valor
-              ? 'border-primary bg-primary/5'
+              ? 'border-primary bg-primary-soft'
               : 'border-border hover:border-primary/40'
           }`}
         >
@@ -95,7 +95,7 @@ function SelectorEstadoFinal({
 function Indicador({ titulo, valor, tono }: { titulo: string; valor: string; tono?: string }) {
   return (
     <div className="rounded-xl border border-border bg-card p-3">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{titulo}</p>
+      <p className="text-[13px] font-medium text-muted-foreground">{titulo}</p>
       <p className={`text-2xl font-bold tabular-nums ${tono ?? 'text-foreground'}`}>{valor}</p>
     </div>
   );
@@ -221,7 +221,10 @@ export default function ImportarViajesPage() {
       </PasoCard>
 
       {analisis && resumen && (
-        <>
+        /* Este div es el que sostiene la barra pegada de abajo. Sin él la
+           barra se cuelga del contenedor de toda la página y aparece desde
+           el paso 1, antes de que haya archivo que revisar. */
+        <div className="space-y-6">
           <PasoCard
             n={4}
             titulo="Revisa lo que se va a cargar"
@@ -250,7 +253,9 @@ export default function ImportarViajesPage() {
             <PanelViajes viajes={analisis.viajes} filas={analisis.filas} />
           </PasoCard>
 
-          <div className="flex flex-wrap items-center justify-end gap-3">
+          {/* Pegada abajo: con decenas de viajes el botón quedaba al final
+              de una pantalla larguísima y tocaba bajar a buscarlo. */}
+          <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center justify-end gap-3 border-t border-border bg-background/95 px-1 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
             {conError > 0 && (
               <p className="text-sm text-destructive">
                 Corrija {conError === 1 ? 'la fila' : `las ${conError} filas`} con error. Basta
@@ -260,7 +265,7 @@ export default function ImportarViajesPage() {
             <Button
               onClick={() => void cargue.importar(false)}
               disabled={!puedeImportar}
-              className="gap-2"
+              
             >
               <Upload className="h-4 w-4" />
               {cargue.importando
@@ -268,7 +273,7 @@ export default function ImportarViajesPage() {
                 : `Importar ${resumen.viajes.nuevos} viaje(s)`}
             </Button>
           </div>
-        </>
+        </div>
       )}
 
       <AlertDialog

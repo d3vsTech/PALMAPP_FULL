@@ -27,14 +27,34 @@ import { AGRO_AGENTE_URL } from './env';
 //      proxy de Vite (`VITE_AGRO_AGENTE_TARGET` en `vite.config.ts`). Así el
 //      navegador nunca pide el agente por HTTP directo (Mixed Content) y no
 //      hace falta hardcodear su host — si necesitás otro, agregalo al .env.
-const AGRO_API = AGRO_AGENTE_URL || '/agro-api';
+/**
+ * Un override HTTP no sirve en una página HTTPS: el navegador bloquea la
+ * petición por Mixed Content y el chat no arranca. Pasó en producción con el
+ * `.env` de desarrollo horneado en el build (Vite reemplaza `import.meta.env`
+ * al compilar, así que el valor viaja dentro del bundle). Sobre HTTPS se
+ * ignora y se vuelve al proxy del mismo origen; en HTTP local el override
+ * sigue mandando, que es donde sirve para ver la IP real en Network.
+ */
+const paginaSegura = typeof window !== 'undefined' && window.location.protocol === 'https:';
+const overrideInseguro = /^http:\/\//i.test(AGRO_AGENTE_URL);
+const overrideUsable = AGRO_AGENTE_URL && !(paginaSegura && overrideInseguro);
+
+if (AGRO_AGENTE_URL && !overrideUsable) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[AgroAgente] Se ignora VITE_AGRO_AGENTE_URL (${AGRO_AGENTE_URL}): es HTTP `
+    + 'y la página es HTTPS. Se usa el proxy /agro-api del mismo origen.',
+  );
+}
+
+const AGRO_API = overrideUsable ? AGRO_AGENTE_URL : '/agro-api';
 
 /**
  * Prefijo para los adjuntos del chat. Misma lógica que `AGRO_API`: con
  * override apunta a `{host}/uploads`; sin override, `/agro-uploads` del
  * propio origen (nginx del portal en prod, proxy de Vite en dev).
  */
-const AGRO_UPLOADS = AGRO_AGENTE_URL
+const AGRO_UPLOADS = overrideUsable
   ? AGRO_AGENTE_URL.replace(/\/api\/?$/, '') + '/uploads'
   : '/agro-uploads';
 

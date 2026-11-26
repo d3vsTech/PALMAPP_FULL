@@ -13,13 +13,17 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { ArrowLeft, Save, Factory, User } from 'lucide-react';
+import { Save } from 'lucide-react';
 import { toast } from 'sonner';
+import PageHeader from '../../components/common/PageHeader';
+import { ConfigSection } from '../../components/configuracion/ConfigSection';
 import { extractorasApi, type Extractora } from '../../../api/viajes';
 import { getDepartamentos, getMunicipios } from '../../../api/plantacion';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../../components/ui/select';
 
 type DaneItem = { codigo: string; nombre: string };
 
@@ -147,39 +151,19 @@ export default function NuevaExtractora() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header: back arrow + título. El botón Guardar va al pie. */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate('/configuracion')}
-            className="mt-1"
-            aria-label="Volver"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-primary">
-              {isEdit ? 'Editar Extractora' : 'Nueva Extractora'}
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Planta extractora de aceite de palma
-            </p>
-          </div>
-        </div>
-      </div>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeader
+        backTo="/configuracion"
+        eyebrow="Configuración · Viajes"
+        title={isEdit ? 'Editar extractora' : 'Nueva extractora'}
+        description="Planta extractora de aceite de palma a la que despachas fruto."
+      />
 
-      {/* Información de la Empresa */}
-      <Card className="border-border">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-primary">
-            <Factory className="h-5 w-5" />
-            Información de la Empresa
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <ConfigSection
+        title="Datos de la empresa"
+        description="Identificación y ubicación de la planta."
+        contentClassName="grid grid-cols-1 gap-4 px-5 py-5 md:grid-cols-2"
+      >
           <div className="space-y-2">
             <Label htmlFor="razon_social">
               Nombre de la Extractora <span className="text-destructive">*</span>
@@ -209,11 +193,9 @@ export default function NuevaExtractora() {
               se limpia el municipio para evitar combinaciones inválidas. */}
           <div className="space-y-2">
             <Label htmlFor="departamento_codigo">Departamento</Label>
-            <select
-              id="departamento_codigo"
+            <Select
               value={formData.departamento_codigo}
-              onChange={(e) => {
-                const codigo = e.target.value;
+              onValueChange={(codigo) => {
                 setFormData((prev) => ({
                   ...prev,
                   departamento_codigo: codigo,
@@ -222,34 +204,38 @@ export default function NuevaExtractora() {
                 }));
               }}
               disabled={loading}
-              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
             >
-              <option value="">Seleccionar departamento...</option>
-              {[...departamentos].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((d) => (
-                <option key={d.codigo} value={d.codigo}>{d.nombre}</option>
-              ))}
-            </select>
+              <SelectTrigger id="departamento_codigo">
+                <SelectValue placeholder="Seleccionar departamento" />
+              </SelectTrigger>
+              <SelectContent>
+                {[...departamentos].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((d) => (
+                  <SelectItem key={d.codigo} value={d.codigo}>{d.nombre}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="ciudad">Ciudad</Label>
-            <select
-              id="ciudad"
+            <Select
               value={formData.municipio_codigo}
-              onChange={(e) => {
-                const codigo = e.target.value;
+              onValueChange={(codigo) => {
                 const nombre = municipios.find((m) => m.codigo === codigo)?.nombre ?? '';
                 setFormData((prev) => ({ ...prev, municipio_codigo: codigo, ciudad: nombre }));
               }}
               disabled={loading || !formData.departamento_codigo}
-              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <option value="">
-                {formData.departamento_codigo ? 'Seleccionar municipio...' : 'Selecciona departamento primero'}
-              </option>
-              {[...municipios].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((m) => (
-                <option key={m.codigo} value={m.codigo}>{m.nombre}</option>
-              ))}
-            </select>
+              <SelectTrigger id="ciudad">
+                <SelectValue placeholder={formData.departamento_codigo
+                  ? 'Seleccionar municipio'
+                  : 'Selecciona departamento primero'} />
+              </SelectTrigger>
+              <SelectContent>
+                {[...municipios].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((m) => (
+                  <SelectItem key={m.codigo} value={m.codigo}>{m.nombre}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="ubicacion">Dirección</Label>
@@ -261,18 +247,14 @@ export default function NuevaExtractora() {
               disabled={loading}
             />
           </div>
-        </CardContent>
-      </Card>
+      </ConfigSection>
 
       {/* Información de Contacto */}
-      <Card className="border-border">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-primary">
-            <User className="h-5 w-5" />
-            Información de Contacto
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <ConfigSection
+        title="Contacto"
+        description="Persona y medios para coordinar los despachos."
+        contentClassName="grid grid-cols-1 gap-4 px-5 py-5 md:grid-cols-2"
+      >
           <div className="space-y-2">
             <Label htmlFor="contacto_nombre">Nombre de Contacto</Label>
             <Input
@@ -294,7 +276,7 @@ export default function NuevaExtractora() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="telefono_fijo">Teléfono Fijo</Label>
+            <Label htmlFor="telefono_fijo">Teléfono fijo</Label>
             <Input
               id="telefono_fijo"
               placeholder="+57 2 123 4567"
@@ -304,7 +286,7 @@ export default function NuevaExtractora() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">Correo Electrónico</Label>
+            <Label htmlFor="email">Correo electrónico</Label>
             <Input
               id="email"
               type="email"
@@ -314,17 +296,14 @@ export default function NuevaExtractora() {
               disabled={loading}
             />
           </div>
-        </CardContent>
-      </Card>
+      </ConfigSection>
 
-      {/* El botón va al pie del formulario, como en el resto de la app. */}
-      <div className="flex justify-end">
-        <Button
-          onClick={handleSave}
-          disabled={saving || loading}
-          className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-6"
-        >
-          <Save className="h-4 w-4" />
+      <div className="barra-acciones flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button variant="outline" onClick={() => navigate('/configuracion')} disabled={saving}>
+          Cancelar
+        </Button>
+        <Button onClick={handleSave} disabled={saving || loading}>
+          <Save strokeWidth={2} />
           {saving ? 'Guardando…' : 'Guardar'}
         </Button>
       </div>

@@ -3,12 +3,14 @@ import { useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
-import { Input } from '../../components/ui/input';
 import {
-  ArrowLeft, ShoppingCart, Star, Package, Shield, CheckCircle,
-  Plus, Minus, Store, Loader2,
+  ShoppingCart, Star, Shield, CheckCircle, TrendingDown,
+  Store, Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import PageHeader from '../../components/common/PageHeader';
+import { CantidadInput, ProductoFoto } from '../../components/market/piezas';
+import { cop } from '../../lib/formato';
 import { marketApi, toNumber, buildImagenUrl, type Producto } from '../../../api/market';
 
 export default function ProductoDetalle() {
@@ -175,28 +177,19 @@ export default function ProductoDetalle() {
   const especEntries = Object.entries(producto.especificaciones ?? {});
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate(-1)}
-          className="mb-4 gap-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Volver al catálogo
-        </Button>
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl sm:text-4xl font-bold text-foreground">{producto.nombre}</h1>
-              {producto.stock_bajo && <Badge className="bg-amber-500">Stock limitado</Badge>}
-              {producto.destacado && <Badge className="bg-primary">Destacado</Badge>}
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        backTo="/market"
+        eyebrow="Tienda de insumos"
+        title={
+          <>
+            {producto.nombre}
+            {producto.stock_bajo && <Badge variant="warning" className="ml-3 align-middle">Stock limitado</Badge>}
+            {producto.destacado && <Badge className="ml-2 align-middle">Destacado</Badge>}
+          </>
+        }
+        description={producto.proveedor.nombre_empresa}
+      />
 
       <div className="grid gap-8 lg:grid-cols-3">
         {/* Columna izquierda */}
@@ -205,7 +198,7 @@ export default function ProductoDetalle() {
               + imagen principal grande a la derecha. Hover en miniatura cambia
               la imagen principal automáticamente (sin necesidad de clic).
               En móvil colapsa a tira horizontal abajo. */}
-          <Card className="border-border overflow-hidden">
+          <Card className="overflow-hidden">
             <div className="flex flex-col lg:flex-row">
               {/* ─── Columna miniaturas (vertical en desktop, horizontal en móvil) */}
               {galeria.length > 1 && (
@@ -242,21 +235,28 @@ export default function ProductoDetalle() {
               {/* ─── Imagen principal */}
               <div className="order-1 lg:order-2 flex-1 relative h-[420px] sm:h-[500px] lg:h-[600px] bg-white flex items-center justify-center overflow-hidden">
                 {galeria.length > 0 ? (
-                  <img
+                  <ProductoFoto
                     key={galeria[imagenActiva].url}
+                    categoria={producto.categoria.nombre}
                     src={buildImagenUrl(galeria[imagenActiva].url)}
                     alt={galeria[imagenActiva].alt ?? producto.nombre}
-                    className="h-full w-full object-contain"
+                    ajuste="contain"
+                    className="h-full w-full rounded-none"
+                    iconClassName="h-16 w-16"
                   />
                 ) : (
-                  <Package className="h-32 w-32 text-muted-foreground/30" />
+                  <ProductoFoto
+                    categoria={producto.categoria.nombre}
+                    className="h-full w-full rounded-none"
+                    iconClassName="h-16 w-16"
+                  />
                 )}
 
                 {/* Contador "1 / 5" abajo a la derecha — sin flechas, sin
                     overlays clickables. La navegación se hace solo con las
                     miniaturas (hover/clic) o con teclado ←/→. */}
                 {galeria.length > 1 && (
-                  <div className="absolute bottom-3 right-3 px-2.5 py-1 rounded-full bg-background/90 backdrop-blur-sm border border-border text-xs font-medium">
+                  <div className="absolute bottom-3 right-3 rounded-md border border-border bg-background/90 px-2.5 py-1 text-xs font-medium backdrop-blur-sm">
                     {imagenActiva + 1} / {galeria.length}
                   </div>
                 )}
@@ -265,10 +265,10 @@ export default function ProductoDetalle() {
           </Card>
 
           {/* Información del producto */}
-          <Card className="border-border">
+          <Card>
             <CardContent className="p-6 space-y-6">
               <div>
-                <h2 className="text-2xl font-bold text-foreground mb-3">Descripción</h2>
+                <h2 className="mb-3">Descripción</h2>
                 <p className="text-muted-foreground">{producto.descripcion}</p>
               </div>
 
@@ -276,9 +276,7 @@ export default function ProductoDetalle() {
                 <>
                   <div className="h-px bg-border" />
                   <div>
-                    <h3 className="text-lg font-semibold text-foreground mb-3">
-                      Especificaciones Técnicas
-                    </h3>
+                    <h3 className="mb-3">Especificaciones técnicas</h3>
                     <div className="grid gap-3 sm:grid-cols-2">
                       {especEntries.map(([key, value]) => (
                         <div key={key} className="flex justify-between p-3 bg-muted/30 rounded-lg">
@@ -299,7 +297,7 @@ export default function ProductoDetalle() {
                 <>
                   <div className="h-px bg-border" />
                   <div>
-                    <h3 className="text-lg font-semibold text-foreground mb-3">Precios por Volumen</h3>
+                    <h3 className="mb-3">Precios por volumen</h3>
                     <div className="grid gap-3 sm:grid-cols-2">
                       {producto.precios_volumen.map((nivel, i) => {
                         const precio = toNumber(nivel.precio_unidad);
@@ -309,28 +307,22 @@ export default function ProductoDetalle() {
                             : 0;
                         const aplicado = cantidad >= nivel.cantidad_minima;
                         return (
-                          <Card
+                          <div
                             key={i}
-                            className={`border-2 ${
-                              aplicado ? 'border-primary bg-primary/5' : 'border-border'
+                            className={`flex items-center justify-between rounded-lg border px-4 py-3 ${
+                              aplicado ? 'border-primary/20 bg-primary-soft' : 'border-border'
                             }`}
                           >
-                            <CardContent className="p-4">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <p className="text-sm text-muted-foreground">
-                                    {nivel.cantidad_minima}+ unidades
-                                  </p>
-                                  <p className="text-xl font-bold text-success">
-                                    ${precio.toLocaleString('es-CO')}
-                                  </p>
-                                </div>
-                                {descuento > 0 && (
-                                  <Badge className="bg-success">{descuento}% OFF</Badge>
-                                )}
-                              </div>
-                            </CardContent>
-                          </Card>
+                            <div>
+                              <p className="text-sm text-muted-foreground">
+                                {nivel.cantidad_minima}+ unidades
+                              </p>
+                              <p className="font-heading text-lg font-bold tabular-nums text-foreground">
+                                {cop(precio)}
+                              </p>
+                            </div>
+                            {descuento > 0 && <Badge variant="success">{descuento}% menos</Badge>}
+                          </div>
                         );
                       })}
                     </div>
@@ -341,15 +333,15 @@ export default function ProductoDetalle() {
           </Card>
 
           {/* Información del proveedor */}
-          <Card className="border-border">
-            <CardContent className="p-6">
+          <Card>
+            <CardContent>
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Store className="h-8 w-8 text-primary" />
-                  </div>
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                    <Store className="h-6 w-6" strokeWidth={2} />
+                  </span>
                   <div>
-                    <h3 className="font-semibold text-foreground">{producto.proveedor.nombre_empresa}</h3>
+                    <h3>{producto.proveedor.nombre_empresa}</h3>
                     {(() => {
                       const ratingProv = Number(producto.proveedor.calificacion_promedio ?? 0);
                       const mostrar = ratingProv > 0 ? ratingProv : 5;
@@ -361,7 +353,7 @@ export default function ProductoDetalle() {
                                 key={i}
                                 className={`h-3 w-3 ${
                                   i < Math.floor(mostrar)
-                                    ? 'fill-amber-400 text-amber-400'
+                                    ? 'fill-warning text-warning'
                                     : 'text-muted'
                                 }`}
                               />
@@ -388,11 +380,11 @@ export default function ProductoDetalle() {
 
           {/* Beneficios */}
           <div className="grid gap-4 sm:grid-cols-2">
-            <Card className="border-border">
+            <Card>
               <CardContent className="p-4 flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-success/10 flex items-center justify-center flex-shrink-0">
-                  <Shield className="h-5 w-5 text-success" />
-                </div>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-success-soft text-success">
+                  <Shield className="h-5 w-5" strokeWidth={2} />
+                </span>
                 <div>
                   <p className="font-medium text-sm">Compra segura</p>
                   <p className="text-xs text-muted-foreground">Garantía de calidad</p>
@@ -400,11 +392,11 @@ export default function ProductoDetalle() {
               </CardContent>
             </Card>
 
-            <Card className="border-border">
+            <Card>
               <CardContent className="p-4 flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-amber-500/10 flex items-center justify-center flex-shrink-0">
-                  <CheckCircle className="h-5 w-5 text-amber-500" />
-                </div>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-warning-soft text-warning">
+                  <CheckCircle className="h-5 w-5" strokeWidth={2} />
+                </span>
                 <div>
                   <p className="font-medium text-sm">Stock disponible</p>
                   <p className="text-xs text-muted-foreground">{producto.stock_disponible} unidades</p>
@@ -417,7 +409,7 @@ export default function ProductoDetalle() {
         {/* Columna derecha: Compra */}
         <div className="lg:col-span-1">
           <div className="sticky top-8 space-y-4">
-            <Card className="border-border">
+            <Card>
               <CardContent className="p-6 space-y-6">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
@@ -428,7 +420,7 @@ export default function ProductoDetalle() {
                           key={i}
                           className={`h-4 w-4 ${
                             i < Math.floor(ratingMostrar)
-                              ? 'fill-amber-400 text-amber-400'
+                              ? 'fill-warning text-warning'
                               : 'text-muted'
                           }`}
                         />
@@ -448,11 +440,11 @@ export default function ProductoDetalle() {
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Precio unitario</p>
                   <div className="flex items-baseline gap-2 flex-wrap">
-                    <p className="text-2xl sm:text-3xl font-bold text-success">
-                      ${precioInfo.precio.toLocaleString('es-CO')}
+                    <p className="font-heading text-2xl font-bold tabular-nums text-foreground sm:text-3xl">
+                      {cop(precioInfo.precio)}
                     </p>
                     {precioInfo.descuento > 0 && (
-                      <Badge className="bg-success">{precioInfo.descuento}% OFF</Badge>
+                      <Badge variant="success">{precioInfo.descuento}% menos</Badge>
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground">
@@ -463,33 +455,12 @@ export default function ProductoDetalle() {
                 <div className="h-px bg-border" />
 
                 <div>
-                  <p className="text-sm font-medium mb-2">Cantidad</p>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCantidad(Math.max(1, cantidad - 1))}
-                      disabled={cantidad <= 1}
-                    >
-                      <Minus className="h-4 w-4" />
-                    </Button>
-                    <Input
-                      type="number" step="0.001"
-                      value={cantidad}
-                      onChange={(e) => setCantidad(Math.max(1, parseFloat(e.target.value) || 1))}
-                      className="w-20 text-center"
-                      min="1"
-                      max={producto.stock_disponible}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCantidad(Math.min(producto.stock_disponible, cantidad + 1))}
-                      disabled={cantidad >= producto.stock_disponible}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  <p className="mb-2 text-sm font-medium">Cantidad</p>
+                  <CantidadInput
+                    value={cantidad}
+                    onChange={setCantidad}
+                    max={producto.stock_disponible}
+                  />
                 </div>
 
                 <div className="h-px bg-border" />
@@ -497,23 +468,21 @@ export default function ProductoDetalle() {
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Subtotal</span>
-                    <span className="font-semibold">${subtotal.toLocaleString('es-CO')}</span>
+                    <span className="font-semibold tabular-nums">{cop(subtotal)}</span>
                   </div>
 
                   <div className="h-px bg-border my-2" />
 
                   <div className="flex justify-between">
                     <span className="font-semibold">Total</span>
-                    <span className="text-xl font-bold text-success">
-                      ${subtotal.toLocaleString('es-CO')}
-                    </span>
+                    <span className="text-xl font-bold tabular-nums">{cop(subtotal)}</span>
                   </div>
                 </div>
 
                 <div className="space-y-2 pt-2">
                   <Button
                     onClick={() => agregarAlCarrito(true)}
-                    className="w-full gap-2"
+                    className="w-full"
                     size="lg"
                     disabled={agregando || producto.stock_disponible <= 0}
                   >
@@ -523,7 +492,7 @@ export default function ProductoDetalle() {
                   <Button
                     onClick={() => agregarAlCarrito(false)}
                     variant="outline"
-                    className="w-full gap-2"
+                    className="w-full"
                     size="lg"
                     disabled={agregando || producto.stock_disponible <= 0}
                   >
@@ -535,15 +504,12 @@ export default function ProductoDetalle() {
             </Card>
 
             {precioInfo.descuento > 0 && (
-              <Card className="border-success bg-success/5">
-                <CardContent className="p-4">
-                  <p className="text-sm font-medium text-success">
-                    ¡Ahorras $
-                    {((precioInfo.base - precioInfo.precio) * cantidad).toLocaleString('es-CO')}
-                    {' '}comprando {cantidad} unidades!
-                  </p>
-                </CardContent>
-              </Card>
+              <div className="flex gap-2 rounded-lg bg-success-soft p-3">
+                <TrendingDown className="mt-0.5 h-4 w-4 shrink-0 text-success" strokeWidth={2} />
+                <p className="text-sm text-foreground">
+                  Ahorras {cop((precioInfo.base - precioInfo.precio) * cantidad)} comprando {cantidad} unidades.
+                </p>
+              </div>
             )}
           </div>
         </div>

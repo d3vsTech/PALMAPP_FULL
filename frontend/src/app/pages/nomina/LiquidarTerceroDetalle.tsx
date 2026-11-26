@@ -19,8 +19,10 @@
  *   7. Descargar/imprimir PDF del acta (§7.8).
  */
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router';
+import { useParams, useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import PageHeader from '../../components/common/PageHeader';
 import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
 import { Label } from '../../components/ui/label';
@@ -28,17 +30,13 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
 import {
-  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
-  BreadcrumbPage, BreadcrumbSeparator,
-} from '../../components/ui/breadcrumb';
-import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle,
 } from '../../components/ui/dialog';
 import {
-  ArrowLeft, Building2, Check, ChevronDown, ChevronRight,
+  Check, ChevronDown, ChevronRight,
   FileText, AlertCircle, Loader2, Printer, Download,
-  MessageCircle, CheckCircle2, Plus, Trash2, Minus,
+  MessageCircle, Plus, Trash2, RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { avisarCierreAutomatico } from '../../utils/cierreAutomaticoNomina';
@@ -50,6 +48,7 @@ import {
   NominaErrorCodes,
 } from '../../../api/nomina';
 import type { ApiError } from '../../../api/client';
+import { Eyebrow, FilaMonto, thead, th, td } from '../../components/nomina/piezas';
 
 function toNumber(v: string | number | null | undefined): number {
   if (v == null) return 0;
@@ -57,63 +56,11 @@ function toNumber(v: string | number | null | undefined): number {
   return parseFloat(v) || 0;
 }
 
-// ── Colores por labor (esquema V.19) ─────────────────────────────────────────
-// Cada labor tiene su color: cosecha (ámbar), poda (verde oscuro finca),
-// fertilización (azul), sanidad (rosa), abonada (púrpura), trabajos de finca (zinc).
-type LaborMeta = { header: string; bg: string; chip: string };
-
-const LABOR_META_COSECHA: LaborMeta = {
-  header: 'text-amber-600',
-  bg: 'bg-amber-50/60 dark:bg-amber-950/20',
-  chip: 'bg-amber-500/10 text-amber-700 border-amber-500/30',
-};
-const LABOR_META_PODA: LaborMeta = {
-  header: 'text-[#1E5631]',
-  bg: 'bg-[#1E5631]/5',
-  chip: 'bg-[#1E5631]/10 text-[#1E5631] border-[#1E5631]/30',
-};
-const LABOR_META_PLATEO: LaborMeta = LABOR_META_PODA;
-const LABOR_META_FERTILIZACION: LaborMeta = {
-  header: 'text-blue-600',
-  bg: 'bg-blue-50/60 dark:bg-blue-950/20',
-  chip: 'bg-blue-500/10 text-blue-700 border-blue-500/30',
-};
-const LABOR_META_ABONADA: LaborMeta = {
-  header: 'text-purple-600',
-  bg: 'bg-purple-50/60 dark:bg-purple-950/20',
-  chip: 'bg-purple-500/10 text-purple-700 border-purple-500/30',
-};
-const LABOR_META_SANIDAD: LaborMeta = {
-  header: 'text-rose-600',
-  bg: 'bg-rose-50/60 dark:bg-rose-950/20',
-  chip: 'bg-rose-500/10 text-rose-700 border-rose-500/30',
-};
-const LABOR_META_FINCA: LaborMeta = {
-  header: 'text-zinc-700 dark:text-zinc-300',
-  bg: 'bg-zinc-100/80 dark:bg-zinc-800/40',
-  chip: 'bg-zinc-500/10 text-zinc-700 border-zinc-500/30 dark:text-zinc-300',
-};
-
-/** Resuelve el color según el nombre de la labor (case-insensitive). */
-function metaDeLabor(nombreLabor: string): LaborMeta {
-  const n = (nombreLabor || '').toLowerCase();
-  if (n.includes('cosecha')) return LABOR_META_COSECHA;
-  if (n.includes('plateo')) return LABOR_META_PLATEO;
-  if (n.includes('poda')) return LABOR_META_PODA;
-  if (n.includes('fertiliz')) return LABOR_META_FERTILIZACION;
-  if (n.includes('abonad')) return LABOR_META_ABONADA;
-  if (n.includes('sanidad')) return LABOR_META_SANIDAD;
-  return LABOR_META_FINCA;
-}
-
-// Aliases legacy usados en el JSX del desglose.
-const LABOR_META_PALMA = LABOR_META_COSECHA;
-
 /** El acta sin liquidar no tiene comprobante que imprimir (doc §7.8). */
 function avisarErrorDeActa(err: unknown, respaldo: string): void {
   const e = err as ApiError;
   if (e?.code === NominaErrorCodes.ACTA_NO_CALCULADA) {
-    toast.error('Liquide el acta antes de generar el comprobante');
+    toast.error('Liquida el acta antes de generar el comprobante');
     return;
   }
   toast.error(e?.message ?? respaldo);
@@ -371,7 +318,7 @@ export default function LiquidarTerceroDetalle() {
       if (e.code === NominaErrorCodes.ACTA_TERCERO_YA_PAGADA) {
         toast.error('El acta ya fue pagada');
       } else if (e.code === NominaErrorCodes.ACTA_NO_CALCULADA) {
-        toast.error('Liquide el acta antes de registrar el pago');
+        toast.error('Liquida el acta antes de registrar el pago');
         cargarActa();
       } else if (e.code === NominaErrorCodes.PERMISSION_DENIED) {
         toast.error('No tienes el permiso "nomina.pagar-tercero"');
@@ -450,10 +397,10 @@ export default function LiquidarTerceroDetalle() {
   // ── Render ────────────────────────────────────────────────────────────────
   if (cargando) {
     return (
-      <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" />
+      <Card className="flex-row items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
         Cargando acta...
-      </div>
+      </Card>
     );
   }
 
@@ -462,36 +409,40 @@ export default function LiquidarTerceroDetalle() {
     // el cálculo (que además liquida a los operarios pendientes del
     // tercero) corre solo con este botón.
     return (
-      <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-        <p className="text-sm text-muted-foreground max-w-md">
-          El acta de este contratista aún no está calculada. Para ver sus
-          totales y el desglose por operario se necesita calcularla — esto
-          también liquida a sus operarios pendientes con los valores del
-          período. La nómina debe estar en borrador.
-        </p>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate(-1)}>
-            Volver
-          </Button>
-          <Button onClick={calcularActa} disabled={calculandoActa} className="gap-1.5">
-            {calculandoActa ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Calculando...
-              </>
-            ) : (
-              'Calcular acta'
-            )}
-          </Button>
-        </div>
+      <div className="space-y-6">
+        <PageHeader
+          backTo={`/nomina/${nominaId}`}
+          eyebrow="Liquidar tercero"
+          title="Acta sin calcular"
+          description="Para ver los totales y el desglose por operario hay que calcularla. Esto también liquida a sus operarios pendientes con los valores del período. La nómina debe estar en borrador."
+          actions={
+            <>
+              <Button variant="outline" onClick={() => navigate(-1)}>
+                Volver
+              </Button>
+              <Button onClick={calcularActa} disabled={calculandoActa}>
+                {calculandoActa ? (
+                  <Loader2 className="animate-spin" strokeWidth={2} />
+                ) : (
+                  <FileText strokeWidth={2} />
+                )}
+                {calculandoActa ? 'Calculando...' : 'Calcular acta'}
+              </Button>
+            </>
+          }
+        />
       </div>
     );
   }
 
   if (!detalle) {
     return (
-      <div className="text-center py-20 text-muted-foreground">
-        No se pudo cargar el acta del tercero.
+      <div className="space-y-6">
+        <PageHeader
+          backTo={`/nomina/${nominaId}`}
+          title="No se pudo cargar el acta"
+          description="Vuelve al período e intenta de nuevo."
+        />
       </div>
     );
   }
@@ -537,140 +488,76 @@ export default function LiquidarTerceroDetalle() {
   const totalEmpresa = sinLiquidar
     ? estimadoEmpresa
     : toNumber(detalle.acta.total_a_transferir);
+  /** Bruto de labores antes de descuentos; con el acta liquidada, `total_bruto` (§7.2). */
+  const subtotalLabores = sinLiquidar
+    ? estimadoBruto
+    : toNumber(detalle.acta.total_bruto);
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link to="/nomina">Pagos</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link to={`/nomina/${nominaId}`}>{detalle.nomina.periodo_label}</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>Liquidar — {nombre}</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
-
       {/* Header con botón volver */}
-      <div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate(`/nomina/${nominaId}`)}
-          className="mb-4 gap-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Volver
-        </Button>
-        <h1 className="text-2xl sm:text-3xl font-bold text-primary">Liquidar — {nombre}</h1>
-        <p className="text-muted-foreground mt-1">{detalle.nomina.periodo_label}</p>
-      </div>
+      <PageHeader
+        backTo={`/nomina/${nominaId}`}
+        eyebrow={`Liquidar tercero · ${detalle.nomina.periodo_label}`}
+        title={nombre}
+        description="Revisa las labores de cada operario, agrega descuentos y liquida la orden de pago."
+      />
 
-      {/* Card empresa */}
-      <div className="rounded-xl border border-border overflow-hidden bg-card shadow-sm">
-        {/* Header empresa */}
-        <div className={`flex items-center justify-between px-5 py-4 border-b border-border ${
-          estaPagada
-            ? 'bg-[#1E5631]/5'
-            : 'bg-amber-50/40 dark:bg-amber-950/10'
-        }`}>
-          <div className="flex items-center gap-3">
-            <div className={`h-10 w-10 rounded-xl flex items-center justify-center font-bold text-sm ${
-              estaPagada
-                ? 'bg-[#1E5631]/10 text-[#1E5631]'
-                : 'bg-amber-500/10 text-amber-700'
-            }`}>
+      {/* La empresa y su acta. Es una tarjeta de la app, no un recuadro
+          escrito a mano: asi sigue el borde y el radio del tema. */}
+      <Card className="gap-0 overflow-hidden">
+        {/* Encabezado de la empresa */}
+        <div className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-sm font-semibold text-foreground">
               {nombre.charAt(0)}
-            </div>
-            <div>
-              <p className="font-semibold text-foreground">{nombre}</p>
-              <p className="text-xs text-muted-foreground">
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="break-words">{nombre}</h3>
+                <Badge variant={estaPagada ? 'success' : 'warning'}>
+                  {estaPagada ? 'Liquidado' : 'Pendiente'}
+                </Badge>
+              </div>
+              <p className="break-words text-xs text-muted-foreground">
                 NIT {nit}
                 {contacto && ` · ${contacto}`}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="text-right">
-              <p className="text-xs text-muted-foreground">Total a pagar</p>
-              <p className="text-xl font-bold text-foreground">
+          <div className="flex items-center justify-between gap-4 md:justify-end">
+            <div className="md:text-right">
+              <Eyebrow>Total a pagar</Eyebrow>
+              <p className="text-lg font-semibold tabular-nums text-foreground">
                 ${totalEmpresa.toLocaleString('es-CO')}
               </p>
             </div>
-            <Badge className={`text-xs ${
-              estaPagada
-                ? 'bg-[#1E5631]/10 text-[#1E5631] border-[#1E5631]/20'
-                : 'bg-amber-500/10 text-amber-700 border-amber-300'
-            }`}>
-              {estaPagada ? 'Liquidado' : 'Pendiente'}
-            </Badge>
             {sinLiquidar ? (
-              <Button
-                size="sm"
-                className="bg-primary hover:bg-primary/90 gap-1.5"
-                onClick={calcularActa}
-                disabled={calculandoActa}
-              >
-                {calculandoActa ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Liquidando...
-                  </>
-                ) : (
-                  <>
-                    <FileText className="h-3.5 w-3.5" />
-                    Liquidar acta
-                  </>
-                )}
+              <Button onClick={calcularActa} disabled={calculandoActa}>
+                {calculandoActa
+                  ? <Loader2 className="animate-spin" strokeWidth={2} />
+                  : <FileText strokeWidth={2} />}
+                {calculandoActa ? 'Liquidando...' : 'Liquidar acta'}
               </Button>
             ) : !estaPagada ? (
-              <>
+              <div className="flex flex-wrap items-center gap-2">
                 {/* El desglose de abajo se calcula en vivo; el acta solo
                     cambia al volver a liquidarla. */}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5"
-                  onClick={calcularActa}
-                  disabled={calculandoActa}
-                >
-                  {calculandoActa ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Recalculando...
-                    </>
-                  ) : (
-                    'Recalcular'
-                  )}
+                <Button variant="outline" onClick={calcularActa} disabled={calculandoActa}>
+                  {calculandoActa
+                    ? <Loader2 className="animate-spin" strokeWidth={2} />
+                    : <RefreshCw strokeWidth={2} />}
+                  {calculandoActa ? 'Recalculando...' : 'Recalcular'}
                 </Button>
-                <Button
-                  size="sm"
-                  className="bg-primary hover:bg-primary/90 gap-1.5"
-                  onClick={() => setModalPagoAbierto(true)}
-                >
-                  <FileText className="h-3.5 w-3.5" />
+                <Button onClick={() => setModalPagoAbierto(true)}>
+                  <FileText strokeWidth={2} />
                   Registrar pago
                 </Button>
-              </>
+              </div>
             ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5 text-[#1E5631] border-[#1E5631]/30"
-                onClick={descargarPdf}
-              >
-                <Download className="h-3.5 w-3.5" />
-                Descargar Comprobante
+              <Button variant="outline" onClick={descargarPdf}>
+                <Download strokeWidth={2} />
+                Descargar comprobante
               </Button>
             )}
           </div>
@@ -678,19 +565,12 @@ export default function LiquidarTerceroDetalle() {
 
         {/* Lista de operarios */}
         {detalle.operarios.length === 0 ? (
-          <div className="py-10 text-center text-sm text-muted-foreground">
+          <div className="border-t border-border px-6 py-10 text-center text-sm text-muted-foreground">
             Este tercero no tiene operarios en la nómina.
           </div>
         ) : (
           detalle.operarios.map((o) => {
             const abierto = expandidos.has(o.operario_id);
-            const iniciales = (o.nombre_completo || '')
-              .split(' ')
-              .filter(Boolean)
-              .slice(0, 2)
-              .map((p) => p.charAt(0))
-              .join('')
-              .toUpperCase() || '?';
             const desglose = desglosePorOperario.get(o.operario_id);
             const vivo = desglose === 'cargando' || desglose === 'error' ? null : desglose;
             // Sin liquidar, la línea del acta está en ceros: se muestra lo que
@@ -718,82 +598,72 @@ export default function LiquidarTerceroDetalle() {
                     j.categoria === 'FINCA' ? 'Trabajos de finca' : j.labor_nombre)),
                 ];
             return (
-              <div key={o.id} className="border-b border-border/60 last:border-0">
+              <div key={o.id} className="border-t border-border">
                 {/* Fila resumen operario — clickeable */}
-                <button aria-label="Desplegar"
+                <button
                   type="button"
-                  className="w-full flex items-center justify-between px-5 py-3 hover:bg-muted/20 transition-colors text-left"
+                  aria-expanded={abierto}
+                  className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left transition-colors hover:bg-muted/40"
                   onClick={() => toggleExpandido(o.operario_id)}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 rounded-full bg-amber-500/10 text-amber-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                      {iniciales}
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm">{o.nombre_completo}</p>
-                      <p className="text-xs text-muted-foreground">
+                  <div className="flex min-w-0 items-center gap-3">
+                    {abierto
+                      ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2} />
+                      : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2} />}
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-semibold text-foreground">{o.nombre_completo}</p>
+                      <p className="break-words text-xs text-muted-foreground">
                         {o.cargo || '—'} · {o.cedula}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    {/* Chips de labores realizadas — color por labor (V.19) */}
-                    <div className="flex gap-2 flex-wrap justify-end max-w-md">
-                      {labores.map((labor, idx) => {
-                        const meta = metaDeLabor(labor);
-                        return (
-                          <span
-                            key={`${labor}-${idx}`}
-                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${meta.chip}`}
-                          >
-                            {labor.toUpperCase()}
-                          </span>
-                        );
-                      })}
+                  <div className="flex shrink-0 items-center gap-3">
+                    {/* Labores realizadas en el período. */}
+                    <div className="hidden max-w-md flex-wrap justify-end gap-1.5 md:flex">
+                      {labores.map((labor, idx) => (
+                        <Badge key={`${labor}-${idx}`} variant="secondary">{labor}</Badge>
+                      ))}
                     </div>
-                    <p className="font-bold text-sm text-primary w-28 text-right">
+                    <p className="w-28 text-right text-sm font-semibold tabular-nums text-foreground">
                       ${subtotal.toLocaleString('es-CO')}
                     </p>
-                    {abierto
-                      ? <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      : <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
                   </div>
                 </button>
 
                 {/* Detalle expandido */}
                 {abierto && (
-                  <div className="border-t border-border/40 bg-muted/5">
+                  <div className="border-t border-border">
                     {/* Totales del operario */}
-                    <div className="grid grid-cols-1 sm:grid-cols-4 divide-x divide-border/40 border-b border-border/40 bg-muted/10">
+                    <div className="grid grid-cols-2 border-b border-border bg-muted/30 sm:grid-cols-4">
                       <div className="px-5 py-3">
-                        <p className="text-xs text-muted-foreground">Jornales</p>
-                        <p className="text-sm font-bold">${totalJornales.toLocaleString('es-CO')}</p>
+                        <Eyebrow>Jornales</Eyebrow>
+                        <p className="text-sm font-semibold tabular-nums text-foreground">${totalJornales.toLocaleString('es-CO')}</p>
                       </div>
                       <div className="px-5 py-3">
-                        <p className="text-xs text-muted-foreground">Cosecha</p>
-                        <p className="text-sm font-bold">${totalCosecha.toLocaleString('es-CO')}</p>
+                        <Eyebrow>Cosecha</Eyebrow>
+                        <p className="text-sm font-semibold tabular-nums text-foreground">${totalCosecha.toLocaleString('es-CO')}</p>
                       </div>
                       <div className="px-5 py-3">
-                        <p className="text-xs text-muted-foreground">Descuentos</p>
-                        <p className="text-sm font-bold text-destructive">
+                        <Eyebrow>Descuentos</Eyebrow>
+                        <p className="text-sm font-semibold tabular-nums text-foreground">
                           {totalDescuentos > 0 ? `−$${totalDescuentos.toLocaleString('es-CO')}` : '$0'}
                         </p>
                       </div>
                       <div className="px-5 py-3">
-                        <p className="text-xs text-muted-foreground">Subtotal</p>
-                        <p className="text-sm font-bold text-primary">${subtotal.toLocaleString('es-CO')}</p>
+                        <Eyebrow>Subtotal</Eyebrow>
+                        <p className="text-sm font-semibold tabular-nums text-foreground">${subtotal.toLocaleString('es-CO')}</p>
                       </div>
                     </div>
 
                     {/* Desglose de labores del backend (§7.4) */}
                     {desglose === 'cargando' && (
-                      <div className="py-8 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
+                      <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Cargando desglose...
                       </div>
                     )}
                     {desglose === 'error' && (
-                      <div className="py-6 text-center text-sm text-muted-foreground">
+                      <div className="py-8 text-center text-sm text-muted-foreground">
                         No se pudo cargar el desglose.
                       </div>
                     )}
@@ -819,7 +689,7 @@ export default function LiquidarTerceroDetalle() {
 
                       if (!hayContenido) {
                         return (
-                          <div className="py-6 text-center text-sm text-muted-foreground">
+                          <div className="py-8 text-center text-sm text-muted-foreground">
                             Sin registros de labores en el período.
                           </div>
                         );
@@ -827,58 +697,56 @@ export default function LiquidarTerceroDetalle() {
 
                       return (
                         <div className="overflow-x-auto">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="border-b border-border text-xs text-muted-foreground bg-muted/20">
-                                <th className="text-left p-3 pl-5 font-semibold">Lote</th>
-                                <th className="text-left p-3 font-semibold">Sublote</th>
-                                <th className="text-right p-3 font-semibold">Cantidad</th>
-                                <th className="text-right p-3 font-semibold">Prom.</th>
-                                <th className="text-right p-3 font-semibold">Peso (kg)</th>
-                                <th className="text-right p-3 font-semibold">Precio Unit.</th>
-                                <th className="text-right p-3 pr-5 font-semibold">Total</th>
+                          <table className="w-full min-w-[640px] text-sm">
+                            <thead className={thead}>
+                              <tr>
+                                <th className={`${th} pl-5 text-left`}>Lote</th>
+                                <th className={`${th} text-left`}>Sublote</th>
+                                <th className={`${th} text-right`}>Cantidad</th>
+                                <th className={`${th} text-right`}>Prom.</th>
+                                <th className={`${th} text-right`}>Peso (kg)</th>
+                                <th className={`${th} text-right`}>Precio unit.</th>
+                                <th className={`${th} pr-5 text-right`}>Total</th>
                               </tr>
                             </thead>
-                            <tbody>
+                            <tbody className="divide-y divide-border">
                               {/* ─── COSECHA ─── */}
                               {desglose.cosecha.length > 0 && (
                                 <>
-                                  <tr className={LABOR_META_COSECHA.bg}>
-                                    <td colSpan={7} className={`px-5 py-2 text-xs font-bold tracking-wider ${LABOR_META_COSECHA.header}`}>
-                                      COSECHA
+                                  <tr className="bg-muted/30">
+                                    <td colSpan={7} className="px-5 py-1.5 text-[13px] font-medium text-muted-foreground">
+                                      Cosecha
                                     </td>
                                   </tr>
                                   {desglose.cosecha.map((c, idx) => (
                                     <tr
-                                      key={`cosecha-${idx}`}
-                                      className="border-b border-border/50 hover:bg-muted/10"
-                                    >
-                                      <td className="p-3 pl-5 font-semibold">{c.lote}</td>
-                                      <td className="p-3 text-muted-foreground">{c.sublote ?? '—'}</td>
-                                      <td className="p-3 text-right">
-                                        <span className="font-semibold">{c.gajos.toLocaleString('es-CO')}</span>{' '}
-                                        <span className="text-xs text-muted-foreground">gajos</span>
+                                      key={`cosecha-${idx}`}>
+                                      <td className={`${td} pl-5 font-medium text-foreground`}>{c.lote}</td>
+                                      <td className={`${td} text-muted-foreground`}>{c.sublote ?? '—'}</td>
+                                      <td className={`${td} text-right tabular-nums`}>
+                                        {c.gajos.toLocaleString('es-CO')}
+                                        <span className="ml-1 text-xs text-muted-foreground">gajos</span>
                                       </td>
-                                      <td className="p-3 text-right text-muted-foreground">
+                                      <td className={`${td} text-right tabular-nums text-muted-foreground`}>
                                         {c.promedio_kg_gajo > 0 ? c.promedio_kg_gajo.toFixed(4) : '—'}
                                       </td>
-                                      <td className="p-3 text-right font-semibold">
+                                      <td className={`${td} text-right tabular-nums`}>
                                         {c.peso_kg > 0 ? c.peso_kg.toLocaleString('es-CO') : '—'}
                                       </td>
-                                      <td className="p-3 text-right text-muted-foreground">
+                                      <td className={`${td} text-right tabular-nums text-muted-foreground`}>
                                         ${c.precio_unit_kg.toLocaleString('es-CO')}
-                                        <span className="text-xs ml-0.5">/kg</span>
+                                        <span className="ml-0.5 text-xs">/kg</span>
                                       </td>
-                                      <td className={`p-3 pr-5 text-right font-semibold ${LABOR_META_COSECHA.header}`}>
+                                      <td className={`${td} pr-5 text-right tabular-nums text-foreground`}>
                                         ${c.total.toLocaleString('es-CO')}
                                       </td>
                                     </tr>
                                   ))}
-                                  <tr className="border-b border-border">
-                                    <td colSpan={6} className="p-2 pr-5 text-right text-xs text-muted-foreground">
-                                      Subtotal Cosecha
+                                  <tr>
+                                    <td colSpan={6} className="px-4 py-2 text-right text-xs text-muted-foreground">
+                                      Subtotal cosecha
                                     </td>
-                                    <td className={`p-2 pr-5 text-right text-sm font-bold ${LABOR_META_COSECHA.header}`}>
+                                    <td className="px-4 py-2 pr-5 text-right font-semibold tabular-nums text-foreground">
                                       ${totalCosecha.toLocaleString('es-CO')}
                                     </td>
                                   </tr>
@@ -887,42 +755,39 @@ export default function LiquidarTerceroDetalle() {
 
                               {/* ─── PALMA (poda / fertilización / sanidad / abonada / plateo) ─── */}
                               {Object.entries(gruposPalma).map(([nombreLabor, filas]) => {
-                                const meta = metaDeLabor(nombreLabor);
                                 const subtotalGrupo = filas.reduce((s, j) => s + j.total, 0);
                                 return (
                                   <React.Fragment key={`grupo-${nombreLabor}`}>
-                                    <tr className={meta.bg}>
-                                      <td colSpan={7} className={`px-5 py-2 text-xs font-bold tracking-wider ${meta.header}`}>
-                                        {nombreLabor.toUpperCase()}
+                                    <tr className="bg-muted/30">
+                                      <td colSpan={7} className="px-5 py-1.5 text-[13px] font-medium text-muted-foreground">
+                                        {nombreLabor}
                                       </td>
                                     </tr>
                                     {filas.map((j, idx) => (
                                       <tr
-                                        key={`palma-${nombreLabor}-${idx}`}
-                                        className="border-b border-border/50 hover:bg-muted/10"
-                                      >
-                                        <td className="p-3 pl-5 font-semibold">{j.lote ?? '—'}</td>
-                                        <td className="p-3 text-muted-foreground">{j.sublote ?? '—'}</td>
-                                        <td className="p-3 text-right">
-                                          <span className="font-semibold">{j.unidades.toLocaleString('es-CO')}</span>{' '}
-                                          <span className="text-xs text-muted-foreground">{j.unidad}</span>
+                                        key={`palma-${nombreLabor}-${idx}`}>
+                                        <td className={`${td} pl-5 font-medium text-foreground`}>{j.lote ?? '—'}</td>
+                                        <td className={`${td} text-muted-foreground`}>{j.sublote ?? '—'}</td>
+                                        <td className={`${td} text-right tabular-nums`}>
+                                          {j.unidades.toLocaleString('es-CO')}
+                                          <span className="ml-1 text-xs text-muted-foreground">{j.unidad}</span>
                                         </td>
-                                        <td className="p-3 text-right text-muted-foreground">—</td>
-                                        <td className="p-3 text-right text-muted-foreground">—</td>
-                                        <td className="p-3 text-right text-muted-foreground">
+                                        <td className={`${td} text-right text-muted-foreground`}>—</td>
+                                        <td className={`${td} text-right text-muted-foreground`}>—</td>
+                                        <td className={`${td} text-right tabular-nums text-muted-foreground`}>
                                           ${j.precio_unit.toLocaleString('es-CO')}
-                                          <span className="text-xs ml-0.5">/{j.unidad}</span>
+                                          <span className="ml-0.5 text-xs">/{j.unidad}</span>
                                         </td>
-                                        <td className={`p-3 pr-5 text-right font-semibold ${meta.header}`}>
+                                        <td className={`${td} pr-5 text-right tabular-nums text-foreground`}>
                                           ${j.total.toLocaleString('es-CO')}
                                         </td>
                                       </tr>
                                     ))}
-                                    <tr className="border-b border-border">
-                                      <td colSpan={6} className="p-2 pr-5 text-right text-xs text-muted-foreground">
-                                        Subtotal {nombreLabor}
+                                    <tr>
+                                      <td colSpan={6} className="px-4 py-2 text-right text-xs text-muted-foreground">
+                                        Subtotal {nombreLabor.toLowerCase()}
                                       </td>
-                                      <td className={`p-2 pr-5 text-right text-sm font-bold ${meta.header}`}>
+                                      <td className="px-4 py-2 pr-5 text-right font-semibold tabular-nums text-foreground">
                                         ${subtotalGrupo.toLocaleString('es-CO')}
                                       </td>
                                     </tr>
@@ -933,32 +798,30 @@ export default function LiquidarTerceroDetalle() {
                               {/* ─── TRABAJOS DE FINCA ─── */}
                               {jornalesFinca.length > 0 && (
                                 <>
-                                  <tr className={LABOR_META_FINCA.bg}>
-                                    <td colSpan={7} className={`px-5 py-2 text-xs font-bold tracking-wider ${LABOR_META_FINCA.header}`}>
-                                      TRABAJOS DE FINCA
+                                  <tr className="bg-muted/30">
+                                    <td colSpan={7} className="px-5 py-1.5 text-[13px] font-medium text-muted-foreground">
+                                      Trabajos de finca
                                     </td>
                                   </tr>
                                   {jornalesFinca.map((j, idx) => (
                                     <tr
-                                      key={`finca-${idx}`}
-                                      className="border-b border-border/50 hover:bg-muted/10"
-                                    >
-                                      <td className="p-3 pl-5 font-semibold" colSpan={5}>
+                                      key={`finca-${idx}`}>
+                                      <td className={`${td} pl-5 font-medium text-foreground`} colSpan={5}>
                                         {j.labor_nombre}
                                       </td>
-                                      <td className="p-3 text-right text-muted-foreground">
+                                      <td className={`${td} text-right tabular-nums text-muted-foreground`}>
                                         ${j.precio_unit.toLocaleString('es-CO')}
                                       </td>
-                                      <td className={`p-3 pr-5 text-right font-semibold ${LABOR_META_FINCA.header}`}>
+                                      <td className={`${td} pr-5 text-right tabular-nums text-foreground`}>
                                         ${j.total.toLocaleString('es-CO')}
                                       </td>
                                     </tr>
                                   ))}
-                                  <tr className="border-b border-border">
-                                    <td colSpan={6} className="p-2 pr-5 text-right text-xs text-muted-foreground">
-                                      Subtotal Finca
+                                  <tr>
+                                    <td colSpan={6} className="px-4 py-2 text-right text-xs text-muted-foreground">
+                                      Subtotal finca
                                     </td>
-                                    <td className={`p-2 pr-5 text-right text-sm font-bold ${LABOR_META_FINCA.header}`}>
+                                    <td className="px-4 py-2 pr-5 text-right font-semibold tabular-nums text-foreground">
                                       ${totalFinca.toLocaleString('es-CO')}
                                     </td>
                                   </tr>
@@ -985,144 +848,102 @@ export default function LiquidarTerceroDetalle() {
           const totalDescuentosActa = toNumber(detalle?.acta?.total_descuentos ?? 0)
             || descuentosActa.reduce((s, d) => s + toNumber(d.valor), 0);
           return (
-            <div className="border-t border-destructive/20">
-              <div className="flex items-center justify-between px-5 py-3 bg-destructive/5">
-                <p className="text-xs font-bold uppercase tracking-wide text-destructive">
-                  Descuentos
-                </p>
+            <div className="space-y-2 border-t border-border px-5 py-4">
+              <div className="flex items-center justify-between gap-2">
+                <Eyebrow>Descuentos</Eyebrow>
                 {puedeEditar && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => abrirModalDescuento(null, nombre)}
-                    className="h-7 gap-1 text-destructive hover:bg-destructive/10 font-semibold"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
+                  <Button size="sm" variant="ghost" onClick={() => abrirModalDescuento(null, nombre)}>
+                    <Plus strokeWidth={2} />
                     Agregar
                   </Button>
                 )}
               </div>
-              {descuentosActa.length === 0 ? (
-                <div className="py-4 text-center text-sm font-semibold text-destructive/70 bg-destructive/[0.03]">
-                  $0
-                </div>
-              ) : (
-                <div className="divide-y divide-destructive/10 bg-destructive/[0.03]">
-                  {descuentosActa.map((d) => (
-                    <div
-                      key={d.id}
-                      className="flex items-center justify-between gap-3 px-5 py-2.5"
+              {descuentosActa.length === 0 && <p className="text-sm text-muted-foreground">$0</p>}
+              {descuentosActa.map((d) => (
+                <div key={d.id} className="flex items-center justify-between gap-3 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words text-foreground">{d.concepto_nombre}</p>
+                    {d.observacion && (
+                      <p className="break-words text-xs text-muted-foreground">{d.observacion}</p>
+                    )}
+                  </div>
+                  <span className="whitespace-nowrap font-medium tabular-nums text-foreground">
+                    −${toNumber(d.valor).toLocaleString('es-CO')}
+                  </span>
+                  {puedeEditar && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => eliminarDescuento(d.id)}
+                      disabled={eliminandoDescuentoId === d.id}
+                      className="text-muted-foreground hover:text-destructive"
+                      aria-label="Quitar descuento"
+                      title="Quitar descuento"
                     >
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <Minus className="h-3.5 w-3.5 text-destructive flex-shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{d.concepto_nombre}</p>
-                          {d.observacion && (
-                            <p className="text-xs text-muted-foreground truncate">
-                              {d.observacion}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      <p className="text-sm font-bold text-destructive whitespace-nowrap">
-                        −${toNumber(d.valor).toLocaleString('es-CO')}
-                      </p>
-                      {puedeEditar && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => eliminarDescuento(d.id)}
-                          disabled={eliminandoDescuentoId === d.id}
-                          className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10 flex-shrink-0"
-                          title="Eliminar descuento"
-                        >
-                          {eliminandoDescuentoId === d.id
-                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            : <Trash2 className="h-3.5 w-3.5" />}
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                  {totalDescuentosActa > 0 && (
-                    <div className="flex items-center justify-end gap-3 px-5 py-2 bg-destructive/[0.06]">
-                      <span className="text-xs font-semibold uppercase text-destructive">
-                        Total descuentos
-                      </span>
-                      <span className="text-sm font-bold text-destructive">
-                        −${totalDescuentosActa.toLocaleString('es-CO')}
-                      </span>
-                    </div>
+                      {eliminandoDescuentoId === d.id
+                        ? <Loader2 className="animate-spin" strokeWidth={2} />
+                        : <Trash2 strokeWidth={2} />}
+                    </Button>
                   )}
+                </div>
+              ))}
+              {totalDescuentosActa > 0 && (
+                <div className="space-y-1 border-t border-border pt-2">
+                  <FilaMonto label="Subtotal labores" value={`$${subtotalLabores.toLocaleString('es-CO')}`} />
+                  <FilaMonto label="Descuentos" value={`−$${totalDescuentosActa.toLocaleString('es-CO')}`} />
+                  <FilaMonto label="Neto" value={`$${totalEmpresa.toLocaleString('es-CO')}`} strong />
                 </div>
               )}
             </div>
           );
         })()}
 
-        {/* Total general empresa */}
-        <div className="border-t border-border bg-muted/20 px-5 py-3 flex justify-end items-center gap-4">
-          <span className="text-sm font-semibold text-muted-foreground">
-            TOTAL ORDEN DE PAGO A {nombre.toUpperCase()}
-          </span>
-          <span className="text-lg font-bold text-primary">
+        {/* Observación de pago */}
+        <div className="space-y-2 border-t border-border px-5 py-4">
+          <Label htmlFor="liquidarte-observacion-pago">Observación</Label>
+          <Input
+            id="liquidarte-observacion-pago"
+            placeholder="Observación general para esta orden de pago"
+            value={observacionPago}
+            disabled={estaPagada}
+            onChange={(e) => setObservacionPago(e.target.value)}
+          />
+        </div>
+
+        {/* Total de la orden */}
+        <div className="flex flex-col gap-1 border-t border-border bg-muted/60 px-5 py-3 sm:flex-row sm:items-center sm:justify-end sm:gap-4">
+          <span className="text-sm font-semibold text-foreground">Total orden de pago a {nombre}</span>
+          <span className="text-lg font-bold tabular-nums text-foreground">
             ${totalEmpresa.toLocaleString('es-CO')}
           </span>
         </div>
-
-        {/* Observación de pago */}
-        <div className="px-5 py-3 border-t border-border bg-muted/5">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap">
-              Observación:
-            </span>
-            <Input
-              className="h-8 text-xs"
-              placeholder="Observación general para esta orden de pago..."
-              value={observacionPago}
-              disabled={estaPagada}
-              onChange={(e) => setObservacionPago(e.target.value)}
-            />
-          </div>
-        </div>
-      </div>
+      </Card>
 
       {/* Modal confirmación liquidación */}
       <Dialog open={modalPagoAbierto} onOpenChange={setModalPagoAbierto}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-primary" />
-              Liquidar — {nombre}
-            </DialogTitle>
+            <DialogTitle>Liquidar a {nombre}</DialogTitle>
             <DialogDescription>
-              Confirma la liquidación de la orden de pago a esta empresa
+              Confirma la liquidación de la orden de pago a esta empresa.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Empresa</span>
-                <span className="font-medium">{nombre}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">NIT</span>
-                <span>{nit}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Operarios</span>
-                <span>{detalle.operarios.length} personas</span>
-              </div>
-              <div className="flex justify-between pt-2 border-t border-border">
-                <span className="font-semibold">Total a pagar</span>
-                <span className="font-bold text-lg text-primary">
+            <div className="space-y-2 rounded-lg bg-muted/60 p-4">
+              <FilaMonto label="Empresa" value={nombre} />
+              <FilaMonto label="NIT" value={nit} />
+              <FilaMonto label="Operarios" value={`${detalle.operarios.length} personas`} />
+              <div className="flex items-baseline justify-between border-t border-border pt-2">
+                <span className="font-semibold text-foreground">Total a pagar</span>
+                <span className="text-lg font-bold tabular-nums text-foreground">
                   ${totalEmpresa.toLocaleString('es-CO')}
                 </span>
               </div>
             </div>
-            <div className="rounded-lg border border-amber-400/40 bg-amber-50/60 p-3 flex gap-2">
-              <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-700">
-                Al confirmar, la orden quedará marcada como liquidada. Asegúrate de haber revisado todos los valores antes de continuar.
+            <div className="flex gap-2 rounded-lg bg-warning-soft p-3">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+              <p className="text-sm text-foreground">
+                Al confirmar, la orden quedará marcada como liquidada. Revisa todos los valores antes de continuar.
               </p>
             </div>
           </div>
@@ -1137,10 +958,9 @@ export default function LiquidarTerceroDetalle() {
             <Button
               onClick={() => registrarPago(totalEmpresa)}
               disabled={confirmando}
-              className="bg-primary hover:bg-primary/90 gap-2"
             >
-              {confirmando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-              Confirmar Liquidación
+              {confirmando ? <Loader2 className="animate-spin" strokeWidth={2} /> : <Check strokeWidth={2} />}
+              Confirmar liquidación
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1150,25 +970,22 @@ export default function LiquidarTerceroDetalle() {
       <Dialog open={!!modalDescuento} onOpenChange={(open) => !open && setModalDescuento(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Minus className="h-5 w-5 text-destructive" />
-              Agregar descuento
-            </DialogTitle>
+            <DialogTitle>Agregar descuento</DialogTitle>
             <DialogDescription>
-              Se aplicará al acta de {modalDescuento?.operarioNombre ?? 'la empresa'}
+              Se aplicará al acta de {modalDescuento?.operarioNombre ?? 'la empresa'}.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Concepto *</Label>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="liquidarte-concepto">Concepto *</Label>
               <Select
                 value={nuevoDescuento.concepto_id}
                 onValueChange={(v) =>
                   setNuevoDescuento((prev) => ({ ...prev, concepto_id: v }))
                 }
               >
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Selecciona un concepto..." />
+                <SelectTrigger id="liquidarte-concepto">
+                  <SelectValue placeholder="Selecciona un concepto" />
                 </SelectTrigger>
                 <SelectContent>
                   {conceptosDescuento.map((c) => (
@@ -1179,8 +996,8 @@ export default function LiquidarTerceroDetalle() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs" htmlFor="liquidarte-valor">Valor *</Label>
+            <div className="space-y-2">
+              <Label htmlFor="liquidarte-valor">Valor *</Label>
               <Input id="liquidarte-valor"
                 type="number"
                 min="0"
@@ -1190,18 +1007,16 @@ export default function LiquidarTerceroDetalle() {
                 onChange={(e) =>
                   setNuevoDescuento((prev) => ({ ...prev, valor: e.target.value }))
                 }
-                className="h-9"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs" htmlFor="liquidarte-observacion-opcional">Observación (opcional)</Label>
+            <div className="space-y-2">
+              <Label htmlFor="liquidarte-observacion-opcional">Observación (opcional)</Label>
               <Input id="liquidarte-observacion-opcional"
                 placeholder="Ej: Herramienta extraviada"
                 value={nuevoDescuento.observacion}
                 onChange={(e) =>
                   setNuevoDescuento((prev) => ({ ...prev, observacion: e.target.value }))
                 }
-                className="h-9"
               />
             </div>
           </div>
@@ -1216,9 +1031,8 @@ export default function LiquidarTerceroDetalle() {
             <Button
               onClick={guardarDescuento}
               disabled={guardandoDescuento}
-              className="gap-2 bg-primary hover:bg-primary/90"
             >
-              {guardandoDescuento ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              {guardandoDescuento ? <Loader2 className="animate-spin" strokeWidth={2} /> : <Check strokeWidth={2} />}
               Agregar
             </Button>
           </DialogFooter>
@@ -1229,68 +1043,48 @@ export default function LiquidarTerceroDetalle() {
       <Dialog open={modalExitoAbierto} onOpenChange={(open) => !open && cerrarModalExito()}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-primary" />
-              ¡Liquidación Exitosa!
-            </DialogTitle>
+            <DialogTitle>Liquidación registrada</DialogTitle>
             <DialogDescription>
-              La orden de pago ha sido liquidada correctamente.
+              La orden de pago quedó liquidada.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="rounded-lg border border-[#1E5631]/30 bg-[#1E5631]/5 p-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-[#1E5631]/10 text-[#1E5631] flex items-center justify-center flex-shrink-0">
-              <CheckCircle2 className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="font-semibold text-sm">{nombre}</p>
-              <p className="text-xs text-muted-foreground">
-                Total liquidado: <span className="font-bold text-foreground">${totalLiquidado.toLocaleString('es-CO')}</span>
+          <div className="flex items-center gap-3 rounded-lg bg-success-soft p-4">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-card text-success">
+              <Check className="h-5 w-5" strokeWidth={2} />
+            </span>
+            <div className="min-w-0">
+              <p className="font-semibold text-foreground">{nombre}</p>
+              <p className="text-sm text-muted-foreground">
+                Total liquidado: <span className="font-semibold tabular-nums text-foreground">${totalLiquidado.toLocaleString('es-CO')}</span>
               </p>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <Button
-                onClick={cerrarModalExito}
-                className="bg-primary hover:bg-primary/90 gap-1.5"
-              >
-                <Check className="h-4 w-4" />
-                Aceptar
-              </Button>
-              <Button
-                variant="outline"
-                onClick={imprimirPdf}
-                className="gap-1.5"
-              >
-                <Printer className="h-4 w-4" />
-                Imprimir
-              </Button>
-              <Button
-                variant="outline"
-                onClick={enviarWhatsapp}
-                disabled={enviandoWhatsapp}
-                className="gap-1.5 text-primary border-primary/30 hover:bg-primary/5"
-              >
-                {enviandoWhatsapp
-                  ? <Loader2 className="h-4 w-4 animate-spin" />
-                  : <MessageCircle className="h-4 w-4" />}
-                <span className="text-xs">Enviar WhatsApp</span>
-              </Button>
-            </div>
-            <Button
-              variant="outline"
-              onClick={descargarPdf}
-              disabled={descargandoPdf}
-              className="w-full gap-2"
-            >
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <Button variant="outline" onClick={imprimirPdf}>
+              <Printer strokeWidth={2} />
+              Imprimir
+            </Button>
+            <Button variant="outline" onClick={enviarWhatsapp} disabled={enviandoWhatsapp}>
+              {enviandoWhatsapp
+                ? <Loader2 className="animate-spin" strokeWidth={2} />
+                : <MessageCircle strokeWidth={2} />}
+              WhatsApp
+            </Button>
+            <Button variant="outline" onClick={descargarPdf} disabled={descargandoPdf}>
               {descargandoPdf
-                ? <Loader2 className="h-4 w-4 animate-spin" />
-                : <Download className="h-4 w-4" />}
+                ? <Loader2 className="animate-spin" strokeWidth={2} />
+                : <Download strokeWidth={2} />}
               Descargar PDF
             </Button>
           </div>
+          <DialogFooter>
+            <Button onClick={cerrarModalExito}>
+              <Check strokeWidth={2} />
+              Aceptar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

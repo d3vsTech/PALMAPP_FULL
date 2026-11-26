@@ -12,11 +12,19 @@
  *  - El JSX visual proviene del diseño V.15 — sin cambios.
  */
 import React, { useEffect, useState } from 'react';
-import { comoBoton } from '../../hooks/comoBoton';
 import { useNavigate } from 'react-router';
 import { sortByFirstName } from '../../utils/personas';
 import { Button } from '../ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
+import { ConfigSection, ConfigEmpty, ConfigRowActions } from './ConfigSection';
+import { cn } from '../lib/utils';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../ui/table';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
@@ -24,8 +32,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../ui/select';
 import {
-  Plus, Pencil, Building2, User, HardHat, ShieldCheck, UserPlus,
-  ChevronDown, Trash2,
+  Plus, Building2, User, UserPlus, ChevronDown,
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
@@ -120,31 +127,28 @@ function FormOperario({
   };
 
   return (
-    <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-4">
-      <p className="text-sm font-semibold text-primary flex items-center gap-2">
-        <HardHat className="h-4 w-4" /> Nuevo Operario
-      </p>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="space-y-1.5">
-          <Label className="text-xs">Nombres <span className="text-destructive">*</span></Label>
+    <div className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Nombres <span className="text-destructive">*</span></Label>
           <Input value={form.nombres ?? ''} onChange={e => set('nombres', e.target.value)} placeholder="Nombres" />
         </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs">Apellidos <span className="text-destructive">*</span></Label>
+        <div className="space-y-2">
+          <Label>Apellidos <span className="text-destructive">*</span></Label>
           <Input value={form.apellidos ?? ''} onChange={e => set('apellidos', e.target.value)} placeholder="Apellidos" />
         </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs" htmlFor="tercerosta-cedula">Cédula</Label>
+        <div className="space-y-2">
+          <Label htmlFor="tercerosta-cedula">Cédula</Label>
           <Input id="tercerosta-cedula" value={form.cedula ?? ''} onChange={e => set('cedula', e.target.value)} placeholder="Número de cédula" />
         </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs" htmlFor="tercerosta-cargo">Cargo</Label>
-          <Input id="tercerosta-cargo" value={form.cargo ?? ''} onChange={e => set('cargo', e.target.value)} placeholder="Cosechero, Podador..." />
+        <div className="space-y-2">
+          <Label htmlFor="tercerosta-cargo">Cargo</Label>
+          <Input id="tercerosta-cargo" value={form.cargo ?? ''} onChange={e => set('cargo', e.target.value)} placeholder="Cosechero, podador..." />
         </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs flex items-center gap-1"><ShieldCheck className="h-3 w-3 text-primary" /> EPS</Label>
+        <div className="space-y-2">
+          <Label>EPS</Label>
           <Select value={form.eps ?? ''} onValueChange={v => set('eps', v)} disabled={epsCargando || (epsOptions?.length ?? 0) === 0}>
-            <SelectTrigger className="h-9">
+            <SelectTrigger>
               <SelectValue placeholder={epsCargando ? 'Cargando…' : (epsOptions?.length ? 'Seleccionar EPS' : 'Sin catálogo')} />
             </SelectTrigger>
             <SelectContent>
@@ -152,10 +156,10 @@ function FormOperario({
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs flex items-center gap-1"><HardHat className="h-3 w-3 text-amber-600" /> ARL</Label>
+        <div className="space-y-2">
+          <Label>ARL</Label>
           <Select value={form.arl ?? ''} onValueChange={v => set('arl', v)} disabled={arlCargando || (arlOptions?.length ?? 0) === 0}>
-            <SelectTrigger className="h-9">
+            <SelectTrigger>
               <SelectValue placeholder={arlCargando ? 'Cargando…' : (arlOptions?.length ? 'Seleccionar ARL' : 'Sin catálogo')} />
             </SelectTrigger>
             <SelectContent>
@@ -164,15 +168,13 @@ function FormOperario({
           </Select>
         </div>
       </div>
-      <div className="flex justify-end gap-2">
-        <Button size="sm" variant="outline" onClick={onCancelar} disabled={guardando}>Cancelar</Button>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button variant="outline" onClick={onCancelar} disabled={guardando}>Cancelar</Button>
         <Button
-          size="sm"
-          className="bg-primary hover:bg-primary/90 gap-1.5"
           disabled={!form.nombres || !form.apellidos || guardando}
           onClick={guardar}
         >
-          <Plus className="h-3.5 w-3.5" /> {guardando ? 'Guardando…' : 'Agregar Operario'}
+          <Plus strokeWidth={2} /> {guardando ? 'Guardando…' : 'Agregar operario'}
         </Button>
       </div>
     </div>
@@ -339,226 +341,204 @@ export function TercerosTab() {
     <>
       {ConfirmDeleteDialog}
       <TabLoadingGate loading={loading} message="Cargando terceros…">
-      <Card className="border-border">
-        <CardHeader className="border-b">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-1">
-                Terceros
-                <InfoTooltip text="Empresas o personas naturales externas que prestan servicios en la finca. No son colaboradores directos." />
-              </CardTitle>
-              <CardDescription>
-                {terceros.length} tercero{terceros.length !== 1 ? 's' : ''}
-                {totalOperariosCargados > 0 && ` · ${totalOperariosCargados} operario${totalOperariosCargados !== 1 ? 's' : ''} cargado${totalOperariosCargados !== 1 ? 's' : ''}`}
-              </CardDescription>
-            </div>
-            <Button onClick={() => navigate('/configuracion/terceros/nuevo')} className="gap-2 bg-primary hover:bg-primary/90">
-              <Plus className="h-4 w-4" /> Nuevo Tercero
-            </Button>
-          </div>
-        </CardHeader>
-
-        <CardContent className="p-0">
-          {terceros.length === 0 ? (
-            <div className="text-center py-14 text-muted-foreground">
-              <Building2 className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">Sin terceros registrados.</p>
-              <Button size="sm" className="mt-3 gap-2" onClick={() => navigate('/configuracion/terceros/nuevo')}>
-                <Plus className="h-4 w-4" /> Agregar primer tercero
+      <ConfigSection
+        title={
+          <span className="inline-flex items-center gap-1">
+            Terceros
+            <InfoTooltip text="Empresas o personas naturales externas que prestan servicios en la finca. No son colaboradores directos." />
+          </span>
+        }
+        description={
+          <>
+            {terceros.length} tercero{terceros.length !== 1 ? 's' : ''}
+            {totalOperariosCargados > 0 && ` · ${totalOperariosCargados} operario${totalOperariosCargados !== 1 ? 's' : ''} cargado${totalOperariosCargados !== 1 ? 's' : ''}`}
+          </>
+        }
+        flush
+        actions={
+          <Button onClick={() => navigate('/configuracion/terceros/nuevo')}>
+            <Plus strokeWidth={2} />
+            Nuevo tercero
+          </Button>
+        }
+      >
+        {terceros.length === 0 ? (
+          <ConfigEmpty
+            title="Sin terceros registrados"
+            description="Agrega las empresas o personas que prestan servicios en la finca."
+            action={
+              <Button onClick={() => navigate('/configuracion/terceros/nuevo')}>
+                <Plus strokeWidth={2} />
+                Agregar tercero
               </Button>
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {[...terceros].sort((a, b) => {
-                // NATURAL: por primer nombre. JURIDICA: por razon social.
-                // Mixto: naturales primero, luego juridicas.
-                const aName = a.tipo_persona === 'NATURAL'
-                  ? (a.nombre_completo ?? '').trim().split(/\s+/)[0] ?? ''
-                  : displayNombre(a);
-                const bName = b.tipo_persona === 'NATURAL'
-                  ? (b.nombre_completo ?? '').trim().split(/\s+/)[0] ?? ''
-                  : displayNombre(b);
-                return aName.localeCompare(bName, 'es', { sensitivity: 'base' });
-              }).map(t => {
-                const ops = operariosPorTercero[t.id] ?? [];
-                const cargando = cargandoOperarios[t.id];
-                const esNatural = t.tipo_persona === 'NATURAL';
-                const expandido = expandidoId === t.id;
-                const nombre = displayNombre(t);
-                const documento = displayDocumento(t);
+            }
+          />
+        ) : (
+          <ul className="divide-y divide-border">
+            {[...terceros].sort((a, b) => {
+              // NATURAL: por primer nombre. JURIDICA: por razon social.
+              // Mixto: naturales primero, luego juridicas.
+              const aName = a.tipo_persona === 'NATURAL'
+                ? (a.nombre_completo ?? '').trim().split(/\s+/)[0] ?? ''
+                : displayNombre(a);
+              const bName = b.tipo_persona === 'NATURAL'
+                ? (b.nombre_completo ?? '').trim().split(/\s+/)[0] ?? ''
+                : displayNombre(b);
+              return aName.localeCompare(bName, 'es', { sensitivity: 'base' });
+            }).map(t => {
+              const ops = operariosPorTercero[t.id] ?? [];
+              const cargando = cargandoOperarios[t.id];
+              const esNatural = t.tipo_persona === 'NATURAL';
+              const expandido = expandidoId === t.id;
+              const nombre = displayNombre(t);
+              const documento = displayDocumento(t);
 
-                return (
-                  <React.Fragment key={t.id}>
-                    {/* Fila del tercero */}
-                    <div
-                      className={`flex items-center gap-3 px-5 py-4 cursor-pointer transition-colors ${expandido ? 'bg-primary/5' : 'hover:bg-muted/30'}`}
-                      {...comoBoton(() => toggleExpandido(t.id))}
+              return (
+                <li key={t.id}>
+                  {/* Fila del tercero */}
+                  <div
+                    className={cn(
+                      'flex items-center gap-3 py-3 pl-5 pr-3 transition-colors',
+                      expandido ? 'bg-muted/40' : 'hover:bg-muted/40',
+                    )}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleExpandido(t.id)}
+                      aria-expanded={expandido}
+                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
                     >
-                      <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-                        {esNatural ? <User className="h-5 w-5" /> : <Building2 className="h-5 w-5" />}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-semibold text-sm">{nombre || '(sin nombre)'}</p>
-                          <Badge variant="outline" className="text-xs border-primary/30 text-primary">
-                            {esNatural ? 'Natural' : 'Jurídica'}
-                          </Badge>
-                          <Badge className={`text-xs ${t.estado ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted text-muted-foreground'}`}>
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                        {esNatural
+                          ? <User className="h-4 w-4" strokeWidth={2} />
+                          : <Building2 className="h-4 w-4" strokeWidth={2} />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-semibold text-foreground">{nombre || '(sin nombre)'}</span>
+                          <Badge variant="outline">{esNatural ? 'Natural' : 'Jurídica'}</Badge>
+                          <Badge variant={t.estado ? 'success' : 'secondary'}>
                             {t.estado ? 'Activa' : 'Inactiva'}
                           </Badge>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                           {esNatural ? 'CC' : 'NIT'} {documento}
                           {t.representante && ` · ${t.representante}`}
                           {t.telefono && ` · ${t.telefono}`}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
-                        {operariosPorTercero[t.id] !== undefined && (
-                          <span className="text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
-                            {ops.length} operario{ops.length !== 1 ? 's' : ''}
-                          </span>
+                          {operariosPorTercero[t.id] !== undefined &&
+                            ` · ${ops.length} operario${ops.length !== 1 ? 's' : ''}`}
+                        </span>
+                      </span>
+                      <ChevronDown
+                        className={cn(
+                          'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+                          expandido && 'rotate-180',
                         )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary"
-                          title="Editar tercero"
-                          onClick={() => navigate(`/configuracion/terceros/editar/${t.id}`)}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
-                          title="Eliminar tercero"
-                          onClick={() => eliminarTercero(t)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
+                        strokeWidth={2}
+                      />
+                    </button>
+                    <ConfigRowActions
+                      label={nombre || 'tercero'}
+                      onEdit={() => navigate(`/configuracion/terceros/editar/${t.id}`)}
+                      onDelete={() => eliminarTercero(t)}
+                    />
+                  </div>
+
+                  {/* Panel expandido */}
+                  {expandido && (
+                    <div className="border-t border-border bg-muted/40 px-5 py-4">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <p className="text-[13px] font-medium text-muted-foreground">
+                          Operarios ({ops.length})
+                        </p>
+                        <Button size="sm" variant="outline" onClick={() => abrirModalOperario(t.id)}>
+                          <UserPlus strokeWidth={2} />
+                          Agregar operario
                         </Button>
                       </div>
 
-                      <ChevronDown className={`h-4 w-4 text-muted-foreground flex-shrink-0 transition-transform ${expandido ? 'rotate-180 text-primary' : ''}`} />
-                    </div>
+                      {cargando && (
+                        <p className="text-sm text-muted-foreground">Cargando operarios…</p>
+                      )}
 
-                    {/* Panel expandido */}
-                    {expandido && (
-                      <div className="bg-muted/5 px-5 py-5 space-y-5 border-t border-border/50">
-                        <div>
-                          <div className="flex items-center justify-between mb-3">
-                            <p className="text-sm font-semibold flex items-center gap-1.5">
-                              <HardHat className="h-4 w-4 text-primary" />
-                              Operarios ({ops.length})
-                            </p>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-1.5 h-8"
-                              onClick={() => abrirModalOperario(t.id)}
-                            >
-                              <UserPlus className="h-3.5 w-3.5" /> Agregar Operario
-                            </Button>
-                          </div>
-
-                          {cargando && (
-                            <p className="text-xs text-muted-foreground italic py-1">Cargando operarios…</p>
-                          )}
-
-                          {!cargando && ops.length > 0 && (
-                            <div className="rounded-xl border border-border overflow-x-auto mb-3">
-                              <table className="w-full min-w-[640px] text-sm">
-                                <thead>
-                                  <tr className="bg-muted/30 text-xs text-muted-foreground">
-                                    <th className="text-left p-3 font-semibold">Nombre</th>
-                                    <th className="text-left p-3 font-semibold">Cédula</th>
-                                    <th className="text-left p-3 font-semibold">Cargo</th>
-                                    <th className="text-left p-3 font-semibold">
-                                      <span className="flex items-center gap-1"><ShieldCheck className="h-3 w-3 text-primary" /> EPS</span>
-                                    </th>
-                                    <th className="text-left p-3 font-semibold">
-                                      <span className="flex items-center gap-1"><HardHat className="h-3 w-3 text-amber-600" /> ARL</span>
-                                    </th>
-                                    <th className="text-center p-3 font-semibold">Estado</th>
-                                    <th className="text-center p-3 font-semibold w-16">Acciones</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {sortByFirstName(ops).map((op, i) => (
-                                    <tr key={op.id} className={`border-t border-border/50 ${i % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}>
-                                      <td className="p-3">
-                                        <div className="flex items-center gap-2">
-                                          <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
-                                            {op.nombres?.[0] ?? ''}{op.apellidos?.[0] ?? ''}
-                                          </div>
-                                          <span className="font-medium">{op.nombres} {op.apellidos}</span>
-                                        </div>
-                                      </td>
-                                      <td className="p-3 text-muted-foreground">{op.cedula || '—'}</td>
-                                      <td className="p-3">{op.cargo || '—'}</td>
-                                      <td className="p-3 text-muted-foreground">{op.eps || '—'}</td>
-                                      <td className="p-3 text-muted-foreground">{op.arl || '—'}</td>
-                                      <td className="p-3 text-center">
-                                        <Badge variant="outline" className={`text-xs ${op.estado ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted text-muted-foreground'}`}>
-                                          {op.estado ? 'Activo' : 'Inactivo'}
-                                        </Badge>
-                                      </td>
-                                      <td className="p-3 text-center">
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
-                                          title="Eliminar operario"
-                                          onClick={() => eliminarOperario(t.id, op)}
-                                        >
-                                          <Trash2 className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
-
-                          {!cargando && ops.length === 0 && (
-                            <p className="text-xs text-muted-foreground italic py-1">Sin operarios registrados.</p>
-                          )}
+                      {!cargando && ops.length > 0 && (
+                        <div className="overflow-hidden rounded-lg border border-border bg-card">
+                          <Table className="min-w-[640px]">
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Nombre</TableHead>
+                                <TableHead>Cédula</TableHead>
+                                <TableHead>Cargo</TableHead>
+                                <TableHead>EPS</TableHead>
+                                <TableHead>ARL</TableHead>
+                                <TableHead className="text-right">Estado</TableHead>
+                                <TableHead className="w-12" />
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {sortByFirstName(ops).map((op) => (
+                                <TableRow key={op.id}>
+                                  <TableCell>
+                                    <span className="font-medium text-foreground">
+                                      {op.nombres} {op.apellidos}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="tabular-nums text-muted-foreground">
+                                    {op.cedula || '—'}
+                                  </TableCell>
+                                  <TableCell>{op.cargo || '—'}</TableCell>
+                                  <TableCell className="text-muted-foreground">{op.eps || '—'}</TableCell>
+                                  <TableCell className="text-muted-foreground">{op.arl || '—'}</TableCell>
+                                  <TableCell className="text-right">
+                                    <Badge variant={op.estado ? 'success' : 'secondary'}>
+                                      {op.estado ? 'Activo' : 'Inactivo'}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="pr-2 text-right">
+                                    <ConfigRowActions
+                                      label={`${op.nombres} ${op.apellidos}`}
+                                      onDelete={() => eliminarOperario(t.id, op)}
+                                    />
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
                         </div>
-                      </div>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
+                      )}
 
-        {/* Modal agregar operario */}
-        <Dialog open={modalOperario.open} onOpenChange={open => !open && setModalOperario({ open: false, terceroId: null })}>
-          <DialogContent style={{ width: 'min(600px, 95vw)', maxWidth: 'min(600px, 95vw)' }}>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <HardHat className="h-5 w-5 text-primary" /> Nuevo Operario
-              </DialogTitle>
-              <DialogDescription>
-                Operario vinculado a {terceroDelModal ? displayNombre(terceroDelModal) : 'este tercero'}
-              </DialogDescription>
-            </DialogHeader>
-            {modalOperario.terceroId !== null && (
-              <FormOperario
-                terceroId={modalOperario.terceroId}
-                epsOptions={epsOptions}
-                arlOptions={arlOptions}
-                onGuardado={(op) => onOperarioGuardado(modalOperario.terceroId!, op)}
-                onCancelar={() => setModalOperario({ open: false, terceroId: null })}
-              />
-            )}
-          </DialogContent>
-        </Dialog>
-      </Card>
+                      {!cargando && ops.length === 0 && (
+                        <p className="text-sm text-muted-foreground">Sin operarios registrados.</p>
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </ConfigSection>
+
+      {/* Modal agregar operario */}
+      <Dialog open={modalOperario.open} onOpenChange={open => !open && setModalOperario({ open: false, terceroId: null })}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Nuevo operario</DialogTitle>
+            <DialogDescription>
+              Operario vinculado a {terceroDelModal ? displayNombre(terceroDelModal) : 'este tercero'}.
+            </DialogDescription>
+          </DialogHeader>
+          {modalOperario.terceroId !== null && (
+            <FormOperario
+              terceroId={modalOperario.terceroId}
+              epsOptions={epsOptions}
+              arlOptions={arlOptions}
+              onGuardado={(op) => onOperarioGuardado(modalOperario.terceroId!, op)}
+              onCancelar={() => setModalOperario({ open: false, terceroId: null })}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
       </TabLoadingGate>
     </>
   );

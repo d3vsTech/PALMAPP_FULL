@@ -16,6 +16,7 @@ import { useNavigate } from 'react-router';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
 import { Label } from '../../../components/ui/label';
+import { Textarea } from '../../../components/ui/textarea';
 import {
   Dialog, DialogContent, DialogDescription, DialogTitle,
 } from '../../../components/ui/dialog';
@@ -32,10 +33,11 @@ import {
 import { vacacionesApi } from '../../../../api/vacaciones';
 import { liquidacionFinalApi } from '../../../../api/liquidacionFinal';
 import type { ApiError } from '../../../../api/client';
+import Avatar from '../../../components/common/Avatar';
 import { EditarNovedadForm } from './EditarNovedadForm';
 import {
-  ESTADO_BADGE, ESTADO_LABEL, ORIGEN_LABEL, etiquetaDias,
-  formatFecha, formatPorcentaje, iniciales,
+  ESTADO_BADGE, ESTADO_LABEL, ORIGEN_LABEL, etiquetaDias, listaDeCampos,
+  formatFecha, formatPorcentaje,
 } from '../tipos';
 
 /** De qué documento sale el número que se pinta en el encabezado. */
@@ -80,12 +82,12 @@ function rutaDelDetalle(fila: NovedadFila): { ruta: string; etiqueta: string } |
 
 function Dato({ label, valor, icono }: { label: string; valor: string; icono?: boolean }) {
   return (
-    <div className="space-y-0.5">
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        {icono && <Calendar className="h-3 w-3" />}
+    <div className="space-y-1">
+      <dt className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground">
+        {icono && <Calendar className="h-3.5 w-3.5" />}
         {label}
-      </p>
-      <p className="text-sm font-medium">{valor}</p>
+      </dt>
+      <dd className="text-sm font-medium">{valor}</dd>
     </div>
   );
 }
@@ -120,6 +122,12 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
    * liquidaciones, el renglón no se pinta y nada más.
    */
   const [numeroNovedad, setNumeroNovedad] = useState<string | null>(null);
+  /**
+   * Cuándo se registró la novedad, ya formateada por el backend
+   * (`registro.fecha_humana` del comprobante, §4.7). Va en el encabezado, al
+   * lado del consecutivo. Solo las ausencias lo traen.
+   */
+  const [fechaRegistro, setFechaRegistro] = useState<string | null>(null);
 
   const esAusencia = fila?.fuente === 'AUSENCIA';
   /*
@@ -136,6 +144,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
     setDetalle(null);
     setTerminacion(null);
     setNumeroNovedad(null);
+    setFechaRegistro(null);
     setAccion(null);
     setMotivoRechazo('');
     if (!fila) return;
@@ -146,18 +155,30 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
     // no puede demorar ni tumbar el detalle, que es lo que se vino a ver.
     // Va ANTES del guard de abajo: la vacación no pide detalle, pero sí tiene
     // número.
-    const pedirNumero = fila.fuente === 'AUSENCIA'
-      ? novedadesApi.ausencias.comprobante(fila.id).then((res) => res.data.numero)
+    type Encabezado = { numero: string | null; registro: string | null };
+    const pedirNumero: Promise<Encabezado> | null = fila.fuente === 'AUSENCIA'
+      ? novedadesApi.ausencias.comprobante(fila.id).then((res) => ({
+        numero: res.data.numero ?? null,
+        registro: res.data.registro?.fecha_humana ?? null,
+      }))
       : fila.fuente === 'VACACION'
-        ? vacacionesApi.ver(fila.id).then((res) => res.data.numero_comprobante)
+        ? vacacionesApi.ver(fila.id).then((res) => ({
+          numero: res.data.numero_comprobante ?? null, registro: null,
+        }))
         // Una terminación de origen FICHA no tiene detalle del que sacarlo,
         // pero la fila sí trae el id de su liquidación final.
         : fila.fuente === 'TERMINACION' && fila.liquidacion_id
-          ? liquidacionFinalApi.ver(fila.liquidacion_id).then((d) => d.numero_comprobante)
+          ? liquidacionFinalApi.ver(fila.liquidacion_id).then((d) => ({
+            numero: d.numero_comprobante ?? null, registro: null,
+          }))
           : null;
     pedirNumero
-      ?.then((numero) => { if (vivo) setNumeroNovedad(numero ?? null); })
-      .catch(() => { if (vivo) setNumeroNovedad(null); });
+      ?.then((cab) => {
+        if (!vivo) return;
+        setNumeroNovedad(cab.numero);
+        setFechaRegistro(cab.registro);
+      })
+      .catch(() => { if (vivo) { setNumeroNovedad(null); setFechaRegistro(null); } });
 
     // Una terminación de origen FICHA no tiene detalle (§6.2): el tenant no
     // lleva contratos y el retiro vive solo en la ficha del colaborador. Una
@@ -353,8 +374,8 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                   style={{ backgroundColor: fila.tipo.color ?? '#9ca3af' }}
                 />
                 <div className="min-w-0">
-                  <DialogTitle className="text-base font-semibold">{fila.tipo.nombre}</DialogTitle>
-                  <DialogDescription className="mt-0.5 text-xs">
+                  <DialogTitle>{fila.tipo.nombre}</DialogTitle>
+                  <DialogDescription className="mt-0.5">
                     {numeroNovedad && (
                       <span className="mr-1.5 font-medium text-foreground" title={tituloNumero(fila.fuente)}>
                         {numeroNovedad} ·
@@ -362,16 +383,16 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                     )}
                     {fila.fuente === 'TERMINACION'
                       ? 'Terminación de contrato'
-                      : `Registrada desde ${ORIGEN_LABEL[fila.origen] ?? fila.origen}`}
+                      : fechaRegistro
+                        ? `Registrada el ${fechaRegistro} desde ${ORIGEN_LABEL[fila.origen] ?? fila.origen}`
+                        : `Registrada desde ${ORIGEN_LABEL[fila.origen] ?? fila.origen}`}
                   </DialogDescription>
                 </div>
               </div>
             </div>
 
             <div className="flex items-center gap-3 border-b border-border px-6 py-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                {iniciales(fila.empleado.nombre_completo)}
-              </div>
+              <Avatar nombre={fila.empleado.nombre_completo} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{fila.empleado.nombre_completo}</p>
                 <p className="truncate text-xs text-muted-foreground">
@@ -383,10 +404,10 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
               </Badge>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 px-6 py-4 sm:grid-cols-2">
-              <Dato icono label="Fecha inicio" valor={formatFecha(fila.fecha_inicio)} />
+            <dl className="grid grid-cols-1 gap-4 px-6 py-4 sm:grid-cols-2">
+              <Dato icono label="Fecha de inicio" valor={formatFecha(fila.fecha_inicio)} />
               {fila.fuente !== 'TERMINACION' && (
-                <Dato icono label="Fecha fin" valor={formatFecha(fila.fecha_fin)} />
+                <Dato icono label="Fecha de fin" valor={formatFecha(fila.fecha_fin)} />
               )}
               {fila.parcial ? (
                 <Dato label="Horario" valor={`${fila.horario} (informativa)`} />
@@ -412,11 +433,11 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                     : 'Pago directo desde Liquidaciones'}
                 />
               )}
-            </div>
+            </dl>
 
             {terminacion && (
               <>
-                <div className="grid grid-cols-1 gap-4 border-t border-border px-6 py-4 sm:grid-cols-2">
+                <dl className="grid grid-cols-1 gap-4 border-t border-border px-6 py-4 sm:grid-cols-2">
                   <Dato label="Motivo" valor={terminacion.terminacion.motivo.etiqueta} />
                   <Dato label="Norma" valor={terminacion.terminacion.motivo.norma || '—'} />
                   {terminacion.contrato && (
@@ -425,11 +446,11 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                       <Dato icono label="Inicio del contrato" valor={formatFecha(terminacion.contrato.fecha_inicio)} />
                     </>
                   )}
-                </div>
+                </dl>
 
                 {terminacion.terminacion.observaciones && (
                   <div className="border-t border-border px-6 py-4">
-                    <p className="mb-1 text-xs text-muted-foreground">Observaciones</p>
+                    <p className="mb-1 text-[13px] font-medium text-muted-foreground">Observaciones</p>
                     <p className="text-sm text-foreground">{terminacion.terminacion.observaciones}</p>
                   </div>
                 )}
@@ -478,15 +499,15 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
             )}
 
             {detalle && (detalle.entidad || detalle.numero_radicado) && (
-              <div className="grid grid-cols-1 gap-4 border-t border-border px-6 py-4 sm:grid-cols-2">
+              <dl className="grid grid-cols-1 gap-4 border-t border-border px-6 py-4 sm:grid-cols-2">
                 {detalle.entidad && <Dato label="Entidad" valor={detalle.entidad} />}
                 {detalle.numero_radicado && <Dato label="Radicado" valor={detalle.numero_radicado} />}
-              </div>
+              </dl>
             )}
 
             {detalle?.observacion && (
               <div className="border-t border-border px-6 py-4">
-                <p className="mb-1 text-xs text-muted-foreground">Observaciones</p>
+                <p className="mb-1 text-[13px] font-medium text-muted-foreground">Observaciones</p>
                 <p className="text-sm text-foreground">{detalle.observacion}</p>
               </div>
             )}
@@ -500,7 +521,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
             */}
             {esAusencia && detalle && (
               <div className="border-t border-border px-6 py-4">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <p className="mb-2 text-[13px] font-medium text-muted-foreground">
                   Soporte adjunto
                 </p>
                 {detalle.documento ? (
@@ -514,12 +535,12 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {detalle.documento.previsualizable && (
-                        <Button size="sm" variant="outline" onClick={() => void bajarAdjunto(true)} className="gap-2">
+                        <Button size="sm" variant="outline" onClick={() => void bajarAdjunto(true)} >
                           <Eye className="h-3.5 w-3.5" />
                           Ver
                         </Button>
                       )}
-                      <Button size="sm" variant="outline" onClick={() => void bajarAdjunto(false)} className="gap-2">
+                      <Button size="sm" variant="outline" onClick={() => void bajarAdjunto(false)} >
                         <Download className="h-3.5 w-3.5" />
                         Descargar
                       </Button>
@@ -556,7 +577,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                         variant="outline"
                         onClick={() => archivoRef.current?.click()}
                         disabled={cargando}
-                        className="gap-2"
+                        
                       >
                         {cargando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
                         {detalle.documento ? 'Reemplazar soporte' : 'Subir soporte'}
@@ -580,7 +601,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                 <span>
                   {detalle.editable.motivo_bloqueo === 'RECHAZADA'
                     ? 'Una novedad rechazada no se edita: registra una nueva.'
-                    : `Solo se pueden cambiar: ${detalle.editable.campos.join(', ')}.`}
+                    : `Solo se pueden cambiar ${listaDeCampos(detalle.editable.campos)}.`}
                   {detalle.editable.nominas_cerradas.length > 0 &&
                     ' Hay días dentro de nóminas cerradas que no se pueden mover.'}
                 </span>
@@ -609,7 +630,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                   <Button variant="outline" size="sm" onClick={() => setAccion(null)} disabled={cargando}>
                     Cancelar
                   </Button>
-                  <Button size="sm" variant="destructive" onClick={eliminar} disabled={cargando} className="gap-2">
+                  <Button size="sm" variant="destructive" onClick={eliminar} disabled={cargando}>
                     {cargando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                     Eliminar
                   </Button>
@@ -618,7 +639,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
             ) : accion === 'rechazar' ? (
               <div className="space-y-2 border-t border-border px-6 py-4">
                 <Label htmlFor="detallenov-motivo-del-rechazo">Motivo del rechazo</Label>
-                <textarea id="detallenov-motivo-del-rechazo"
+                <Textarea id="detallenov-motivo-del-rechazo"
                   rows={3}
                   maxLength={500}
                   value={motivoRechazo}
@@ -626,7 +647,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                   placeholder={esSolicitudVacacion
                     ? 'Ej: no hay cobertura en campo esa semana'
                     : 'Ej: no llegó el soporte después de 5 días hábiles'}
-                  className="flex w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="resize-none"
                 />
                 {esSolicitudVacacion && (
                   <p className="text-xs text-muted-foreground">
@@ -637,7 +658,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                   <Button variant="outline" size="sm" onClick={() => setAccion(null)} disabled={cargando}>
                     Cancelar
                   </Button>
-                  <Button size="sm" variant="destructive" onClick={rechazar} disabled={cargando} className="gap-2">
+                  <Button size="sm" variant="destructive" onClick={rechazar} disabled={cargando}>
                     {cargando && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                     Rechazar
                   </Button>
@@ -655,7 +676,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                       variant="outline"
                       onClick={() => void bajarActa()}
                       disabled={bajandoActa}
-                      className="gap-2 border-primary/40 text-primary hover:border-primary hover:bg-primary/5"
+                      className="border-primary/40 text-primary hover:border-primary hover:bg-primary/5"
                     >
                       {bajandoActa
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -671,7 +692,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                       size="sm"
                       variant="outline"
                       onClick={() => irA(`/liquidaciones/liquidacion-final/${terminacion.liquidacion!.id}`)}
-                      className="gap-2"
+                      
                     >
                       <Receipt className="h-3.5 w-3.5" />
                       Liquidación final
@@ -681,7 +702,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                     const destino = rutaDelDetalle(fila);
                     if (!destino) return null;
                     return (
-                      <Button size="sm" variant="outline" onClick={() => irA(destino.ruta)} className="gap-2">
+                      <Button size="sm" variant="outline" onClick={() => irA(destino.ruta)} >
                         {fila.fuente === 'TERMINACION'
                           ? <User className="h-3.5 w-3.5" />
                           : <ArrowUpRight className="h-3.5 w-3.5" />}
@@ -701,7 +722,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                       variant="outline"
                       onClick={() => setAccion('editar')}
                       disabled={cargando}
-                      className="gap-2"
+                      
                     >
                       <Pencil className="h-3.5 w-3.5" />
                       Editar
@@ -713,7 +734,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                       variant="outline"
                       onClick={() => setAccion('eliminar')}
                       disabled={cargando}
-                      className="gap-2 text-destructive hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
+                      className="text-destructive hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                       Eliminar
@@ -721,11 +742,11 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                   )}
                   {esAusencia && fila.estado === 'PENDIENTE' && permisos?.puede_aprobar && (
                     <>
-                      <Button size="sm" variant="outline" onClick={() => setAccion('rechazar')} disabled={cargando} className="gap-2">
+                      <Button size="sm" variant="outline" onClick={() => setAccion('rechazar')} disabled={cargando} >
                         <X className="h-3.5 w-3.5" />
                         Rechazar
                       </Button>
-                      <Button size="sm" onClick={aprobar} disabled={cargando} className="gap-2 bg-success hover:bg-success/90">
+                      <Button size="sm" onClick={aprobar} disabled={cargando} className="bg-success hover:bg-success/90">
                         {cargando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                         Aprobar
                       </Button>
@@ -740,7 +761,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                       variant="outline"
                       onClick={() => setAccion('rechazar')}
                       disabled={cargando}
-                      className="gap-2 text-destructive hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
+                      className="text-destructive hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
                     >
                       <X className="h-3.5 w-3.5" />
                       Rechazar solicitud

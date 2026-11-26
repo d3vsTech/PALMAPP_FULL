@@ -262,7 +262,7 @@ export default function ProveedorEstadisticas() {
               size="sm"
               onClick={() => descargar('ventas')}
               disabled={descargando.ventas || !paramsActuales}
-              className="gap-2"
+              
             >
               {descargando.ventas ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
               Ventas
@@ -272,7 +272,7 @@ export default function ProveedorEstadisticas() {
               size="sm"
               onClick={() => descargar('productos')}
               disabled={descargando.productos || !paramsActuales}
-              className="gap-2"
+              
             >
               {descargando.productos ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
               Productos
@@ -282,7 +282,7 @@ export default function ProveedorEstadisticas() {
               size="sm"
               onClick={() => descargar('clientes')}
               disabled={descargando.clientes || !paramsActuales}
-              className="gap-2"
+              
             >
               {descargando.clientes ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
               Clientes
@@ -306,7 +306,7 @@ export default function ProveedorEstadisticas() {
               : 'bg-destructive/10 text-destructive';
           return (
             <Card key={key}>
-              <CardContent className="p-6">
+              <CardContent>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm text-muted-foreground">{titulo}</p>
                   <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${bg}`}>
@@ -537,7 +537,7 @@ export default function ProveedorEstadisticas() {
       {/* Métricas adicionales */}
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
-          <CardContent className="p-6">
+          <CardContent>
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-info-soft">
                 <ArrowUpRight className="h-6 w-6 text-info" />
@@ -555,7 +555,7 @@ export default function ProveedorEstadisticas() {
         </Card>
 
         <Card>
-          <CardContent className="p-6">
+          <CardContent>
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary-soft">
                 <DollarSign className="h-6 w-6 text-primary" />
@@ -569,7 +569,7 @@ export default function ProveedorEstadisticas() {
         </Card>
 
         <Card>
-          <CardContent className="p-6">
+          <CardContent>
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-success-soft">
                 <Package className="h-6 w-6 text-success" />

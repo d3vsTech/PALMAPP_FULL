@@ -198,6 +198,12 @@ export interface BaseVacaciones {
   salario_basico: number;
   promedio_recargo_nocturno: number;
   base_mensual: number;
+  /**
+   * 2026-11-19 — Lo que el motor calcula **sin** ajuste manual. Igual a
+   * `base_mensual` cuando no hay ajuste y `0` cuando no hay devengado en la
+   * ventana. Es lo que la tarjeta muestra como "Sistema: …".
+   */
+  base_mensual_sistema?: number;
   dias_mes: number;
   valor_dia: number;
   meses_base: number;
@@ -226,6 +232,18 @@ export interface BaseVacaciones {
     no_salarial_excluido: number;
     bonificaciones_excluidas: number;
   };
+}
+
+/**
+ * Base mensual capturada a mano al liquidar (2026-11-19). Reemplaza la del
+ * art. 192 que calcula el sistema, se audita con su motivo y sale en el
+ * comprobante. Exige el permiso `liquidaciones.ajustar_base`.
+ */
+export interface AjusteManualVacaciones {
+  base_mensual: number;
+  motivo: string | null;
+  /** La que se reemplazó. `0` si no había devengado en la ventana. */
+  base_mensual_sistema: number;
 }
 
 /** Detalle del colaborador (§10.3). */
@@ -326,7 +344,7 @@ export interface ResultadoVacaciones {
   /** v1.11 — `valor_total − deducciones.total`: lo que se le gira. */
   valor_neto?: number;
   formula_aplicada: string;
-  ajuste_manual: Record<string, unknown> | null;
+  ajuste_manual: AjusteManualVacaciones | null;
   acuerdo_escrito?: boolean;
 }
 
@@ -364,6 +382,138 @@ export function normalizarBloqueante(bruto: string | BloqueanteVacaciones): Bloq
 }
 
 /** Una nómina CERRADA que ya pagó un tramo del disfrute (PR-L15). */
+/**
+ * Qué pasó con el dinero al interrumpir (2026-11-19).
+ *
+ * `NO_APLICA` = no se había pagado nada de los días devueltos.
+ * `PENDIENTE` = se pagó de más y hay que recuperarlo o condonarlo.
+ */
+export type EstadoReintegroVacacion =
+  | 'NO_APLICA'
+  | 'PENDIENTE'
+  | 'DESCONTADO_EN_NOMINA'
+  | 'CONDONADO';
+
+export interface ReintegroVacacion {
+  estado: EstadoReintegroVacacion;
+  /** Pagado de más por los días no disfrutados. */
+  bruto: number;
+  /** Aportes que el comprobante retuvo por esos días y vuelven al trabajador. */
+  deducciones: number | DeduccionesVacaciones;
+  /** Lo que hay que recuperar: `bruto − deducciones`. */
+  neto: number;
+  /** CST arts. 149-150: descontar por nómina exige autorización escrita. */
+  autorizacion_descuento: boolean;
+  /** La fila de nómina donde se descontó, si se marcó así. */
+  nomina_empleado_id: number | null;
+  /** Por qué se condonó. */
+  motivo: string | null;
+  marcado_por: number | string | null;
+  marcado_at: string | null;
+}
+
+/** Un lado de la comparación Original → Nueva del preview de interrupción. */
+export interface TramoInterrupcionVacaciones {
+  fecha_inicio?: string | null;
+  fecha_fin: string | null;
+  dias_habiles: number;
+  dias_calendario: number;
+  dias_pago?: number | null;
+  valor_disfrute: number;
+  valor_total: number;
+  deducciones?: DeduccionesVacaciones;
+  valor_neto?: number;
+  total_pagado?: number;
+  neto_pagado?: number;
+}
+
+/**
+ * Lo que queda escrito en la vacación acortada (§10.16). Los campos de
+ * primer nivel de la vacación ya son los **nuevos**; lo que había está acá.
+ */
+export interface InterrupcionVacacion {
+  /** Primer día en que volvió a trabajar. */
+  fecha_reintegro: string;
+  motivo: string;
+  autorizacion_descuento: boolean;
+  interrumpida_por: number | string | null;
+  interrumpida_at: string | null;
+  /** Días hábiles que vuelven a la bolsa. */
+  dias_devueltos: number;
+  dias_calendario_devueltos: number;
+  /** Días remunerados que dejan de pagarse. */
+  dias_pago_devueltos: number;
+  fechas_devueltas: { desde: string; hasta: string } | null;
+  original: TramoInterrupcionVacaciones;
+  reintegro: ReintegroVacacion;
+}
+
+/** Comparación que pinta el modal antes de confirmar (§10.16). */
+export interface PreviewInterrupcionVacaciones {
+  vacacion: {
+    id: number;
+    numero_comprobante: string;
+    estado: EstadoVacacion;
+    modo_pago?: ModoPagoVacacion;
+    empleado: EmpleadoVacacionRef;
+  };
+  fecha_reintegro: string;
+  original: TramoInterrupcionVacaciones;
+  /** Cómo queda la vacación: el `valor_dia` no cambia (CST art. 192). */
+  nuevo: TramoInterrupcionVacaciones & { calendario?: CalendarioVacaciones };
+  devueltos: {
+    /** Los que vuelven a la bolsa. */
+    dias_habiles: number;
+    dias_calendario: number;
+    dias_pago: number;
+    desde: string;
+    hasta: string;
+  };
+  saldo: {
+    dias_disponibles_exigibles_antes: number;
+    dias_disponibles_antes: number;
+    dias_devueltos: number;
+    dias_disponibles_exigibles_despues: number;
+    dias_disponibles_despues: number;
+  };
+  reintegro: ReintegroVacacion;
+  /**
+   * En una `NOMINA`, si lo que ya pagaron las nóminas cubre el nuevo total
+   * la vacación pasa a `PAGADA` al interrumpir.
+   */
+  pago_despues?: {
+    estado: EstadoVacacion;
+    total_pagado: number;
+    pendiente: number;
+    se_completa: boolean;
+  };
+  seguridad_social?: SeguridadSocialVacaciones;
+  /** Las nóminas BORRADOR cuya fila vuelve a PENDIENTE al interrumpir (D10). */
+  nomina?: {
+    nominas_cerradas?: Array<Record<string, unknown>>;
+    borradores_a_reliquidar?: Array<Record<string, unknown>>;
+  };
+  advertencias: AdvertenciaLiquidacion[];
+  /** Ninguno es forzable: con uno solo no se puede interrumpir. */
+  bloqueantes: BloqueanteVacaciones[];
+}
+
+export interface InterrumpirVacacionPayload {
+  fecha_reintegro: string;
+  /** Obligatorio, de 5 a 500 caracteres. */
+  motivo: string;
+  /** Solo cuenta cuando hay dinero que recuperar. */
+  autorizacion_descuento?: boolean;
+}
+
+export interface MarcarReintegroPayload {
+  estado: 'DESCONTADO_EN_NOMINA' | 'CONDONADO';
+  /** La fila de nómina donde se descontó. Opcional. */
+  nomina_empleado_id?: number;
+  /** Obligatorio al condonar. */
+  motivo?: string;
+}
+
 export interface NominaQuePago {
   nomina_id: number;
   nomina_empleado_id: number;
@@ -546,6 +696,10 @@ export interface VacacionItem {
   liquidado_por: number | string | null;
   liquidado_at: string | null;
   pago: PagoVacacion;
+  /** 2026-11-19 — El disfrute terminó antes (CST art. 188). */
+  interrumpida?: boolean;
+  /** Con qué fecha, cuántos días volvieron a la bolsa y qué pasó con el dinero. */
+  interrupcion?: InterrupcionVacacion | null;
   anulacion: Record<string, unknown> | null;
   advertencias_count: number;
   advertencias: AdvertenciaLiquidacion[];
@@ -607,6 +761,11 @@ export interface MetaHistoricoVacaciones {
     /** v1.11 — Lo descontado y lo girado en el filtro; `total_pagado` es bruto. */
     total_deducciones?: number;
     valor_neto?: number;
+    /** 2026-11-19 — Vacaciones acortadas por un regreso anticipado. */
+    interrumpidas?: number;
+    /** De esas, las que dejaron dinero por recuperar, y cuánto. */
+    reintegros_pendientes?: number;
+    reintegros_pendientes_valor?: number;
   };
 }
 
@@ -717,9 +876,23 @@ export const vacacionesApi = {
        */
       modo_pago?: ModoPagoVacacion;
     },
+    /**
+     * 2026-11-19 — Base mensual manual del art. 192. Con ella el preview
+     * recalcula valor día, disfrute, dinero, deducciones y neto, y dejan de
+     * salir `SIN_DEVENGADO` y `LIQUIDACION_COBERTURA_INCOMPLETA`.
+     *
+     * Exige el permiso `liquidaciones.ajustar_base`; sin él responde 403
+     * antes de validar. El `motivo` es opcional acá y obligatorio al
+     * confirmar. No entra al `calculo_hash`.
+     */
+    ajuste?: { base_mensual?: number; motivo?: string },
   ) =>
     apiClient.get<{ data: ComprobanteVacaciones }>(
-      `${BASE}/colaboradores/${empleadoId}/preview${toQuery(params)}`,
+      `${BASE}/colaboradores/${empleadoId}/preview${toQuery({
+        ...params,
+        'ajuste[base_mensual]': ajuste?.base_mensual,
+        'ajuste[motivo]': ajuste?.motivo,
+      })}`,
       T,
     ),
 
@@ -755,6 +928,10 @@ export const vacacionesApi = {
     empleado_id?: number;
     /** PR-N4 — `1` para ver solo las solicitudes PENDIENTE. */
     es_solicitud?: 0 | 1;
+    /** 2026-11-19 — `1` para ver solo las interrumpidas. */
+    interrumpida?: 0 | 1;
+    /** 2026-11-19 — `1` para las que tienen dinero por recuperar. */
+    reintegro_pendiente?: 0 | 1;
     page?: number;
     per_page?: number;
   }) =>
@@ -786,6 +963,36 @@ export const vacacionesApi = {
   anular: (id: number, motivo: string) =>
     apiClient.post<{ message: string; data: VacacionItem }>(`${BASE}/${id}/anular`, { motivo }, T),
 
+  /**
+   * §10.16 — Qué queda si el colaborador volvió el `fechaReintegro`. No
+   * persiste nada: es la comparación Original → Nueva del modal.
+   */
+  interrumpirPreview: (id: number, fechaReintegro: string) =>
+    apiClient.get<{ data: PreviewInterrupcionVacaciones }>(
+      `${BASE}/${id}/interrumpir/preview${toQuery({ fecha_reintegro: fechaReintegro })}`,
+      T,
+    ),
+
+  /**
+   * §10.16 — Acorta la vacación: los días no disfrutados vuelven a la bolsa
+   * y los valores se recalculan al **mismo** valor día (CST art. 192). Una
+   * sola interrupción por vacación.
+   */
+  interrumpir: (id: number, payload: InterrumpirVacacionPayload) =>
+    apiClient.post<{ message: string; data: VacacionItem }>(
+      `${BASE}/${id}/interrumpir`,
+      payload,
+      T,
+    ),
+
+  /** §10.16 — Cierra el reintegro: descontado en nómina o condonado. */
+  marcarReintegro: (id: number, payload: MarcarReintegroPayload) =>
+    apiClient.post<{ message: string; data: VacacionItem }>(
+      `${BASE}/${id}/reintegro`,
+      payload,
+      T,
+    ),
+
   /** §10.11 — Comprobante legal. Nunca recalcula. */
   comprobante: (id: number) =>
     apiClient.get<{ data: ComprobanteVacaciones }>(`${BASE}/${id}/comprobante`, T),
@@ -815,6 +1022,16 @@ export const VacacionesErrorCodes = {
   VACACION_EN_NOMINA_CERRADA: 'VACACION_EN_NOMINA_CERRADA',
   VACACION_PAGADA: 'VACACION_PAGADA',
   VACACION_ESTADO_INVALIDO: 'VACACION_ESTADO_INVALIDO',
+  /**
+   * 2026-11-19 — La fecha de reintegro no sirve. `detalle.motivo`:
+   * `SIN_DISFRUTE` (no alcanzó a disfrutar nada, hay que anular) o
+   * `POSTERIOR_AL_FIN` (ya había terminado).
+   */
+  VACACION_REINTEGRO_INVALIDO: 'VACACION_REINTEGRO_INVALIDO',
+  /** Una vacación se interrumpe una sola vez. */
+  VACACION_YA_INTERRUMPIDA: 'VACACION_YA_INTERRUMPIDA',
+  /** El reintegro ya se descontó o se condonó. */
+  VACACION_REINTEGRO_NO_PENDIENTE: 'VACACION_REINTEGRO_NO_PENDIENTE',
   /**
    * PR-L15 — `modo_pago = NOMINA` en una liquidación sin disfrute
    * (`motivo: SIN_DISFRUTE`) o de un solo día 31 (`DIA_31`: vale 0 días

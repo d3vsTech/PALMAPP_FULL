@@ -297,7 +297,7 @@ export default function ProveedorPedidos() {
     return (
       <>
         {acciones.includes('confirmar') && (
-          <Button size="sm" onClick={() => abrirModalAccion(pedido, 'confirmar')} className="gap-2">
+          <Button size="sm" onClick={() => abrirModalAccion(pedido, 'confirmar')} >
             <CheckCircle className="h-4 w-4" />
             Confirmar Pedido
           </Button>
@@ -307,20 +307,20 @@ export default function ProveedorPedidos() {
             size="sm"
             variant="outline"
             onClick={() => abrirModalAccion(pedido, 'cancelar')}
-            className="gap-2 text-destructive hover:text-destructive"
+            className="text-destructive hover:text-destructive"
           >
             <XCircle className="h-4 w-4" />
             Rechazar
           </Button>
         )}
         {acciones.includes('preparar') && (
-          <Button size="sm" onClick={() => cambiarEstadoDirecto(pedido, 'preparando')} className="gap-2">
+          <Button size="sm" onClick={() => cambiarEstadoDirecto(pedido, 'preparando')} >
             <ChefHat className="h-4 w-4" />
             Iniciar Preparación
           </Button>
         )}
         {acciones.includes('despachar') && (
-          <Button size="sm" onClick={() => abrirModalAccion(pedido, 'despachar')} className="gap-2">
+          <Button size="sm" onClick={() => abrirModalAccion(pedido, 'despachar')} >
             <Truck className="h-4 w-4" />
             Despachar
           </Button>
@@ -329,7 +329,7 @@ export default function ProveedorPedidos() {
           <Button
             size="sm"
             onClick={() => cambiarEstadoDirecto(pedido, 'entregado')}
-            className="gap-2 bg-success hover:bg-success/90"
+            className="bg-success hover:bg-success/90"
           >
             <CheckCircle className="h-4 w-4" />
             Confirmar Entrega
@@ -515,7 +515,7 @@ export default function ProveedorPedidos() {
                         size="sm"
                         variant="ghost"
                         onClick={() => navigate(`/proveedor/pedidos/${pedido.codigo}`)}
-                        className="gap-2"
+                        
                       >
                         <Eye className="h-4 w-4" />
                         Ver Detalles

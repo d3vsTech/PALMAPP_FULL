@@ -16,9 +16,8 @@ import { Checkbox } from '../../components/ui/checkbox';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
-import { AlertCircle, ArrowLeft, Save, Sprout, Loader2 } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Palmtree, Save, Sprout, Loader2 } from 'lucide-react';
 import { lotesApi, prediosApi } from '../../../api/plantacion';
-import IlustracionPalma from '../../components/common/IlustracionPalma';
 import { toast } from 'sonner';
 
 /** Lo mínimo que la pantalla necesita de cada predio del listado. */
@@ -128,7 +127,7 @@ export default function CrearEditarLote() {
         </Button>
         <div className="flex items-center gap-4">
           <div className="flex h-16 w-16 items-center justify-center rounded-xl border border-success/30 bg-success-soft shadow-sm">
-            <Sprout className="h-8 w-8 text-success" strokeWidth={2} />
+            <Palmtree className="h-8 w-8 text-success" strokeWidth={2} />
           </div>
           <div>
             <h1>
@@ -143,14 +142,14 @@ export default function CrearEditarLote() {
         </div>
       </div>
 
-      <Card className="gap-4 border-border shadow-sm">
-        <CardHeader className="border-b bg-muted/60 pb-6">
+      <Card className="gap-4">
+        <CardHeader className="rounded-t-xl border-b bg-muted/60 pb-6">
           <CardTitle className="text-2xl">Información del lote</CardTitle>
           <CardDescription>
             Los campos marcados con <span className="text-destructive font-semibold">*</span> son obligatorios
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-8">
+        <CardContent>
           <div className="space-y-8">
 
             {/* Predio */}
@@ -233,7 +232,6 @@ export default function CrearEditarLote() {
 
               {semillasList.length === 0 ? (
                 <div className="rounded-xl border-2 border-dashed bg-muted/10 p-8 text-center">
-                  <IlustracionPalma variante="palma" className="mx-auto mb-3" />
                   <p className="mb-2 text-base font-semibold text-muted-foreground">No hay semillas en el catálogo</p>
                   <p className="mb-4 text-sm text-muted-foreground">
                     Primero hay que crearlas en Configuración, en Maestros.
@@ -292,7 +290,7 @@ export default function CrearEditarLote() {
               className="h-12 px-6 text-base">
               Cancelar
             </Button>
-            <Button onClick={handleSave} disabled={loading} className="h-12 gap-2 px-8 text-base">
+            <Button onClick={handleSave} disabled={loading} className="h-12 px-8 text-base">
               {loading
                 ? <><Loader2 className="h-5 w-5 animate-spin" />Guardando</>
                 : <><Save className="h-5 w-5" strokeWidth={2} />{isEditing ? 'Guardar cambios' : 'Crear lote'}</>}

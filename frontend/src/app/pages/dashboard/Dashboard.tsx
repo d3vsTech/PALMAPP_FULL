@@ -9,12 +9,12 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
-import { Label } from '../../components/ui/label';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
 import PageHeader from '../../components/common/PageHeader';
 import StatStrip from '../../components/common/StatStrip';
+import SelectorPeriodo from '../../components/common/SelectorPeriodo';
 import {
   SelectorAnio, SelectorMes, mesDeHoy,
 } from '../../components/common/SelectorMes';
@@ -28,6 +28,18 @@ import {
   type DashboardData, type ParamsDashboard, type PeriodoDashboard, type QuincenaDashboard,
 } from '../../../api/dashboard';
 import { SeccionInsightsIA } from '../../components/insights/SeccionInsightsIA';
+
+/**
+ * Períodos del panel, con la forma del diseño. El diseño trae tres; estos
+ * cinco son los que el endpoint del panel acepta.
+ */
+const PERIODOS: { valor: PeriodoDashboard; etiqueta: string }[] = [
+  { valor: 'semanal', etiqueta: 'Semanal' },
+  { valor: 'quincenal', etiqueta: 'Quincenal' },
+  { valor: 'mensual', etiqueta: 'Mensual' },
+  { valor: 'anual', etiqueta: 'Anual' },
+  { valor: 'personalizado', etiqueta: 'Personalizado' },
+];
 
 /** Buenos días hasta las 12, buenas tardes hasta las 19, buenas noches después. */
 function saludo(): string {
@@ -93,6 +105,9 @@ export default function Dashboard() {
   }));
   const sinViajes = viajes.length === 0;
   // Sin viajes se grafican seis barras vacías para que los ejes se pinten igual.
+  /** Lo despachado en el período, para la nota del indicador de viajes. */
+  const kilosDespachados = viajes.reduce((suma, v) => suma + v.peso_viaje, 0);
+
   const datosGrafica = sinViajes
     ? Array.from({ length: 6 }, () => ({ remision: '', peso_viaje: 0, fecha_viaje: '' }))
     : viajes;
@@ -115,17 +130,11 @@ export default function Dashboard() {
         description="Así va la plantación en el período seleccionado."
         actions={
           <>
-            <Label className="text-sm font-medium">Período:</Label>
-            <Select value={preset} onValueChange={(v) => setPreset(v as PeriodoDashboard)}>
-              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="semanal">Semanal</SelectItem>
-                <SelectItem value="quincenal">Quincenal</SelectItem>
-                <SelectItem value="mensual">Mensual</SelectItem>
-                <SelectItem value="anual">Anual</SelectItem>
-                <SelectItem value="personalizado">Personalizado</SelectItem>
-              </SelectContent>
-            </Select>
+            <SelectorPeriodo
+              valor={preset}
+              opciones={PERIODOS}
+              onChange={(v) => setPreset(v)}
+            />
             {(preset === 'mensual' || preset === 'quincenal') && (
               <SelectorMes valor={mes} onChange={setMes} />
             )}
@@ -143,22 +152,23 @@ export default function Dashboard() {
               </Select>
             )}
             {preset === 'personalizado' && (
-              <>
+              <div className="flex items-center gap-1.5">
                 <Input
                   type="date"
                   aria-label="Fecha de inicio"
-                  className="w-40"
+                  className="w-[138px]"
                   value={fechaInicio}
                   onChange={(e) => setFechaInicio(e.target.value)}
                 />
+                <span className="text-xs text-muted-foreground">a</span>
                 <Input
                   type="date"
                   aria-label="Fecha de fin"
-                  className="w-40"
+                  className="w-[138px]"
                   value={fechaFin}
                   onChange={(e) => setFechaFin(e.target.value)}
                 />
-              </>
+              </div>
             )}
           </>
         }
@@ -173,18 +183,18 @@ export default function Dashboard() {
             label: 'Producción total',
             value: num(Number(data?.indicadores.produccion_total_kg ?? 0), 2),
             unit: 'kg',
-            note: 'en el período elegido',
+            note: 'en el período',
           },
           {
             label: 'Promedio por gajo',
             value: num(Number(data?.indicadores.promedio_kg_gajo ?? 0), 2),
             unit: 'kg',
-            note: 'peso promedio de cada racimo',
+            note: 'peso medio del racimo',
           },
           {
             label: 'Viajes',
             value: num(viajes.length),
-            note: 'despachados en el período',
+            note: `${num(kilosDespachados)} kg a extractora`,
           },
           {
             label: 'Lluvia del mes',
@@ -199,11 +209,9 @@ export default function Dashboard() {
       <Card className="gap-4 lg:col-span-2">
         <CardHeader className="flex flex-row items-start justify-between gap-4">
           <div className="space-y-1">
-            <CardTitle className="flex items-center gap-2.5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
-                <Truck className="h-4 w-4" strokeWidth={2} />
-              </span>
-              Registro de viajes
+            <CardTitle className="flex items-center gap-2">
+              <Truck className="h-4 w-4 text-muted-foreground" strokeWidth={2} />
+              Kilos despachados por viaje
             </CardTitle>
             <CardDescription>
               {sinViajes ? 'Sin viajes en el período' : `${viajes.length} viajes a extractora`}
@@ -211,22 +219,24 @@ export default function Dashboard() {
           </div>
           <Link
             to="/viajes"
-            className="flex shrink-0 items-center gap-1 text-[13px] font-semibold text-primary hover:underline"
+            className="flex shrink-0 items-center gap-1 whitespace-nowrap text-[13px] font-semibold text-primary hover:underline"
           >
             Ver viajes <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
           </Link>
         </CardHeader>
         <CardContent>
           <div className="relative">
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={datosGrafica} barCategoryGap={barCategoryGap} margin={{ top: 24, right: 8, left: -8, bottom: 0 }}>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={datosGrafica} barCategoryGap={barCategoryGap} margin={{ top: 24, right: 8, left: -12, bottom: 0 }}>
                 <CartesianGrid {...gridProps} />
                 <XAxis dataKey="remision" {...xAxisProps} />
+                {/* El eje va en miles, como el diseño. Por debajo de mil
+                    la cifra entera se lee mejor que "0.5k". */}
                 <YAxis
                   {...yAxisProps}
-                  width={56}
                   domain={sinViajes ? [0, 1000] : [0, 'auto']}
                   allowDecimals={false}
+                  tickFormatter={(v: number) => (v >= 1000 ? `${v / 1000}k` : num(v))}
                 />
                 {!sinViajes && (
                   <Tooltip
@@ -291,16 +301,16 @@ export default function Dashboard() {
                 return (
                   <li key={lote.id}>
                     <div className="flex items-baseline justify-between gap-3">
-                      <span className="min-w-0">
-                        <span className="block truncate font-semibold text-foreground">{lote.nombre}</span>
-                        <span className="block text-[13px] text-muted-foreground">{lote.codigo}</span>
-                      </span>
-                      <span className="shrink-0 text-xl font-bold text-foreground">
+                      <div className="min-w-0">
+                        <p className="break-words text-sm font-semibold text-foreground">{lote.nombre}</p>
+                        <p className="text-xs text-muted-foreground">{lote.codigo}</p>
+                      </div>
+                      <span className="shrink-0 text-lg font-bold text-foreground">
                         {num(Number(lote.kg_promedio), 1)}
                       </span>
                     </div>
-                    <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                      <div className="h-full rounded-full bg-primary" style={{ width: `${ancho}%` }} />
+                    <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
+                      <div className="h-full rounded-full bg-chart-1" style={{ width: `${ancho}%` }} />
                     </div>
                   </li>
                 );
@@ -313,23 +323,23 @@ export default function Dashboard() {
 
       <Card className="gap-4">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-info-soft text-info">
-              <Cloud className="h-4 w-4" strokeWidth={2} />
-            </span>
+          <CardTitle className="flex items-center gap-2">
+            <Cloud className="h-4 w-4 text-muted-foreground" strokeWidth={2} />
             Lluvias
           </CardTitle>
-          <CardDescription>Milímetros registrados en la finca</CardDescription>
+          <CardDescription>Precipitación registrada en la finca</CardDescription>
         </CardHeader>
         <CardContent>
           <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {lluvias.map((item) => (
               <div key={item.label} className="rounded-lg bg-muted/60 px-4 py-3">
-                <dt className="text-[13px] font-medium text-muted-foreground">{item.label}</dt>
-                <dd className="mt-1 text-2xl font-bold text-foreground">
-                  {item.valor == null ? '—' : num(Number(item.valor))}
+                <dt className="text-xs font-medium text-muted-foreground">{item.label}</dt>
+                <dd className="mt-1 flex flex-wrap items-baseline gap-1">
+                  <span className="text-2xl font-bold text-foreground">
+                    {item.valor == null ? '—' : num(Number(item.valor))}
+                  </span>
+                  <span className="text-xs font-medium text-muted-foreground">{item.nota}</span>
                 </dd>
-                <dd className="text-xs text-muted-foreground">{item.nota}</dd>
               </div>
             ))}
           </dl>

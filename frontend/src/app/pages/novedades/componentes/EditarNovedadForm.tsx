@@ -15,6 +15,7 @@ import { useMemo, useState } from 'react';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 import { Label } from '../../../components/ui/label';
+import { Textarea } from '../../../components/ui/textarea';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../../components/ui/select';
@@ -28,6 +29,7 @@ import {
 } from '../../../../api/novedades';
 import type { ApiError } from '../../../../api/client';
 import { CampoAdjunto } from './CampoAdjunto';
+import { listaDeCampos } from '../tipos';
 
 interface Props {
   detalle: AusenciaDetalle;
@@ -176,16 +178,16 @@ export function EditarNovedadForm({
 
   return (
     <div className="space-y-4 border-t border-border px-6 py-4">
-      <div className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50/60 p-3 text-xs text-sky-800 dark:border-sky-900 dark:bg-sky-950/20 dark:text-sky-300">
+      <div className="flex items-start gap-2 rounded-lg border border-info/20 bg-info-soft p-3 text-xs text-info">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <p>
-          En este estado solo se pueden cambiar: {campos.join(', ')}. Los demás campos quedan
+          En este estado solo se pueden cambiar {listaDeCampos(campos)}. Los demás campos quedan
           fijos porque ya afectaron una nómina o una aprobación.
         </p>
       </div>
 
       {detalle.editable.nominas_cerradas.length > 0 && (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-300">
+        <div className="flex items-start gap-2 rounded-lg border border-warning/20 bg-warning-soft p-3 text-xs text-warning">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <p>
             Hay días dentro de{' '}
@@ -305,12 +307,12 @@ export function EditarNovedadForm({
         {puede('observacion') && (
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="editarnove-observaciones">Observaciones</Label>
-            <textarea id="editarnove-observaciones"
+            <Textarea id="editarnove-observaciones"
               rows={3}
               maxLength={500}
               value={form.observacion}
               onChange={(e) => cambiar({ observacion: e.target.value })}
-              className="flex w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="resize-none"
             />
           </div>
         )}
@@ -332,7 +334,7 @@ export function EditarNovedadForm({
         <Button variant="outline" size="sm" onClick={onCancelar} disabled={guardando}>
           Cancelar
         </Button>
-        <Button size="sm" onClick={guardar} disabled={guardando} className="gap-2">
+        <Button size="sm" onClick={guardar} disabled={guardando}>
           {guardando && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           Guardar cambios
         </Button>

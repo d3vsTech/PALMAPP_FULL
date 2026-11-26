@@ -12,7 +12,7 @@
  *    informativo, para confirmar que por eso no se le pagó.
  */
 import { Badge } from '../../../components/ui/badge';
-import { AlertTriangle, CalendarDays, Info } from 'lucide-react';
+import { AlertTriangle, Info } from 'lucide-react';
 import type { FaltanteDelPeriodo, FilaNominaCargue, NominaDelCargue } from '../../../../api/importarNominas';
 import { formatFecha } from '../../../utils/fecha';
 import { TablaFilasNominas } from './TablaFilasNominas';
@@ -21,7 +21,7 @@ function pesos(valor: string | null | undefined): string {
   if (valor === null || valor === undefined) return '—';
   const n = Number(valor);
   if (Number.isNaN(n)) return '—';
-  return `$${n.toLocaleString('es-CO', { maximumFractionDigits: 0 })}`;
+  return `$${n.toLocaleString('es-CO')}`;
 }
 
 /** Cómo se llamará el período en el listado de nóminas. */
@@ -34,15 +34,15 @@ function etiquetaPeriodo(nomina: NominaDelCargue): string {
 function Dato({ titulo, valor }: { titulo: string; valor: string }) {
   return (
     <div className="min-w-0">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{titulo}</p>
-      <p className="truncate text-sm font-medium">{valor}</p>
+      <dt className="text-xs text-muted-foreground">{titulo}</dt>
+      <dd className="font-medium tabular-nums text-foreground">{valor}</dd>
     </div>
   );
 }
 
 function Faltante({ persona }: { persona: FaltanteDelPeriodo }) {
   return (
-    <li className="truncate">
+    <li>
       {persona.nombre_completo}{' '}
       <span className="text-muted-foreground">({persona.documento})</span>
       {persona.novedad && (
@@ -58,7 +58,7 @@ function Faltante({ persona }: { persona: FaltanteDelPeriodo }) {
 
 /**
  * Los que faltan, separados por si hay algo que los explique. El grupo sin
- * novedad va en ámbar; el otro en gris, porque no pide acción.
+ * novedad va en ámbar; el otro en azul informativo, porque no pide acción.
  */
 function Faltantes({ faltantes }: { faltantes: FaltanteDelPeriodo[] }) {
   const sinNovedad = faltantes.filter((f) => !f.novedad);
@@ -66,27 +66,31 @@ function Faltantes({ faltantes }: { faltantes: FaltanteDelPeriodo[] }) {
   if (faltantes.length === 0) return null;
 
   return (
-    <div className="space-y-2 px-4 pb-3">
+    <div className="space-y-2 border-t border-border px-4 py-3">
       {sinNovedad.length > 0 && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-200">
-          <p className="flex items-center gap-2 font-medium">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            {sinNovedad.length} con contrato y sin pago en este período
-          </p>
-          <ul className="mt-1 space-y-0.5 text-xs">
-            {sinNovedad.map((p) => <Faltante key={p.id} persona={p} />)}
-          </ul>
+        <div className="flex gap-2 rounded-lg bg-warning-soft p-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+          <div className="min-w-0 text-sm text-foreground">
+            <p className="font-medium">
+              {sinNovedad.length} con contrato y sin pago en este período
+            </p>
+            <ul className="mt-1 space-y-0.5 text-xs">
+              {sinNovedad.map((p) => <Faltante key={p.id} persona={p} />)}
+            </ul>
+          </div>
         </div>
       )}
       {conNovedad.length > 0 && (
-        <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
-          <p className="flex items-center gap-2 font-medium">
-            <Info className="h-4 w-4 shrink-0" />
-            {conNovedad.length} sin pago, con una novedad que lo explica
-          </p>
-          <ul className="mt-1 space-y-0.5 text-xs">
-            {conNovedad.map((p) => <Faltante key={p.id} persona={p} />)}
-          </ul>
+        <div className="flex gap-2 rounded-lg bg-info-soft p-3">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-info" strokeWidth={2} />
+          <div className="min-w-0 text-sm text-foreground">
+            <p className="font-medium">
+              {conNovedad.length} sin pago, con una novedad que lo explica
+            </p>
+            <ul className="mt-1 space-y-0.5 text-xs">
+              {conNovedad.map((p) => <Faltante key={p.id} persona={p} />)}
+            </ul>
+          </div>
         </div>
       )}
     </div>
@@ -100,39 +104,29 @@ function TarjetaPeriodo({
   nomina: NominaDelCargue;
   filas: FilaNominaCargue[];
 }) {
-  const conError = filas.some((f) => f.estado === 'ERROR');
-
   return (
-    <div className={`overflow-hidden rounded-lg border ${conError ? 'border-destructive/40' : 'border-border'}`}>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/20 px-4 py-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <div className="min-w-0">
-            <p className="font-semibold text-foreground">
-              {formatFecha(nomina.fecha_inicio)} al {formatFecha(nomina.fecha_fin)}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {etiquetaPeriodo(nomina)} · {filas.length} colaborador
-              {filas.length === 1 ? '' : 'es'}
-            </p>
-          </div>
+    <div className="overflow-hidden rounded-lg border border-border">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+        <div className="min-w-0">
+          <h4>
+            {formatFecha(nomina.fecha_inicio)} al {formatFecha(nomina.fecha_fin)}
+          </h4>
+          <p className="text-xs text-muted-foreground">
+            {etiquetaPeriodo(nomina)} · {filas.length} colaborador
+            {filas.length === 1 ? '' : 'es'}
+          </p>
         </div>
-        <Badge
-          variant="outline"
-          className={nomina.nueva
-            ? 'border-success/30 bg-success/10 text-success'
-            : 'border-border text-muted-foreground'}
-        >
+        <Badge variant={nomina.nueva ? 'success' : 'secondary'}>
           {nomina.nueva ? 'Nómina nueva' : 'Ya existe, recibe filas'}
         </Badge>
       </div>
 
-      <div className="grid gap-3 px-4 py-3 sm:grid-cols-2 lg:grid-cols-4">
+      <dl className="grid gap-4 bg-muted/60 px-4 py-3 sm:grid-cols-2 lg:grid-cols-4">
         <Dato titulo="Devengado" valor={pesos(nomina.totales?.fijos)} />
         <Dato titulo="Producción" valor={pesos(nomina.totales?.variables)} />
         <Dato titulo="Deducciones" valor={pesos(nomina.totales?.deducciones)} />
         <Dato titulo="Total del período" valor={pesos(nomina.totales?.general)} />
-      </div>
+      </dl>
 
       <Faltantes faltantes={nomina.faltantes ?? []} />
       <TablaFilasNominas filas={filas} />

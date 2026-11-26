@@ -34,6 +34,42 @@ export const ICONO_TIPO: Record<TipoBaseAusencia, LucideIcon> = {
 };
 
 /** Ícono de cada pestaña del Paso 1. */
+/**
+ * Rotulo de cada categoria con la escritura del diseno. El backend las manda
+ * en mayusculas de titulo ("Permisos y Licencias") y el diseno escribe normal.
+ * Una categoria que no este aqui conserva el rotulo del backend.
+ */
+/**
+ * Nombre legible de cada campo editable. El backend los lista con su nombre
+ * tecnico (`numero_radicado`) y en pantalla eso no se entiende.
+ */
+const NOMBRE_CAMPO: Record<string, string> = {
+  fecha_inicio: 'la fecha de inicio',
+  fecha_fin: 'la fecha de fin',
+  hora_inicio: 'la hora de inicio',
+  hora_fin: 'la hora de fin',
+  entidad: 'la entidad',
+  numero_radicado: 'el número de radicado',
+  motivo: 'el motivo',
+  observacion: 'la observación',
+  documento: 'el soporte',
+};
+
+/** "la fecha de inicio, el motivo y el soporte". */
+export function listaDeCampos(campos: string[]): string {
+  const nombres = campos.map((c) => NOMBRE_CAMPO[c] ?? c.replace(/_/g, ' '));
+  if (nombres.length <= 1) return nombres[0] ?? '';
+  return `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}`;
+}
+
+export const ETIQUETA_CATEGORIA: Record<CategoriaNovedad, string> = {
+  PERMISOS_LICENCIAS: 'Permisos y licencias',
+  INCAPACIDADES: 'Incapacidades',
+  AUSENCIAS_SANCIONES: 'Ausencias y sanciones',
+  VACACIONES: 'Vacaciones',
+  TERMINACION_CONTRATO: 'Terminación de contrato',
+};
+
 export const ICONO_CATEGORIA: Record<CategoriaNovedad, LucideIcon> = {
   PERMISOS_LICENCIAS: CalendarCheck,
   INCAPACIDADES: Activity,
@@ -139,13 +175,13 @@ export function hoyIso(): string {
 
 /** Clases del badge por estado. Las tres fuentes usan nombres distintos. */
 export const ESTADO_BADGE: Record<string, string> = {
-  PENDIENTE: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400',
-  APROBADA: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400',
-  RECHAZADA: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400',
-  LIQUIDADA: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/30 dark:text-sky-400',
-  PAGADA: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400',
-  PROGRAMADA: 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800/30 dark:text-slate-400',
-  EFECTIVA: 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-800/30 dark:text-gray-400',
+  PENDIENTE: 'bg-warning-soft text-warning border-warning/20',
+  APROBADA: 'bg-success-soft text-success border-success/20',
+  RECHAZADA: 'bg-destructive-soft text-destructive border-destructive/20',
+  LIQUIDADA: 'bg-info-soft text-info border-info/20',
+  PAGADA: 'bg-success-soft text-success border-success/20',
+  PROGRAMADA: 'bg-muted/40 text-foreground border-border',
+  EFECTIVA: 'bg-muted/40 text-foreground border-border',
 };
 
 export const ESTADO_LABEL: Record<string, string> = {

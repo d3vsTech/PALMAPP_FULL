@@ -79,17 +79,17 @@ export function TabSanidad({
   return (
     <>
                       <div className="flex justify-end">
-                        <Button onClick={agregarSanidad} className="gap-2">
+                        <Button onClick={agregarSanidad}>
                           <Plus className="h-4 w-4" />
-                          Agregar Sanidad
+                          Agregar sanidad
                         </Button>
                       </div>
 
                       {/* Formulario de edición */}
                       {sanidadEnEdicion && (
                         <div ref={setFormRef('sanidad')} className="scroll-mt-24">
-                        <Card className="gap-4 border-primary/40">
-                          <CardContent className="pt-6 space-y-4">
+                        <Card className="border-primary/40 bg-muted/40">
+                          <CardContent className="space-y-4">
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Colaboradores</Label>
@@ -114,7 +114,7 @@ export function TabSanidad({
                                             {col.nombres} {col.apellidos}
                                             {col.terceroNombre && (
                                               <span
-                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle"
+                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-warning-soft text-warning border border-warning/20 font-medium align-middle"
                                                 title={`Operario del tercero ${col.terceroNombre}`}
                                               >
                                                 Tercero · {col.terceroNombre}
@@ -183,7 +183,7 @@ export function TabSanidad({
                                 </Select>
                               </div>
                               <div className="space-y-2 md:col-span-2">
-                                <Label>Trabajo Realizado</Label>
+                                <Label>Trabajo realizado</Label>
                                 <SelectActividadLabor
                                   laborId={palmaTipoToId.get('SANIDAD')}
                                   actividades={actividadesPorLabor[String(palmaTipoToId.get('SANIDAD') ?? '')] ?? []}
@@ -201,7 +201,7 @@ export function TabSanidad({
                               <Button variant="outline" onClick={cancelarSanidad}>
                                 Cancelar
                               </Button>
-                              <Button onClick={guardarSanidad} className="gap-2">
+                              <Button onClick={guardarSanidad}>
                                 <Check className="h-4 w-4" />
                                 Guardar
                               </Button>
@@ -216,7 +216,7 @@ export function TabSanidad({
                         const lote = lotesData.find(l => l.id === trabajo.lote);
                         const sublote = sublotes.find(s => s.id === trabajo.sublote);
                         return (
-                          <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
+                          <Card key={trabajo.id}>
                             <CardContent className="p-4">
                               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 md:gap-4">
                                 {/* Colaboradores */}
@@ -277,9 +277,9 @@ export function TabSanidad({
                       })}
 
                       {trabajosSanidad.length === 0 && !sanidadEnEdicion && (
-                        <div className="text-center py-12 text-muted-foreground">
+                        <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
                           <p>No hay registros de sanidad vegetal</p>
-                          <p className="text-sm">Haz clic en "Agregar Sanidad" para crear uno</p>
+                          <p className="text-sm">Haz clic en "Agregar sanidad" para crear uno</p>
                         </div>
                       )}
     </>

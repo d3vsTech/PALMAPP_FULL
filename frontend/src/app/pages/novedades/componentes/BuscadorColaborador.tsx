@@ -115,13 +115,17 @@ export function BuscadorColaborador({ fecha, seleccionadoId, nombreInicial, onSe
   };
 
   return (
-    <div className="space-y-1.5">
-      <Label>Colaborador <span className="text-destructive">*</span></Label>
+    <div className="space-y-2">
+      <Label htmlFor="novedad-colaborador">Colaborador <span className="text-destructive">*</span></Label>
       <div className="relative">
-        <User className="absolute left-3 top-2.5 z-10 h-4 w-4 text-muted-foreground" />
+        <User
+          className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          strokeWidth={2}
+        />
         <Input
+          id="novedad-colaborador"
           className="pl-9"
-          placeholder="Buscar por nombre o cédula..."
+          placeholder="Buscar por nombre o cédula"
           value={texto}
           onChange={(e) => {
             setTexto(e.target.value);
@@ -138,11 +142,11 @@ export function BuscadorColaborador({ fecha, seleccionadoId, nombreInicial, onSe
           onBlur={() => { cierre.current = setTimeout(() => setAbierto(false), 150); }}
         />
         {cargando && (
-          <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+          <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
         )}
 
         {abierto && (
-          <div className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-border bg-background shadow-lg">
+          <div className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto overflow-x-hidden rounded-lg border border-border bg-popover shadow-md">
             {error ? (
               <p className="px-4 py-3 text-sm text-destructive">{error}</p>
             ) : visibles.length === 0 && !cargando ? (
@@ -164,7 +168,7 @@ export function BuscadorColaborador({ fecha, seleccionadoId, nombreInicial, onSe
                     {c.documento} · {c.modalidad_pago === 'FIJO' ? 'Fijo' : 'Producción'}
                   </span>
                   {c.novedad_vigente && (
-                    <span className="mt-1 flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400">
+                    <span className="mt-1 flex items-center gap-1 text-xs text-warning">
                       <AlertTriangle className="h-3 w-3 shrink-0" />
                       Ya tiene {c.novedad_vigente.tipo.nombre} esos días
                     </span>
@@ -177,7 +181,7 @@ export function BuscadorColaborador({ fecha, seleccionadoId, nombreInicial, onSe
       </div>
 
       {elegido?.novedad_vigente && (
-        <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+        <p className="flex items-start gap-1.5 text-xs text-warning">
           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
           <span>
             Ya tiene {elegido.novedad_vigente.tipo.nombre} del{' '}

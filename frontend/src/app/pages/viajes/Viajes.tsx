@@ -14,11 +14,13 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 import {
-  Plus, MapPin, Eye, FileUp, Search, Calculator, Edit, Trash2,
-  AlertTriangle, Info, Download, RotateCcw,
+  Plus, Eye, FileUp, Upload, Search, Calculator, Edit, Trash2,
+  Download, RotateCcw, Undo2,
 } from 'lucide-react';
+import { Textarea } from '../../components/ui/textarea';
 import PageHeader from '../../components/common/PageHeader';
 import StatStrip from '../../components/common/StatStrip';
+import SelectorPeriodo, { type OpcionPeriodo } from '../../components/common/SelectorPeriodo';
 import EmptyState from '../../components/common/EmptyState';
 import TableSkeleton from '../../components/common/TableSkeleton';
 import { num } from '../../lib/formato';
@@ -58,7 +60,7 @@ const PER_PAGE = 25;
 
 /** Los filtros de la tabla en limpio. Sirve de valor inicial y de "borrar todo". */
 const FILTROS_VACIOS = {
-  remision: '', estado: '',
+  remision: '', fecha: '', estado: '',
   vehiculo: '', conductor: '', extractora: '',
 };
 
@@ -142,6 +144,18 @@ function getEstadoBadge(estado: EstadoViaje) {
   return <Badge variant={VARIANTE_ESTADO[estado]}>{estado}</Badge>;
 }
 
+/** Los períodos que acepta el filtro de viajes. */
+type PeriodoViajes = 'semanal' | 'quincenal' | 'mensual' | 'anual' | 'personalizado';
+
+/** Períodos que acepta el desplegable. */
+const PERIODOS: OpcionPeriodo<PeriodoViajes>[] = [
+  { valor: 'semanal', etiqueta: 'Semanal' },
+  { valor: 'quincenal', etiqueta: 'Quincenal' },
+  { valor: 'mensual', etiqueta: 'Mensual' },
+  { valor: 'anual', etiqueta: 'Anual' },
+  { valor: 'personalizado', etiqueta: 'Personalizado' },
+];
+
 // ─── componente ───────────────────────────────────────────────────────────────
 export default function Viajes() {
   const { hasPermiso } = useAuth();
@@ -150,6 +164,10 @@ export default function Viajes() {
    * los dos sitios donde se ve un viaje finalizado: aquí y en el resumen.
    */
   const [viajeAReabrir, setViajeAReabrir] = useState<{ id: string; remision: string } | null>(null);
+  /* 5.11 — El viaje que vuelve de EN_VALIDACION a CREADO, con su motivo. */
+  const [viajeADevolver, setViajeADevolver] = useState<{ id: string; remision: string } | null>(null);
+  const [motivoDevolver, setMotivoDevolver] = useState('');
+  const [devolviendo, setDevolviendo] = useState(false);
   const navigate = useNavigate();
 
   // Filtros de la tabla. Persisten mientras dure la sesión: entrar al detalle
@@ -201,7 +219,6 @@ export default function Viajes() {
   };
 
   const [viajeAEliminar, setViajeAEliminar] = useState<{ id: string; remision: string } | null>(null);
-  const [viajeAValidar, setViajeAValidar]   = useState<{ id: string; remision: string } | null>(null);
   const [loadingKPI,  setLoadingKPI]  = useState(true);
 
   const handleFiltroChange = (key: keyof typeof filtros, value: string) =>
@@ -274,6 +291,27 @@ export default function Viajes() {
     () => setPagina(1),
   );
 
+  /** 5.11 — EN_VALIDACION a CREADO. Sin guarda: no deshace ningún cálculo. */
+  const devolverViajeAConteo = async () => {
+    if (!viajeADevolver) return;
+    setDevolviendo(true);
+    try {
+      const res = await viajesApi.devolverACreado(Number(viajeADevolver.id), motivoDevolver);
+      toast.success(res.message ?? 'Viaje devuelto a conteo');
+      setViajeADevolver(null);
+      void cargarViajes();
+      void cargarIndicadores();
+    } catch (err) {
+      const e = err as { message?: string };
+      toast.error(e?.message ?? 'No se pudo devolver el viaje a conteo');
+      // Si alguien más lo movió, la lista refrescada muestra el estado real.
+      setViajeADevolver(null);
+      void cargarViajes();
+    } finally {
+      setDevolviendo(false);
+    }
+  };
+
   const cargarViajes = useCallback(async () => {
     setLoadingList(true);
     try {
@@ -284,7 +322,9 @@ export default function Viajes() {
       if (f.vehiculo)   params.vehiculo = f.vehiculo;
       if (f.conductor)  params.conductor = f.conductor;
       if (f.extractora) params.extractora_id = Number(f.extractora);
-      // La fecha la manda el selector del encabezado, no la tabla.
+      // El día exacto lo elige la tabla; el rango sale del selector de
+      // arriba. Van juntos: el día tiene que caer dentro del período.
+      if (f.fecha)      params.fecha = f.fecha;
       if (rangoPeriodo.desde) params.fecha_desde = rangoPeriodo.desde;
       if (rangoPeriodo.hasta) params.fecha_hasta = rangoPeriodo.hasta;
       const res = await viajesApi.listar(params);
@@ -343,27 +383,6 @@ export default function Viajes() {
     }
   };
 
-  // ── Pasar a "En Validación" — el conteo es OPCIONAL.
-  //     Usa POST /viajes/{id}/saltar-validacion (modelo nuevo de 3 estados).
-  //     Aplica para fincas que pagan por jornal y no llevan control de cosechas.
-  const abrirDialogoValidar = (viaje: ViajeUI, event: React.MouseEvent) => {
-    event.stopPropagation();
-    setViajeAValidar({ id: viaje.id, remision: viaje.remisionId });
-  };
-
-  const confirmarValidar = async () => {
-    if (!viajeAValidar) return;
-    const id = viajeAValidar.id;
-    setViajeAValidar(null);
-    try {
-      await viajesApi.saltarValidacion(Number(id));
-      toast.success('Viaje actualizado a "En Validación" exitosamente');
-      cargarViajes();
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Error al cambiar el estado del viaje');
-    }
-  };
-
   // ── filtros ────────────────────────────────────────────────────────────────
   // Los filtros los resuelve `GET /viajes`: la tabla pinta la página que
   // llegó, sin volver a filtrar sobre un recorte.
@@ -401,12 +420,12 @@ export default function Viajes() {
   const gajosTotal         = indicadoresApi?.gajos_totales ?? viajesPorPeriodo.reduce((s, v) => s + v.gajosEstimados, 0);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* ─── Diálogo Eliminar viaje ─────────────────────────────────────── */}
       <AlertDialog open={!!viajeAEliminar} onOpenChange={open => !open && setViajeAEliminar(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogTitle>¿Eliminar el viaje?</AlertDialogTitle>
             <AlertDialogDescription>
               <span>Esto eliminará permanentemente el viaje <strong>{viajeAEliminar?.remision}</strong>. Esta acción no se puede deshacer.</span>
             </AlertDialogDescription>
@@ -420,51 +439,58 @@ export default function Viajes() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ─── Diálogo Pasar a En Validación ──────────────────────────────── */}
-      <AlertDialog open={!!viajeAValidar} onOpenChange={open => !open && setViajeAValidar(null)}>
-        <AlertDialogContent className="max-w-xl">
-          {/* `text-left` override del `text-center` que trae por default
-              AlertDialogHeader (shadcn). Aquí necesitamos alinear a la izquierda
-              porque el callout tiene contenido en formato bloque + icono. */}
+      {/* ─── Diálogo Devolver a conteo ──────────────────────────────────── */}
+      <AlertDialog
+        open={viajeADevolver !== null}
+        onOpenChange={(open) => { if (!open) setViajeADevolver(null); }}
+      >
+        <AlertDialogContent>
           <AlertDialogHeader className="text-left">
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
-              Pasar a En Validación
+            <AlertDialogTitle>
+              Devolver a conteo el viaje {viajeADevolver?.remision}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground text-left">
-                  ¿Confirmas que deseas cambiar el estado del viaje{' '}
-                  <strong>{viajeAValidar?.remision}</strong> a{' '}
-                  <span className="font-semibold text-foreground">En Validación</span>?
+              <div className="space-y-2 text-left">
+                <p>
+                  El viaje vuelve al conteo de cosechas. Las cosechas y sus gajos se
+                  conservan, pero habrá que aprobar el conteo otra vez.
                 </p>
-                {/* Advertencia: cuando se salta el reconteo, el sistema toma los
-                    gajos/peso reportados por el colaborador como definitivos. Eso
-                    impacta el cálculo de nómina, así que el usuario debe verlo
-                    claramente antes de confirmar. */}
-                <div className="rounded-lg border border-amber-400/40 bg-amber-50/60 dark:bg-amber-950/20 p-4 flex gap-3 text-left">
-                  <Info className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold text-amber-800 dark:text-amber-400">
-                      Importante: datos que tomará el sistema
-                    </p>
-                    <p className="text-xs text-amber-700 dark:text-amber-500 leading-relaxed">
-                      Si no ingresas la información de la extractora durante la validación, el sistema tomará como definitivos los <span className="font-semibold">gajos y kilogramos reportados por el colaborador</span>. Estos valores serán los usados para calcular la nómina.
-                    </p>
-                  </div>
-                </div>
+                <p>
+                  Los datos de la extractora y los soportes cargados no se pierden.
+                  Mientras esté en conteo no se pueden subir soportes nuevos.
+                </p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="sm:justify-end">
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmarValidar} className="bg-primary hover:bg-primary/90">
-              Confirmar
+          <div className="space-y-1.5">
+            <Label htmlFor="motivo-devolver">Motivo (opcional)</Label>
+            <Textarea
+              id="motivo-devolver"
+              value={motivoDevolver}
+              onChange={(e) => setMotivoDevolver(e.target.value)}
+              maxLength={500}
+              rows={2}
+              placeholder="Por ejemplo: faltó enlazar la cosecha del 14"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={devolviendo}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={devolviendo}
+              onClick={(e) => {
+                // El AlertDialogAction cierra el diálogo al hacer click; se
+                // frena para que no se cierre antes de que responda el POST.
+                e.preventDefault();
+                void devolverViajeAConteo();
+              }}
+            >
+              {devolviendo ? 'Devolviendo...' : 'Devolver a conteo'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* ─── Diálogo Pasar a En Validación ──────────────────────────────── */}
       <PageHeader
         title="Viajes"
         description="Despachos de fruto hacia la extractora."
@@ -474,8 +500,8 @@ export default function Viajes() {
                 visible siempre, como el resto del módulo, y el backend es el
                 que decide con el permiso `viajes.importar`. */}
             <Button variant="outline" onClick={() => navigate('/viajes/importar')}>
-              <FileUp className="h-4 w-4" strokeWidth={2} />
-              Importar histórico
+              <Upload className="h-4 w-4" strokeWidth={2} />
+              Importar viajes
             </Button>
             <Button onClick={() => navigate('/viajes/nuevo')}>
               <Plus className="h-4 w-4" strokeWidth={2} />
@@ -488,21 +514,15 @@ export default function Viajes() {
 
       {/* El período manda sobre los indicadores y sobre la lista de abajo:
           las dos leen el mismo rango de fechas. */}
+      <section className="space-y-3">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <h2>Indicadores del período</h2>
+        <h2>Indicadores</h2>
         <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-          <Label className="text-sm font-medium">Período:</Label>
-          <Select value={periodoKPI}
-            onValueChange={(v) => setPeriodoKPI(v as typeof periodoKPI)}>
-            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="semanal">Semanal</SelectItem>
-              <SelectItem value="quincenal">Quincenal</SelectItem>
-              <SelectItem value="mensual">Mensual</SelectItem>
-              <SelectItem value="anual">Anual</SelectItem>
-              <SelectItem value="personalizado">Personalizado</SelectItem>
-            </SelectContent>
-          </Select>
+          <SelectorPeriodo
+            valor={periodoKPI}
+            opciones={PERIODOS}
+            onChange={setPeriodoKPI}
+          />
           {(periodoKPI === 'mensual' || periodoKPI === 'quincenal') && (
             <SelectorMes valor={mesKPI} onChange={setMesKPI} />
           )}
@@ -512,7 +532,7 @@ export default function Viajes() {
           {periodoKPI === 'quincenal' && (
             <Select value={String(quincenaKPI)}
               onValueChange={(v) => setQuincenaKPI(Number(v) as QuincenaViajes)}>
-              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Quincena" className="w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="1">Del 1 al 15</SelectItem>
                 <SelectItem value="2">Del 16 al fin de mes</SelectItem>
@@ -520,12 +540,13 @@ export default function Viajes() {
             </Select>
           )}
           {periodoKPI === 'personalizado' && (
-            <>
-              <Input type="date" aria-label="Fecha de inicio" className="w-40"
+            <div className="flex items-center gap-1.5">
+              <Input type="date" aria-label="Fecha de inicio" className="w-[138px]"
                 value={fechaInicioKPI} onChange={e => setFechaInicioKPI(e.target.value)} />
-              <Input type="date" aria-label="Fecha de fin" className="w-40"
+              <span className="text-xs text-muted-foreground">a</span>
+              <Input type="date" aria-label="Fecha de fin" className="w-[138px]"
                 value={fechaFinKPI} onChange={e => setFechaFinKPI(e.target.value)} />
-            </>
+            </div>
           )}
           <Button variant="ghost" size="sm" onClick={reiniciarVista}
             title="Vuelve al mes en curso y borra los filtros de la tabla">
@@ -538,73 +559,81 @@ export default function Viajes() {
       <StatStrip
         loading={loadingKPI && !indicadoresApi}
         items={[
-          { label: 'Total de viajes', value: num(totalViajes), note: 'despachos en el período' },
-          { label: 'En validación', value: num(viajesEnValidacion), note: 'esperan la remisión de la planta' },
-          { label: 'Finalizados', value: num(viajesFinalizados), note: 'ya cerrados' },
-          { label: 'Kilogramos', value: num(pesoTotal), unit: 'kg', note: 'peso de báscula' },
+          { label: 'Total viajes', value: num(totalViajes), note: 'despachos en el período' },
+          { label: 'En validación', value: num(viajesEnValidacion), note: 'pendientes' },
+          { label: 'Finalizados', value: num(viajesFinalizados), note: `${num(gajosTotal)} gajos estimados` },
+          { label: 'Kilogramos', value: num(pesoTotal), unit: 'kg', note: 'peso registrado' },
         ]}
       />
+      </section>
 
-      <div className="space-y-4">
-        <div className="space-y-1">
-          <h2>Viajes registrados</h2>
-          <p className="text-[15px] text-muted-foreground">Despachos de fruto hacia las extractoras.</p>
-        </div>
+      <section className="space-y-3">
+        <h2>Viajes registrados</h2>
 
         {/* Filtros. Van siempre: si se escondieran al quedar la tabla
             vacía, el filtro que dejó cero resultados no se podría
             borrar y la pantalla quedaría trancada. */}
-        <div className="grid gap-3 rounded-xl border border-border bg-muted/40 p-4 md:grid-cols-2 lg:grid-cols-5">
-          <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-muted-foreground" htmlFor="viajes-remision">Remisión</label>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
-              <Input id="viajes-remision" placeholder="REM-2026-001" value={filtros.remision}
-                onChange={e => handleFiltroChange('remision', e.target.value)} className="h-9 pl-8" />
-            </div>
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+          <div className="relative w-full lg:w-64">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
+            <Input
+              id="viajes-remision"
+              type="search"
+              aria-label="Buscar remisión"
+              placeholder="Buscar remisión"
+              value={filtros.remision}
+              onChange={e => handleFiltroChange('remision', e.target.value)}
+              className="pl-9"
+            />
           </div>
-          <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-muted-foreground">Estado</label>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:flex lg:flex-1 lg:flex-wrap lg:justify-end">
+            <Input
+              id="viajes-fecha"
+              type="date"
+              aria-label="Fecha del viaje"
+              value={filtros.fecha}
+              onChange={e => handleFiltroChange('fecha', e.target.value)}
+              className="col-span-2 sm:col-span-1 lg:w-[150px]"
+            />
             <Select
               value={filtros.estado || '__todos__'}
               onValueChange={(v) => handleFiltroChange('estado', v === '__todos__' ? '' : v)}
             >
-              <SelectTrigger className="h-9 w-full">
-                <SelectValue placeholder="Todos" />
+              <SelectTrigger id="viajes-estado" aria-label="Estado" className="col-span-2 w-full sm:col-span-1 lg:w-52">
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__todos__">Todos</SelectItem>
+                <SelectItem value="__todos__">Todos los estados</SelectItem>
                 <SelectItem value="Creado">Creado</SelectItem>
-                <SelectItem value="En Validación">En Validación</SelectItem>
+                <SelectItem value="En Validación">En validación</SelectItem>
                 <SelectItem value="Finalizado">Finalizado</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-muted-foreground" htmlFor="viajes-vehiculo">Vehículo</label>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
-              <Input id="viajes-vehiculo" placeholder="ABC-123" value={filtros.vehiculo}
-                onChange={e => handleFiltroChange('vehiculo', e.target.value)} className="h-9 pl-8" />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-muted-foreground" htmlFor="viajes-conductor">Conductor</label>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
-              <Input id="viajes-conductor" placeholder="Nombre" value={filtros.conductor}
-                onChange={e => handleFiltroChange('conductor', e.target.value)} className="h-9 pl-8" />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-muted-foreground" htmlFor="viajes-extractora">Extractora</label>
+            <Input
+              id="viajes-vehiculo"
+              aria-label="Vehículo"
+              placeholder="Placa"
+              value={filtros.vehiculo}
+              onChange={e => handleFiltroChange('vehiculo', e.target.value)}
+              className="lg:w-28"
+            />
+            <Input
+              id="viajes-conductor"
+              aria-label="Conductor"
+              placeholder="Conductor"
+              value={filtros.conductor}
+              onChange={e => handleFiltroChange('conductor', e.target.value)}
+              className="lg:w-36"
+            />
             <Select
               value={filtros.extractora || '__todas__'}
               onValueChange={(v) => handleFiltroChange('extractora', v === '__todas__' ? '' : v)}
             >
-              <SelectTrigger id="viajes-extractora" className="h-9"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="viajes-extractora" aria-label="Extractora" className="col-span-2 w-full sm:col-span-1 lg:w-56">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__todas__">Todas</SelectItem>
+                <SelectItem value="__todas__">Todas las extractoras</SelectItem>
                 {extractoras.map((e) => (
                   <SelectItem key={e.id} value={String(e.id)}>{e.razon_social}</SelectItem>
                 ))}
@@ -634,27 +663,26 @@ export default function Viajes() {
                 ? 'Ningún viaje coincide con los filtros'
                 : `No hay viajes ${etiquetaPeriodo}`}
               description={hayFiltros
-                ? 'Borre los filtros o cambie el período de arriba.'
-                : 'Cambie el período de arriba o registre un despacho.'}
+                ? 'Borra los filtros o cambia el período de arriba.'
+                : 'Cambia el período de arriba o registra un despacho.'}
               action={hayFiltros
                 ? { label: 'Limpiar filtros', onClick: limpiarFiltros }
                 : { label: 'Nuevo viaje', onClick: () => navigate('/viajes/nuevo') }}
             />
           </Card>
         ) : (
-          <Card className="gap-0">
+          <Card className="gap-0 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-muted/60 text-[13px] text-muted-foreground">
+                <thead className="bg-muted/60 text-[13px] font-medium text-muted-foreground">
                   <tr>
                     <th className="px-5 py-2.5 text-left font-semibold">Remisión</th>
-                    <th className="px-4 py-2.5 text-left font-semibold">Fecha</th>
                     <th className="px-4 py-2.5 text-left font-semibold">Estado</th>
-                    <th className="px-4 py-2.5 text-left font-semibold">Vehículo y conductor</th>
-                    <th className="px-4 py-2.5 text-left font-semibold">Extractora</th>
-                    <th className="px-4 py-2.5 text-right font-semibold">Gajos</th>
+                    <th className="hidden px-4 py-2.5 text-left font-semibold md:table-cell">Vehículo</th>
+                    <th className="hidden px-4 py-2.5 text-left font-semibold lg:table-cell">Extractora</th>
+                    <th className="hidden px-4 py-2.5 text-right font-semibold sm:table-cell">Gajos</th>
                     <th className="px-4 py-2.5 text-right font-semibold">Peso (kg)</th>
-                    <th className="px-5 py-2.5 text-right font-semibold">Acciones</th>
+                    <th className="px-2 py-2.5"><span className="sr-only">Acciones</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -663,45 +691,42 @@ export default function Viajes() {
                     return (
                       <tr key={viaje.id} className="transition-colors hover:bg-muted/40">
                         <td className="px-5 py-3">
-                          <span className="font-semibold text-foreground">{viaje.remisionId}</span>
+                          <Link
+                            to={`/viajes/${viaje.id}`}
+                            className="font-semibold text-foreground hover:text-primary"
+                          >
+                            {viaje.remisionId}
+                          </Link>
                           {viaje.importado && (
-                            <span
-                              className="ml-2 rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                            <Badge
+                              variant="outline"
+                              className="ml-2 align-middle text-[11px]"
                               title="Entró por el cargue de histórico"
                             >
                               Importado
-                            </span>
+                            </Badge>
                           )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="block font-medium text-foreground">
-                            {d ? d.toLocaleDateString('es-CO', { month: 'short', day: 'numeric' }) : '—'}
+                          {/* La fecha va debajo de la remisión. Como columna
+                              aparte no cabía en celular y empujaba la tabla
+                              fuera de la pantalla. */}
+                          <span className="block text-xs text-muted-foreground">
+                            {d ? d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
                           </span>
-                          <span className="text-xs text-muted-foreground">{d ? d.getFullYear() : ''}</span>
                         </td>
                         <td className="px-4 py-3">{getEstadoBadge(viaje.estado)}</td>
-                        <td className="px-4 py-3">
+                        <td className="hidden px-4 py-3 md:table-cell">
                           <span className="block font-medium text-foreground">{viaje.placaVehiculo}</span>
-                          <span className="text-xs text-muted-foreground">{viaje.conductor}</span>
+                          <span className="block text-xs text-muted-foreground">{viaje.conductor}</span>
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1.5">
-                            <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={2} />
-                            <span className="text-foreground">{viaje.extractora}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-foreground">
+                        <td className="hidden px-4 py-3 text-muted-foreground lg:table-cell">{viaje.extractora}</td>
+                        <td className="hidden px-4 py-3 text-right tabular-nums sm:table-cell">
                           {num(viaje.gajosEstimados)}
                         </td>
-                        <td className="px-4 py-3 text-right">
-                          {viaje.peso ? (
-                            <span className="font-semibold tabular-nums text-foreground">{num(viaje.peso)}</span>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {viaje.peso ? num(viaje.peso) : <span className="text-muted-foreground">Pendiente</span>}
                         </td>
-                        <td className="px-5 py-3">
-                          <div className="flex items-center justify-end gap-1">
+                        <td className="px-2 py-3">
+                          <div className="flex justify-end gap-0.5">
                             {viaje.estado === 'Creado' ? (
                               <>
                                 {/* La remisión se imprime ANTES de salir: es el
@@ -761,16 +786,35 @@ export default function Viajes() {
                               /* En Validación: el único paso útil es cargar la
                                  remisión de la extractora. Al abrir el detalle
                                  se sube el PDF. */
-                              <Button
-                                variant="ghost" size="icon" asChild
-                                className="text-muted-foreground"
-                                aria-label="Cargar remisión de la extractora"
-                                title="Cargar remisión extractora"
-                              >
-                                <Link to={`/viajes/${viaje.id}?vista=gestion`}>
-                                  <FileUp className="h-4 w-4" strokeWidth={2} />
-                                </Link>
-                              </Button>
+                              <>
+                                <Button
+                                  variant="ghost" size="icon" asChild
+                                  className="text-muted-foreground"
+                                  aria-label="Cargar remisión de la extractora"
+                                  title="Cargar remisión extractora"
+                                >
+                                  <Link to={`/viajes/${viaje.id}?vista=gestion`}>
+                                    <FileUp className="h-4 w-4" strokeWidth={2} />
+                                  </Link>
+                                </Button>
+                                {/* Pasó a validación antes de tiempo: vuelve al
+                                    conteo sin tener que finalizarlo mal y
+                                    reabrirlo. */}
+                                {hasPermiso('viajes.editar') && (
+                                  <Button
+                                    variant="ghost" size="icon"
+                                    className="text-muted-foreground hover:text-warning"
+                                    aria-label="Devolver el viaje a conteo"
+                                    title="Devolver a conteo"
+                                    onClick={() => {
+                                      setMotivoDevolver('');
+                                      setViajeADevolver({ id: viaje.id, remision: viaje.remisionId });
+                                    }}
+                                  >
+                                    <Undo2 className="h-4 w-4" strokeWidth={2} />
+                                  </Button>
+                                )}
+                              </>
                             ) : (
                               /* Finalizado: solo lectura. No hay eliminar
                                  porque ya está cerrado y liquidado en nómina.
@@ -807,11 +851,8 @@ export default function Viajes() {
               </table>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3 text-sm text-muted-foreground">
-              <p>
-                Mostrando <span className="font-semibold text-foreground">{num(viajesFiltrados.length)}</span> de{' '}
-                <span className="font-semibold text-foreground">{num(totalLista)}</span> viajes
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3 text-xs text-muted-foreground">
+              <p>Mostrando {num(viajesFiltrados.length)} de {num(totalLista)} viajes</p>
               {ultimaPagina > 1 && (
                 <div className="flex items-center gap-2">
                   <span>Página {pagina} de {ultimaPagina}</span>
@@ -834,7 +875,7 @@ export default function Viajes() {
             </div>
           </Card>
         )}
-      </div>
+      </section>
 
       <RevertirEstadoDialog
         abierto={viajeAReabrir !== null}

@@ -4,7 +4,8 @@ import { useNavigate, useParams } from 'react-router';
 
 import { formatFecha } from '../../utils/fecha';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
+import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import {
@@ -49,7 +50,6 @@ import {
   Phone,
   Eye,
 } from 'lucide-react';
-import { Switch } from '../../components/ui/switch';
 import {
   colaboradoresApi,
   buildAvatarUrl,
@@ -284,9 +284,9 @@ export default function NuevoColaboradorWizard() {
   const [avatarUrlRemoto, setAvatarUrlRemoto] = useState<string | null>(null);
   const [subiendoAvatar, setSubiendoAvatar] = useState(false);
 
-  // Pending municipio (solo en modo edición): se aplica una vez los municipios
-  // del departamento estén cargados, porque <select value=""> no acepta valores
-  // que aún no estén en su lista de <option>.
+  // Municipio en espera (solo en modo edición): se aplica una vez los
+  // municipios del departamento estén cargados, porque el desplegable no
+  // muestra un valor que todavía no esta en su lista.
   const [pendingMunicipio, setPendingMunicipio] = useState<string | null>(null);
 
   // Catálogo de categorías de documentos (cargado desde la API)
@@ -936,7 +936,7 @@ export default function NuevoColaboradorWizard() {
             zIndex: 99999,
           }}
         >
-          <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-6 py-4 shadow-lg">
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-6 py-4 shadow-md">
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
             <span className="text-sm font-medium">Cargando datos del colaborador...</span>
           </div>
@@ -966,41 +966,46 @@ export default function NuevoColaboradorWizard() {
         ) : undefined}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Wizard */}
-        <div className="min-w-0 space-y-8 lg:col-span-2">
+        <div className="min-w-0 space-y-6 lg:col-span-2">
           {/* Stepper horizontal */}
-          <Card className="border-border">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
+          <Card>
+            <CardContent className="px-4 py-4 sm:px-6">
+              <ol className="flex items-center">
                 {ETAPAS.map((etapa, index) => {
                   const estaCompleta = etapaActual > etapa.numero;
                   const estaActiva   = etapaActual === etapa.numero;
-                  const Icon = etapa.icon;
+                  const habilitada   = isEditMode || estaActiva || estaCompleta;
                   return (
-                    <React.Fragment key={etapa.numero}>
-                      {/* Círculo de etapa */}
-                      <button aria-label="Confirmar"
+                    <li
+                      key={etapa.numero}
+                      className={`flex items-center ${index < ETAPAS.length - 1 ? 'flex-1' : ''}`}
+                    >
+                      <button
+                        type="button"
+                        aria-label={`Ir al paso ${etapa.numero}: ${etapa.nombre}`}
+                        aria-current={estaActiva ? 'step' : undefined}
                         onClick={() => irAEtapa(etapa.numero)}
                         className={`flex shrink-0 flex-col items-center gap-2 ${
-                          estaActiva || estaCompleta || isEditMode ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
+                          habilitada ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
                         }`}
-                        disabled={!isEditMode && !estaActiva && !estaCompleta}
+                        disabled={!habilitada}
                       >
                         <div
-                          className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition md:h-12 md:w-12 ${
+                          className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-sm font-semibold transition-colors ${
                             estaCompleta
-                              ? 'bg-primary border-primary text-white'
+                              ? 'border-primary bg-primary text-primary-foreground'
                               : estaActiva
-                              ? 'bg-primary/10 border-primary text-primary'
-                              : 'bg-muted border-border text-muted-foreground'
+                              ? 'border-primary bg-primary-soft text-primary'
+                              : 'border-border bg-card text-muted-foreground'
                           }`}
                         >
-                          {estaCompleta ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
+                          {estaCompleta ? <Check className="h-5 w-5" strokeWidth={2.5} /> : etapa.numero}
                         </div>
-                        <div className="hidden text-center md:block">
+                        <div className={`text-center ${estaActiva ? '' : 'hidden sm:block'}`}>
                           <div
-                            className={`text-xs font-semibold whitespace-nowrap ${
+                            className={`text-[13px] font-semibold whitespace-nowrap ${
                               estaActiva || estaCompleta ? 'text-foreground' : 'text-muted-foreground'
                             }`}
                           >
@@ -1011,43 +1016,32 @@ export default function NuevoColaboradorWizard() {
 
                       {/* Línea conectora */}
                       {index < ETAPAS.length - 1 && (
-                        <div className="relative mx-2 h-0.5 flex-1 bg-border sm:mx-4">
+                        <div className="relative mx-2 h-0.5 flex-1 bg-border sm:-mt-6 sm:mx-4">
                           <div
-                            className={`absolute inset-0 bg-primary transition ${
+                            className={`absolute inset-0 bg-primary transition-[width] ${
                               estaCompleta ? 'w-full' : 'w-0'
                             }`}
                           />
                         </div>
                       )}
-                    </React.Fragment>
+                    </li>
                   );
                 })}
-              </div>
-              {/* Reemplaza a los rotulos, escondidos en celular. */}
-              <p className="mt-3 text-center text-[13px] font-semibold text-foreground md:hidden">
-                Paso {etapaActual} de {ETAPAS.length}: {ETAPAS.find((x) => x.numero === etapaActual)?.nombre}
-              </p>
+              </ol>
             </CardContent>
           </Card>
 
           {/* ── ETAPA 1: INFORMACIÓN PERSONAL + CONTACTO ── */}
           {etapaActual === 1 && (
-            <Card className="border-border">
+            <Card>
               <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <Users className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle>Información Personal</CardTitle>
-                    <p className="text-sm text-muted-foreground">Datos básicos y contacto del colaborador</p>
-                  </div>
-                </div>
+                <CardTitle>Información personal</CardTitle>
+                <CardDescription>Datos básicos y contacto del colaborador.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Foto del Colaborador */}
+                {/* Foto del colaborador */}
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Foto del Colaborador</Label>
+                  <Label>Foto del colaborador</Label>
                   <div className="flex items-center gap-4">
                     {imagePreview ? (
                       <div className="relative">
@@ -1065,7 +1059,7 @@ export default function NuevoColaboradorWizard() {
                         </button>
                       </div>
                     ) : (
-                      <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center border-2 border-dashed border-border">
+                      <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center border border-dashed border-border">
                         {subiendoAvatar
                           ? <Loader2 className="h-8 w-8 text-muted-foreground animate-spin" />
                           : <Upload className="h-8 w-8 text-muted-foreground" />}
@@ -1099,21 +1093,21 @@ export default function NuevoColaboradorWizard() {
                 {/* Nombres y apellidos */}
                 <div className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="primerApellido">Primer Apellido <span className="text-destructive">*</span></Label>
+                    <Label htmlFor="primerApellido">Primer apellido <span className="text-destructive">*</span></Label>
                     <Input id="primerApellido" placeholder="Ej: Rodríguez" value={formData.primerApellido} onChange={e => handleInputChange('primerApellido', e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="segundoApellido">Segundo Apellido</Label>
+                    <Label htmlFor="segundoApellido">Segundo apellido</Label>
                     <Input id="segundoApellido" placeholder="Ej: García" value={formData.segundoApellido} onChange={e => handleInputChange('segundoApellido', e.target.value)} />
                   </div>
                 </div>
                 <div className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="primerNombre">Primer Nombre <span className="text-destructive">*</span></Label>
+                    <Label htmlFor="primerNombre">Primer nombre <span className="text-destructive">*</span></Label>
                     <Input id="primerNombre" placeholder="Ej: Juan" value={formData.primerNombre} onChange={e => handleInputChange('primerNombre', e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="segundoNombre">Segundo Nombre</Label>
+                    <Label htmlFor="segundoNombre">Segundo nombre</Label>
                     <Input id="segundoNombre" placeholder="Ej: Carlos" value={formData.segundoNombre} onChange={e => handleInputChange('segundoNombre', e.target.value)} />
                   </div>
                 </div>
@@ -1126,7 +1120,7 @@ export default function NuevoColaboradorWizard() {
                   </div>
                   <div className="grid gap-6 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="nuevocolab-correo-electronico">Correo Electrónico</Label>
+                      <Label htmlFor="nuevocolab-correo-electronico">Correo electrónico</Label>
                       <Input id="nuevocolab-correo-electronico" type="email" placeholder="juan@email.com" value={formData.correo} onChange={e => handleInputChange('correo', e.target.value)} />
                     </div>
                     <div className="space-y-2">
@@ -1141,36 +1135,42 @@ export default function NuevoColaboradorWizard() {
                   <div className="grid gap-6 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="nuevocolab-departamento">Departamento</Label>
-                      <select id="nuevocolab-departamento"
+                      <Select
                         value={deptoSel}
-                        onChange={e => {
-                          setDeptoSel(e.target.value);
-                          const nombre = departamentos.find(d => d.codigo === e.target.value)?.nombre ?? '';
+                        onValueChange={codigo => {
+                          setDeptoSel(codigo);
+                          const nombre = departamentos.find(d => d.codigo === codigo)?.nombre ?? '';
                           handleInputChange('departamento', nombre);
                           handleInputChange('municipio', '');
                           setMunicipios([]);
                         }}
-                        className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                       >
-                        <option value="">Seleccionar departamento...</option>
-                        {departamentos.map(d => (
-                          <option key={d.codigo} value={d.codigo}>{d.nombre}</option>
-                        ))}
-                      </select>
+                        <SelectTrigger id="nuevocolab-departamento">
+                          <SelectValue placeholder="Seleccionar departamento" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {departamentos.map(d => (
+                            <SelectItem key={d.codigo} value={d.codigo}>{d.nombre}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="nuevocolab-municipio">Municipio</Label>
-                      <select id="nuevocolab-municipio"
+                      <Select
                         value={formData.municipio}
-                        onChange={e => handleInputChange('municipio', e.target.value)}
+                        onValueChange={valor => handleInputChange('municipio', valor)}
                         disabled={!deptoSel}
-                        className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
                       >
-                        <option value="">Seleccionar municipio...</option>
-                        {municipios.map(m => (
-                          <option key={m.codigo} value={m.nombre}>{m.nombre}</option>
-                        ))}
-                      </select>
+                        <SelectTrigger id="nuevocolab-municipio">
+                          <SelectValue placeholder="Seleccionar municipio" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {municipios.map(m => (
+                            <SelectItem key={m.codigo} value={m.nombre}>{m.nombre}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>
@@ -1195,44 +1195,37 @@ export default function NuevoColaboradorWizard() {
 
           {/* ── ETAPA 2: IDENTIFICACIÓN ── */}
           {etapaActual === 2 && (
-            <Card className="border-border">
+            <Card>
               <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <IdCard className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle>Identificación</CardTitle>
-                    <p className="text-sm text-muted-foreground">Documentos de identidad</p>
-                  </div>
-                </div>
+                <CardTitle>Identificación</CardTitle>
+                <CardDescription>Documentos de identidad.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
-                  <Label>Tipo de Documento <span className="text-destructive">*</span></Label>
+                  <Label htmlFor="nuevocolab-tipo-documento">Tipo de documento <span className="text-destructive">*</span></Label>
                   <Select value={formData.tipoDocumento} onValueChange={v => handleInputChange('tipoDocumento', v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="nuevocolab-tipo-documento"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {tiposDocumento.map(t => <SelectItem key={t.codigo} value={t.codigo}>{t.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Número de Documento <span className="text-destructive">*</span></Label>
-                  <Input placeholder="Ej: 1.234.567.890" value={formData.numeroDocumento} onChange={e => handleInputChange('numeroDocumento', e.target.value)} />
+                  <Label htmlFor="nuevocolab-numero-documento">Número de documento <span className="text-destructive">*</span></Label>
+                  <Input id="nuevocolab-numero-documento" placeholder="Ej: 1.234.567.890" value={formData.numeroDocumento} onChange={e => handleInputChange('numeroDocumento', e.target.value)} />
                 </div>
                 <div className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>Fecha de Expedición <span className="text-destructive">*</span></Label>
-                    <Input type="date" value={formData.fechaExpedicion} onChange={e => handleInputChange('fechaExpedicion', e.target.value)} />
+                    <Label htmlFor="nuevocolab-fecha-expedicion">Fecha de expedición <span className="text-destructive">*</span></Label>
+                    <Input id="nuevocolab-fecha-expedicion" type="date" value={formData.fechaExpedicion} onChange={e => handleInputChange('fechaExpedicion', e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Fecha de Nacimiento <span className="text-destructive">*</span></Label>
-                    <Input type="date" value={formData.fechaNacimiento} onChange={e => handleInputChange('fechaNacimiento', e.target.value)} />
+                    <Label htmlFor="nuevocolab-fecha-nacimiento">Fecha de nacimiento <span className="text-destructive">*</span></Label>
+                    <Input id="nuevocolab-fecha-nacimiento" type="date" value={formData.fechaNacimiento} onChange={e => handleInputChange('fechaNacimiento', e.target.value)} />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="nuevocolab-lugar-de-expedicion">Lugar de Expedición</Label>
+                  <Label htmlFor="nuevocolab-lugar-de-expedicion">Lugar de expedición</Label>
                   <Input id="nuevocolab-lugar-de-expedicion" placeholder="Ej: Bucaramanga" value={formData.lugarExpedicion} onChange={e => handleInputChange('lugarExpedicion', e.target.value)} />
                 </div>
               </CardContent>
@@ -1247,17 +1240,10 @@ export default function NuevoColaboradorWizard() {
               edición como fila extra al final (V.10 no lo tiene porque no
               tiene conexión a backend; nosotros sí necesitamos editarlo). */}
           {etapaActual === 3 && (
-            <Card className="border-border">
+            <Card>
               <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <Briefcase className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle>Contratación</CardTitle>
-                    <p className="text-sm text-muted-foreground">Cargo y compensación</p>
-                  </div>
-                </div>
+                <CardTitle>Contratación</CardTitle>
+                <CardDescription>Cargo y compensación.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
@@ -1273,7 +1259,7 @@ export default function NuevoColaboradorWizard() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="predioAsignado">Predio Asignado</Label>
+                  <Label htmlFor="predioAsignado">Predio asignado</Label>
                   <Select
                     value={formData.predioAsignado || 'none'}
                     onValueChange={(v) => handleInputChange('predioAsignado', v === 'none' ? '' : v)}
@@ -1294,7 +1280,7 @@ export default function NuevoColaboradorWizard() {
 
                 <div className="space-y-2">
                   <Label htmlFor="modalidadPago">
-                    Modalidad de Pago <span className="text-destructive">*</span>
+                    Modalidad de pago <span className="text-destructive">*</span>
                   </Label>
                   <Select
                     value={formData.modalidadPago}
@@ -1330,7 +1316,7 @@ export default function NuevoColaboradorWizard() {
 
                 <div className="space-y-2">
                   <Label htmlFor="salarioBase">
-                    Salario Base{' '}
+                    Salario base{' '}
                     {formData.modalidadPago === 'FIJO' && (
                       <span className="text-destructive">*</span>
                     )}
@@ -1362,7 +1348,7 @@ export default function NuevoColaboradorWizard() {
                     de Finalización pasa abajo a su propia sección con detalle. */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="aplicaSubsidioTransporte">Subsidio de Transporte</Label>
+                    <Label htmlFor="aplicaSubsidioTransporte">Subsidio de transporte</Label>
                     <Select
                       value={formData.aplicaSubsidioTransporte ? 'si' : 'no'}
                       onValueChange={(v) =>
@@ -1381,7 +1367,7 @@ export default function NuevoColaboradorWizard() {
 
                   <div className="space-y-2">
                     <Label htmlFor="fechaContratacion">
-                      Fecha de Contratación *
+                      Fecha de contratación <span className="text-destructive">*</span>
                     </Label>
                     <Input
                       id="fechaContratacion"
@@ -1392,7 +1378,7 @@ export default function NuevoColaboradorWizard() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="tipoContrato">Tipo de Contrato</Label>
+                    <Label htmlFor="tipoContrato">Tipo de contrato</Label>
                     <Select
                       value={formData.tipoContrato}
                       onValueChange={(v) => {
@@ -1419,7 +1405,7 @@ export default function NuevoColaboradorWizard() {
                   {formData.tipoContrato === 'TERMINO_FIJO' && (
                     <div className="space-y-2">
                       <Label htmlFor="fechaFinPactada">
-                        Fecha de Fin Pactada *
+                        Fecha de fin pactada <span className="text-destructive">*</span>
                       </Label>
                       <Input
                         id="fechaFinPactada"
@@ -1440,14 +1426,14 @@ export default function NuevoColaboradorWizard() {
                 {MOSTRAR_FINALIZACION && (
                 <div className="pt-5 mt-2 border-t border-border space-y-5">
                   <div>
-                    <h3 className="font-semibold text-sm text-foreground">Finalización de Contrato</h3>
+                    <h3 className="font-semibold text-sm text-foreground">Finalización de contrato</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Si el contrato se termina antes de la fecha pactada, registra la fecha, el motivo y adjunta el soporte.
                     </p>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="fechaFinalizacion">Fecha de Finalización</Label>
+                    <Label htmlFor="fechaFinalizacion">Fecha de finalización</Label>
                     <Input
                       id="fechaFinalizacion"
                       type="date"
@@ -1463,13 +1449,13 @@ export default function NuevoColaboradorWizard() {
                   </div>
 
                   {formData.fechaFinalizacion && (
-                    <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-4">
+                    <div className="space-y-4 rounded-lg border border-destructive/20 bg-destructive-soft p-4">
                       {/* Desaparece al elegir el motivo: dejarlo fijo hacía
                           que el bloque siguiera pareciendo un error ya
                           resuelto. */}
                       {!formData.motivoFinalizacion && (
                         <div className="flex items-start gap-2">
-                          <div className="h-5 w-5 rounded-full bg-destructive/15 flex items-center justify-center shrink-0 mt-0.5">
+                          <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-destructive-soft">
                             <span className="text-destructive text-xs font-bold">!</span>
                           </div>
                           <p className="text-xs text-destructive font-medium">
@@ -1480,7 +1466,7 @@ export default function NuevoColaboradorWizard() {
 
                       <div className="space-y-2">
                         <Label htmlFor="motivoFinalizacion">
-                          Motivo de finalización *
+                          Motivo de finalización <span className="text-destructive">*</span>
                         </Label>
                         <Select
                           value={formData.motivoFinalizacion}
@@ -1513,23 +1499,27 @@ export default function NuevoColaboradorWizard() {
                           </span>
                         </Label>
                         {soporteFinalizacion ? (
-                          <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-background">
-                            <div className="flex items-center gap-3">
-                              <FileText className="h-8 w-8 text-primary shrink-0" />
-                              <div>
-                                <p className="text-sm font-medium">{soporteFinalizacion.nombre}</p>
+                          <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-4 py-3 transition-colors hover:bg-muted/40">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                                <FileText className="h-4 w-4" strokeWidth={2} />
+                              </span>
+                              <div className="min-w-0">
+                                <p className="break-words text-sm font-medium text-foreground">{soporteFinalizacion.nombre}</p>
                                 <p className="text-xs text-muted-foreground">
                                   {soporteFinalizacion.fecha} · {soporteFinalizacion.tamaño}
                                 </p>
                               </div>
                             </div>
                             <Button
-                              size="sm"
+                              size="icon"
                               variant="ghost"
                               onClick={() => setSoporteFinalizacion(null)}
-                              className="text-destructive hover:text-destructive"
+                              className="shrink-0 text-muted-foreground hover:bg-destructive-soft hover:text-destructive"
+                              title="Quitar"
+                              aria-label="Quitar soporte documental"
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Trash2 className="h-4 w-4" strokeWidth={2} />
                             </Button>
                           </div>
                         ) : (
@@ -1563,7 +1553,7 @@ export default function NuevoColaboradorWizard() {
                             <button
                               type="button"
                               onClick={() => document.getElementById('upload-soporte-finalizacion')?.click()}
-                              className="w-full flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors px-4 py-5 cursor-pointer"
+                              className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border px-4 py-5 transition-colors hover:border-primary hover:bg-primary-soft"
                             >
                               <Upload className="h-6 w-6 text-muted-foreground" />
                               <div className="text-center">
@@ -1585,23 +1575,16 @@ export default function NuevoColaboradorWizard() {
 
           {/* ── ETAPA 4: SEGURIDAD SOCIAL ── */}
           {etapaActual === 4 && (
-            <Card className="border-border">
+            <Card>
               <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <Shield className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle>Seguridad Social</CardTitle>
-                    <p className="text-sm text-muted-foreground">EPS, ARL y fondo de pensión</p>
-                  </div>
-                </div>
+                <CardTitle>Seguridad social</CardTitle>
+                <CardDescription>EPS, ARL y fondo de pensión.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
-                  <Label>EPS</Label>
+                  <Label htmlFor="nuevocolab-eps">EPS</Label>
                   <Select value={formData.eps} onValueChange={v => handleInputChange('eps', v)}>
-                    <SelectTrigger><SelectValue placeholder="Selecciona una EPS" /></SelectTrigger>
+                    <SelectTrigger id="nuevocolab-eps"><SelectValue placeholder="Selecciona una EPS" /></SelectTrigger>
                     {/* EPS: API + fallback legacy */}
                     <SelectContent>
                       {epsOpciones.length > 0 && !epsOpciones.includes(formData.eps) && formData.eps && <SelectItem value={formData.eps}>{formData.eps}</SelectItem>}
@@ -1610,9 +1593,9 @@ export default function NuevoColaboradorWizard() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>ARL</Label>
+                  <Label htmlFor="nuevocolab-arl">ARL</Label>
                   <Select value={formData.arl} onValueChange={v => handleInputChange('arl', v)}>
-                    <SelectTrigger><SelectValue placeholder="Selecciona una ARL" /></SelectTrigger>
+                    <SelectTrigger id="nuevocolab-arl"><SelectValue placeholder="Selecciona una ARL" /></SelectTrigger>
                     {/* ARL: API + fallback legacy */}
                     <SelectContent>
                       {arlOpciones.length > 0 && !arlOpciones.includes(formData.arl) && formData.arl && <SelectItem value={formData.arl}>{formData.arl}</SelectItem>}
@@ -1621,9 +1604,9 @@ export default function NuevoColaboradorWizard() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Fondo de Pensión</Label>
+                  <Label htmlFor="nuevocolab-fondo-pension">Fondo de pensión</Label>
                   <Select value={formData.fondoPension} onValueChange={v => handleInputChange('fondoPension', v)}>
-                    <SelectTrigger><SelectValue placeholder="Selecciona un fondo" /></SelectTrigger>
+                    <SelectTrigger id="nuevocolab-fondo-pension"><SelectValue placeholder="Selecciona un fondo" /></SelectTrigger>
                     {/* Pensión: API + fallback legacy */}
                     <SelectContent>
                       {pensionOpciones.length > 0 && !pensionOpciones.includes(formData.fondoPension) && formData.fondoPension && <SelectItem value={formData.fondoPension}>{formData.fondoPension}</SelectItem>}
@@ -1632,9 +1615,9 @@ export default function NuevoColaboradorWizard() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Fondo de Cesantías</Label>
+                  <Label htmlFor="nuevocolab-fondo-cesantias">Fondo de cesantías</Label>
                   <Select value={formData.fondoCesantias} onValueChange={v => handleInputChange('fondoCesantias', v)}>
-                    <SelectTrigger><SelectValue placeholder="Selecciona un fondo" /></SelectTrigger>
+                    <SelectTrigger id="nuevocolab-fondo-cesantias"><SelectValue placeholder="Selecciona un fondo" /></SelectTrigger>
                     <SelectContent>
                       {cesantiasOpciones.length > 0 && !cesantiasOpciones.includes(formData.fondoCesantias) && formData.fondoCesantias && <SelectItem value={formData.fondoCesantias}>{formData.fondoCesantias}</SelectItem>}
                       {cesantiasOpciones.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
@@ -1642,7 +1625,7 @@ export default function NuevoColaboradorWizard() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="nuevocolab-caja-de-compensacion">Caja de Compensación</Label>
+                  <Label htmlFor="nuevocolab-caja-de-compensacion">Caja de compensación</Label>
                   <Input id="nuevocolab-caja-de-compensacion" placeholder="Ej: Cafam" value={formData.cajaCompensacion} onChange={e => handleInputChange('cajaCompensacion', e.target.value)} />
                 </div>
 
@@ -1652,41 +1635,34 @@ export default function NuevoColaboradorWizard() {
 
           {/* ── ETAPA 5: DOTACIÓN ── */}
           {etapaActual === 5 && (
-            <Card className="border-border">
+            <Card>
               <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <Package className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle>Dotación</CardTitle>
-                    <p className="text-sm text-muted-foreground">Tallas de ropa y calzado</p>
-                  </div>
-                </div>
+                <CardTitle>Dotación</CardTitle>
+                <CardDescription>Tallas de ropa y calzado.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
-                  <Label>Talla Camisa</Label>
+                  <Label htmlFor="nuevocolab-talla-camisa">Talla de camisa</Label>
                   <Select value={formData.tallaCamisa} onValueChange={v => handleInputChange('tallaCamisa', v)}>
-                    <SelectTrigger><SelectValue placeholder="Selecciona talla" /></SelectTrigger>
+                    <SelectTrigger id="nuevocolab-talla-camisa"><SelectValue placeholder="Selecciona talla" /></SelectTrigger>
                     <SelectContent side="bottom" align="start" avoidCollisions={false}>
                       {tallaCamisas.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Talla Pantalón</Label>
+                  <Label htmlFor="nuevocolab-talla-pantalon">Talla de pantalón</Label>
                   <Select value={formData.tallaPantalon} onValueChange={v => handleInputChange('tallaPantalon', v)}>
-                    <SelectTrigger><SelectValue placeholder="Selecciona talla" /></SelectTrigger>
+                    <SelectTrigger id="nuevocolab-talla-pantalon"><SelectValue placeholder="Selecciona talla" /></SelectTrigger>
                     <SelectContent side="bottom" align="start" avoidCollisions={false}>
                       {tallaPantalones.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Talla Calzado</Label>
+                  <Label htmlFor="nuevocolab-talla-calzado">Talla de calzado</Label>
                   <Select value={formData.tallaCalzado} onValueChange={v => handleInputChange('tallaCalzado', v)}>
-                    <SelectTrigger><SelectValue placeholder="Selecciona talla" /></SelectTrigger>
+                    <SelectTrigger id="nuevocolab-talla-calzado"><SelectValue placeholder="Selecciona talla" /></SelectTrigger>
                     <SelectContent side="bottom" align="start" avoidCollisions={false}>
                       {tallaCalzados.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                     </SelectContent>
@@ -1698,36 +1674,29 @@ export default function NuevoColaboradorWizard() {
 
           {/* ── ETAPA 6: BANCARIO ── */}
           {etapaActual === 6 && (
-            <Card className="border-border">
+            <Card>
               <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <Building2 className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle>Información Bancaria</CardTitle>
-                    <p className="text-sm text-muted-foreground">Datos para pagos de nómina</p>
-                  </div>
-                </div>
+                <CardTitle>Información bancaria</CardTitle>
+                <CardDescription>Datos para pagos de nómina.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
-                  <Label>Banco</Label>
+                  <Label htmlFor="nuevocolab-banco">Banco</Label>
                   <Select value={formData.banco} onValueChange={v => handleInputChange('banco', v)}>
-                    <SelectTrigger><SelectValue placeholder="Selecciona un banco" /></SelectTrigger>
+                    <SelectTrigger id="nuevocolab-banco"><SelectValue placeholder="Selecciona un banco" /></SelectTrigger>
                     <SelectContent>{bancariasOpciones.length > 0 && !bancariasOpciones.includes(formData.banco) && formData.banco && <SelectItem value={formData.banco}>{formData.banco}</SelectItem>}
                       {bancariasOpciones.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Tipo de Cuenta</Label>
+                  <Label htmlFor="nuevocolab-tipo-cuenta">Tipo de cuenta</Label>
                   <Select value={formData.tipoCuenta} onValueChange={v => handleInputChange('tipoCuenta', v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="nuevocolab-tipo-cuenta"><SelectValue /></SelectTrigger>
                     <SelectContent>{tiposCuenta.map(t => <SelectItem key={t.codigo} value={t.codigo}>{t.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="nuevocolab-numero-de-cuenta">Número de Cuenta</Label>
+                  <Label htmlFor="nuevocolab-numero-de-cuenta">Número de cuenta</Label>
                   <Input id="nuevocolab-numero-de-cuenta" placeholder="Ej: 04512345678" value={formData.numeroCuenta} onChange={e => handleInputChange('numeroCuenta', e.target.value)} />
                 </div>
               </CardContent>
@@ -1736,17 +1705,10 @@ export default function NuevoColaboradorWizard() {
 
           {/* ── ETAPA 7: DOCUMENTOS (solo edición) ── */}
           {etapaActual === 7 && isEditMode && (
-            <Card className="border-border">
+            <Card>
               <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <FileText className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle>Repositorio de Documentos</CardTitle>
-                    <p className="text-sm text-muted-foreground">Gestiona los documentos del colaborador por categorías</p>
-                  </div>
-                </div>
+                <CardTitle>Repositorio de documentos</CardTitle>
+                <CardDescription>Gestiona los documentos del colaborador por categorías.</CardDescription>
               </CardHeader>
               <CardContent>
                 {loadingDocs || !categoriasDocs ? (
@@ -1761,10 +1723,10 @@ export default function NuevoColaboradorWizard() {
                       return (
                         <AccordionItem key={catKey} value={catKey}>
                           <AccordionTrigger className="text-sm font-semibold">
-                            {cat.label}
-                            {docsDeCategoria.length > 0 && (
-                              <span className="ml-2 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{docsDeCategoria.length}</span>
-                            )}
+                            <span className="flex items-center gap-2">
+                              {cat.label}
+                              <Badge variant="secondary">{docsDeCategoria.length}</Badge>
+                            </span>
                           </AccordionTrigger>
                           <AccordionContent className="space-y-4">
                             {tiposPredefinidos.length > 0 && cat.unico_por_tipo ? (
@@ -1775,26 +1737,28 @@ export default function NuevoColaboradorWizard() {
                                   <div key={tipo} className="space-y-1">
                                     <p className="text-sm font-medium text-foreground">{label}</p>
                                     {docDelTipo ? (
-                                      <div className="flex items-center justify-between p-3 border border-border rounded-lg bg-accent/20">
-                                        <div className="flex items-center gap-3">
-                                          <FileText className="h-8 w-8 text-primary shrink-0" />
-                                          <div>
-                                            <p className="text-sm font-medium">{docDelTipo.nombre_archivo || docDelTipo.archivo_nombre_original}</p>
+                                      <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-4 py-3 transition-colors hover:bg-muted/40">
+                                        <div className="flex min-w-0 items-center gap-3">
+                                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                                            <FileText className="h-4 w-4" strokeWidth={2} />
+                                          </span>
+                                          <div className="min-w-0">
+                                            <p className="break-words text-sm font-medium text-foreground">{docDelTipo.nombre_archivo || docDelTipo.archivo_nombre_original}</p>
                                             <p className="text-xs text-muted-foreground">
                                               {docDelTipo.fecha_documento ?? docDelTipo.created_at?.split('T')[0]}
-                                              {docDelTipo.archivo_tamano ? ` • ${(docDelTipo.archivo_tamano / 1024).toFixed(1)} KB` : ''}
+                                              {docDelTipo.archivo_tamano ? ` · ${(docDelTipo.archivo_tamano / 1024).toFixed(1)} KB` : ''}
                                             </p>
                                           </div>
                                         </div>
-                                        <div className="flex items-center gap-1">
-                                          <Button size="sm" variant="ghost" title="Visualizar" onClick={() => visualizarDocumento(docDelTipo)}>
-                                            <Eye className="h-4 w-4" />
+                                        <div className="flex shrink-0 items-center gap-0.5">
+                                          <Button size="icon" variant="ghost" className="text-muted-foreground" title="Visualizar" aria-label="Visualizar documento" onClick={() => visualizarDocumento(docDelTipo)}>
+                                            <Eye className="h-4 w-4" strokeWidth={2} />
                                           </Button>
-                                          <Button size="sm" variant="ghost" title="Descargar" onClick={() => descargarDocumento(docDelTipo.id, docDelTipo.archivo_nombre_original)}>
-                                            <Download className="h-4 w-4" />
+                                          <Button size="icon" variant="ghost" className="text-muted-foreground" title="Descargar" aria-label="Descargar documento" onClick={() => descargarDocumento(docDelTipo.id, docDelTipo.archivo_nombre_original)}>
+                                            <Download className="h-4 w-4" strokeWidth={2} />
                                           </Button>
-                                          <Button size="sm" variant="ghost" onClick={() => handleEliminarDocumento(docDelTipo.id, docDelTipo.archivo_nombre_original)} className="text-destructive hover:text-destructive" title="Eliminar">
-                                            <Trash2 className="h-4 w-4" />
+                                          <Button size="icon" variant="ghost" onClick={() => handleEliminarDocumento(docDelTipo.id, docDelTipo.archivo_nombre_original)} className="text-muted-foreground hover:bg-destructive-soft hover:text-destructive" title="Eliminar" aria-label="Eliminar documento">
+                                            <Trash2 className="h-4 w-4" strokeWidth={2} />
                                           </Button>
                                         </div>
                                       </div>
@@ -1832,8 +1796,7 @@ export default function NuevoColaboradorWizard() {
                                         accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"
                                         onChange={e => handleSubirDocumento(catKey, tipoDefault, e)} />
                                       <Button size="sm" disabled={uploadingDoc}
-                                        onClick={() => document.getElementById(inputId)?.click()}
-                                        className="gap-2 bg-primary hover:bg-primary/90 shrink-0">
+                                        onClick={() => document.getElementById(inputId)?.click()}>
                                         <Upload className="h-4 w-4" />
                                         {uploadingDoc ? 'Subiendo...' : 'Subir Documento'}
                                       </Button>
@@ -1841,35 +1804,37 @@ export default function NuevoColaboradorWizard() {
 
                                     {/* Lista de documentos o placeholder vacío */}
                                     {docsDeCategoria.length === 0 ? (
-                                      <div className="text-center py-10 text-muted-foreground">
-                                        <FileText className="h-12 w-12 mx-auto mb-2 opacity-30" />
-                                        <p>No hay documentos en esta categoría</p>
+                                      <div className="space-y-1 py-10 text-center">
+                                        <h3 className="text-base font-semibold text-foreground">Sin documentos en esta categoría</h3>
+                                        <p className="text-sm text-muted-foreground">Sube el primero con el botón de arriba.</p>
                                       </div>
                                     ) : (
                                       <div className="space-y-2">
                                         {docsDeCategoria.map(doc => (
-                                          <div key={doc.id} className="flex items-center justify-between p-3 border border-border rounded-lg bg-accent/20">
-                                            <div className="flex items-center gap-3">
-                                              <FileText className="h-8 w-8 text-primary shrink-0" />
-                                              <div>
-                                                <p className="text-sm font-medium">{doc.nombre_archivo || doc.archivo_nombre_original}</p>
+                                          <div key={doc.id} className="flex items-center justify-between gap-3 rounded-lg border border-border px-4 py-3 transition-colors hover:bg-muted/40">
+                                            <div className="flex min-w-0 items-center gap-3">
+                                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                                                <FileText className="h-4 w-4" strokeWidth={2} />
+                                              </span>
+                                              <div className="min-w-0">
+                                                <p className="break-words text-sm font-medium text-foreground">{doc.nombre_archivo || doc.archivo_nombre_original}</p>
                                                 <p className="text-xs text-muted-foreground">
                                                   {(cat.tipos[doc.tipo_documento] ?? doc.tipo_documento)}
-                                                  {doc.fecha_documento ? ` • ${doc.fecha_documento}` : (doc.created_at ? ` • ${doc.created_at.split('T')[0]}` : '')}
-                                                  {doc.archivo_tamano ? ` • ${(doc.archivo_tamano / 1024).toFixed(1)} KB` : ''}
+                                                  {doc.fecha_documento ? ` · ${doc.fecha_documento}` : (doc.created_at ? ` · ${doc.created_at.split('T')[0]}` : '')}
+                                                  {doc.archivo_tamano ? ` · ${(doc.archivo_tamano / 1024).toFixed(1)} KB` : ''}
                                                 </p>
-                                                {doc.observacion && <p className="text-xs text-muted-foreground italic">{doc.observacion}</p>}
+                                                {doc.observacion && <p className="mt-0.5 text-xs italic text-muted-foreground">{doc.observacion}</p>}
                                               </div>
                                             </div>
-                                            <div className="flex items-center gap-1">
-                                              <Button size="sm" variant="ghost" title="Visualizar" onClick={() => visualizarDocumento(doc)}>
-                                                <Eye className="h-4 w-4" />
+                                            <div className="flex shrink-0 items-center gap-0.5">
+                                              <Button size="icon" variant="ghost" className="text-muted-foreground" title="Visualizar" aria-label="Visualizar documento" onClick={() => visualizarDocumento(doc)}>
+                                                <Eye className="h-4 w-4" strokeWidth={2} />
                                               </Button>
-                                              <Button size="sm" variant="ghost" title="Descargar" onClick={() => descargarDocumento(doc.id, doc.archivo_nombre_original)}>
-                                                <Download className="h-4 w-4" />
+                                              <Button size="icon" variant="ghost" className="text-muted-foreground" title="Descargar" aria-label="Descargar documento" onClick={() => descargarDocumento(doc.id, doc.archivo_nombre_original)}>
+                                                <Download className="h-4 w-4" strokeWidth={2} />
                                               </Button>
-                                              <Button size="sm" variant="ghost" onClick={() => handleEliminarDocumento(doc.id, doc.archivo_nombre_original)} className="text-destructive hover:text-destructive" title="Eliminar">
-                                                <Trash2 className="h-4 w-4" />
+                                              <Button size="icon" variant="ghost" onClick={() => handleEliminarDocumento(doc.id, doc.archivo_nombre_original)} className="text-muted-foreground hover:bg-destructive-soft hover:text-destructive" title="Eliminar" aria-label="Eliminar documento">
+                                                <Trash2 className="h-4 w-4" strokeWidth={2} />
                                               </Button>
                                             </div>
                                           </div>
@@ -1891,29 +1856,29 @@ export default function NuevoColaboradorWizard() {
           )}
 
           {/* Navegación */}
-          <div className="flex justify-between">
-            <Button variant="outline" onClick={etapaAnterior} disabled={etapaActual === 1} className="gap-2">
+          <div className="barra-acciones flex items-center justify-between gap-2">
+            <Button variant="outline" onClick={etapaAnterior} disabled={etapaActual === 1}>
               <ArrowLeft className="h-4 w-4" /> Anterior
             </Button>
             <div className="flex gap-2">
               {/* En edición: siempre mostrar Guardar cambios */}
               {isEditMode && (
-                <Button onClick={guardarTodo} disabled={guardando} variant="outline" className="gap-2">
+                <Button onClick={guardarTodo} disabled={guardando} variant="outline">
                   {guardando ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando...</> : <><Save className="h-4 w-4" />Guardar cambios</>}
                 </Button>
               )}
               {etapaActual < ETAPAS.length ? (
-                <Button onClick={siguienteEtapa} disabled={!isEditMode && !puedeAvanzar} className="gap-2">
+                <Button onClick={siguienteEtapa} disabled={!isEditMode && !puedeAvanzar}>
                   Siguiente <ArrowRight className="h-4 w-4" />
                 </Button>
               ) : (
                 !isEditMode ? (
-                  <Button onClick={guardarTodo} disabled={guardando} className="gap-2 bg-success hover:bg-success/90">
-                    {guardando ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando...</> : <><Save className="h-4 w-4" />Crear Colaborador</>}
+                  <Button onClick={guardarTodo} disabled={guardando}>
+                    {guardando ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando…</> : <><Save className="h-4 w-4" />Crear colaborador</>}
                   </Button>
                 ) : (
-                  <Button onClick={async () => { await guardarTodo(); }} disabled={guardando} className="gap-2 bg-success hover:bg-success/90">
-                    {guardando ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando...</> : 'Finalizar'}
+                  <Button onClick={async () => { await guardarTodo(); }} disabled={guardando} >
+                    {guardando ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando…</> : 'Finalizar'}
                   </Button>
                 )
               )}
@@ -1923,18 +1888,18 @@ export default function NuevoColaboradorWizard() {
 
         {/* Panel resumen */}
         <div className="lg:col-span-1">
-          <Card className="border-border sticky top-8">
-            <CardHeader><CardTitle className="text-lg">Resumen</CardTitle></CardHeader>
+          <Card className="lg:sticky lg:top-8">
+            <CardHeader><CardTitle>Resumen</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-3 text-sm">
                 <div className="pb-3 border-b border-border">
-                  <p className="text-muted-foreground mb-1">Información Personal</p>
+                  <p className="mb-1 text-[13px] font-medium text-muted-foreground">Información personal</p>
                   <p className="font-medium">
                     {[formData.primerNombre, formData.segundoNombre, formData.primerApellido, formData.segundoApellido].filter(Boolean).join(' ') || '-'}
                   </p>
                 </div>
                 <div className="pb-3 border-b border-border">
-                  <p className="text-muted-foreground mb-1">Identificación</p>
+                  <p className="mb-1 text-[13px] font-medium text-muted-foreground">Identificación</p>
                   <p className="font-medium">{formData.numeroDocumento || '-'}</p>
                   <p className="text-xs text-muted-foreground">{tiposDocumento.find(t => t.codigo === formData.tipoDocumento)?.label}</p>
                   {formData.fechaExpedicion && (
@@ -1942,29 +1907,29 @@ export default function NuevoColaboradorWizard() {
                   )}
                 </div>
                 <div className="pb-3 border-b border-border">
-                  <p className="text-muted-foreground mb-1">Cargo</p>
+                  <p className="mb-1 text-[13px] font-medium text-muted-foreground">Cargo</p>
                   <p className="font-medium">{formData.cargo || '-'}</p>
                   <p className="text-xs text-muted-foreground">{modalidadesPago.find(m => m.codigo === formData.modalidadPago)?.label}</p>
                 </div>
                 <div className="pb-3 border-b border-border">
-                  <p className="text-muted-foreground mb-1">Salario Base (COP)</p>
-                  <p className="font-medium">{formData.salarioBase > 0 ? `$${formData.salarioBase.toLocaleString('es-CO')}` : '-'}</p>
+                  <p className="mb-1 text-[13px] font-medium text-muted-foreground">Salario base</p>
+                  <p className="font-medium tabular-nums">{formData.salarioBase > 0 ? `$${formData.salarioBase.toLocaleString('es-CO')}` : '-'}</p>
                 </div>
                 <div className="pb-3 border-b border-border">
-                  <p className="text-muted-foreground mb-1">Seguridad Social</p>
+                  <p className="mb-1 text-[13px] font-medium text-muted-foreground">Seguridad social</p>
                   <p className="text-xs">EPS: {formData.eps || '-'}</p>
                   <p className="text-xs">ARL: {formData.arl || '-'}</p>
                   <p className="text-xs">Pensión: {formData.fondoPension || '-'}</p>
                   <p className="text-xs">Cesantías: {formData.fondoCesantias || '-'}</p>
                 </div>
                 <div className="pb-3 border-b border-border">
-                  <p className="text-muted-foreground mb-1">Dotación</p>
+                  <p className="mb-1 text-[13px] font-medium text-muted-foreground">Dotación</p>
                   <p className="text-xs">Camisa: {formData.tallaCamisa || '-'}</p>
                   <p className="text-xs">Pantalón: {formData.tallaPantalon || '-'}</p>
                   <p className="text-xs">Calzado: {formData.tallaCalzado || '-'}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground mb-1">Información Bancaria</p>
+                  <p className="mb-1 text-[13px] font-medium text-muted-foreground">Información bancaria</p>
                   <p className="text-xs">Banco: {formData.banco || '-'}</p>
                   <p className="text-xs">Tipo: {tiposCuenta.find(t => t.codigo === formData.tipoCuenta)?.label}</p>
                   <p className="text-xs">Cuenta: {formData.numeroCuenta || '-'}</p>
@@ -1988,7 +1953,7 @@ export default function NuevoColaboradorWizard() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmarEliminarDocumento}
-              className="bg-destructive text-white hover:bg-destructive/90"
+              className="bg-destructive hover:bg-destructive/90"
             >
               Eliminar
             </AlertDialogAction>

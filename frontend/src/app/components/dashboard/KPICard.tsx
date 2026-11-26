@@ -39,8 +39,8 @@ export function KPICard({ title, value, icon: Icon, trend, trendValue, subtitle 
   };
 
   return (
-    <Card className="border-border hover:shadow-lg transition duration-300">
-      <CardContent className="p-6">
+    <Card className="transition-colors">
+      <CardContent>
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <p className="text-sm font-medium text-muted-foreground mb-2">{title}</p>
@@ -58,7 +58,7 @@ export function KPICard({ title, value, icon: Icon, trend, trendValue, subtitle 
             )}
           </div>
           {Icon && (
-            <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg">
+            <div className="h-12 w-12 rounded-lg flex items-center justify-center bg-primary">
               <Icon className="h-6 w-6 text-white" />
             </div>
           )}

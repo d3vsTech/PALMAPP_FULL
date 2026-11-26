@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -9,7 +9,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 import {
-  Search, Eye, Edit, Plus, Trash2, UserCheck, UserX, FileSpreadsheet,
+  Search, Eye, Pencil, Plus, Trash2, UserCheck, UserX, FileSpreadsheet,
 } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
 import StatStrip from '../../components/common/StatStrip';
@@ -102,9 +102,9 @@ export default function Colaboradores() {
       <AlertDialog open={alertDialog} onOpenChange={setAlertDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogTitle>¿Eliminar colaborador?</AlertDialogTitle>
             <AlertDialogDescription>
-              <span>Esto eliminará permanentemente a <strong>{colaboradorToDelete?.nombre}</strong>. Esta acción no se puede deshacer.</span>
+              Esto eliminará permanentemente a <strong>{colaboradorToDelete?.nombre}</strong>. Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -127,7 +127,7 @@ export default function Colaboradores() {
                 Activar aquí a un retirado se deshace sin que nadie avise:
                 el camino real es quitarle la fecha de retiro. */}
             {!colaboradorToToggle?.estado && colaboradorToToggle?.fecha_retiro && (
-              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/30 dark:bg-amber-950/30 dark:text-amber-400">
+              <div className="mt-3 rounded-lg border border-warning/20 bg-warning-soft p-3 text-sm text-warning">
                 Está inactivo porque se registró su retiro el{' '}
                 <strong>{colaboradorToToggle.fecha_retiro}</strong>. Activarlo desde aquí no dura:
                 el sistema lo vuelve a apagar. Para un reingreso, edite el colaborador y quítele
@@ -152,7 +152,7 @@ export default function Colaboradores() {
           <>
             <Button variant="outline" onClick={() => navigate('/colaboradores/importar')}>
               <FileSpreadsheet className="h-4 w-4" strokeWidth={2} />
-              Importar
+              Importar colaboradores
             </Button>
             <Button onClick={() => navigate('/colaboradores/nuevo')}>
               <Plus className="h-4 w-4" strokeWidth={2} />
@@ -165,13 +165,13 @@ export default function Colaboradores() {
       <StatStrip
         loading={loading && colaboradores.length === 0}
         items={[
-          { label: 'Total de colaboradores', value: num(meta.total ?? colaboradores.length), note: 'registrados' },
+          { label: 'Colaboradores', value: num(meta.total ?? colaboradores.length), note: 'registrados' },
           { label: 'Activos', value: num(activos), note: 'con la ficha encendida' },
           { label: 'Inactivos', value: num(inactivos), note: 'retirados o apagados' },
         ]}
       />
 
-      <div className="space-y-4">
+      <div className="space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2>Lista de colaboradores</h2>
           <div className="relative w-full sm:w-80">
@@ -188,7 +188,7 @@ export default function Colaboradores() {
 
         {loading ? (
           <Card className="gap-0">
-            <TableSkeleton rows={6} columns={4} avatar />
+            <TableSkeleton rows={6} columns={5} avatar />
           </Card>
         ) : colaboradores.length === 0 ? (
           <Card className="gap-0">
@@ -196,22 +196,25 @@ export default function Colaboradores() {
               title="No se encontraron colaboradores"
               description={searchTerm
                 ? 'Ningún colaborador coincide con la búsqueda.'
-                : 'Registre el primer colaborador para empezar.'}
+                : 'Comienza agregando tu primer colaborador.'}
               action={searchTerm
                 ? { label: 'Limpiar búsqueda', onClick: () => setSearchTerm('') }
                 : { label: 'Nuevo colaborador', onClick: () => navigate('/colaboradores/nuevo') }}
             />
           </Card>
         ) : (
-          <Card className="gap-0">
+          <Card className="overflow-hidden gap-0">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-muted/60 text-[13px] text-muted-foreground">
+                <thead className="bg-muted/60 text-[13px] font-medium text-muted-foreground">
                   <tr>
                     <th className="px-5 py-2.5 text-left font-semibold">Nombre</th>
-                    <th className="px-4 py-2.5 text-left font-semibold">Cédula</th>
-                    <th className="px-4 py-2.5 text-left font-semibold">Cargo</th>
-                    <th className="px-5 py-2.5 text-right font-semibold">Acciones</th>
+                    <th className="hidden px-4 py-2.5 text-left font-semibold sm:table-cell">Cédula</th>
+                    <th className="hidden px-4 py-2.5 text-left font-semibold md:table-cell">Cargo</th>
+                    <th className="hidden px-4 py-2.5 text-left font-semibold md:table-cell">Estado</th>
+                    <th className="px-4 py-2.5 text-right font-semibold">
+                      <span className="sr-only">Acciones</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -229,17 +232,27 @@ export default function Colaboradores() {
                             <Avatar nombre={getNombre(c)} className={c.estado ? '' : 'opacity-60'} />
                           )}
                           <div className="min-w-0">
-                            <span className="block truncate font-semibold text-foreground">{getNombre(c)}</span>
-                            <Badge variant={c.estado ? 'success' : 'secondary'} className="mt-1">
-                              {c.estado ? 'Activo' : 'Inactivo'}
-                            </Badge>
+                            <Link
+                              to={`/colaboradores/${c.id}`}
+                              className="block truncate font-semibold text-foreground hover:text-primary"
+                            >
+                              {getNombre(c)}
+                            </Link>
+                            <span className="block text-xs text-muted-foreground md:hidden">
+                              {c.cargo} · {c.estado ? 'Activo' : 'Inactivo'}
+                            </span>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 tabular-nums text-foreground">{c.documento}</td>
-                      <td className="px-4 py-3 text-foreground">{c.cargo}</td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center justify-end gap-1">
+                      <td className="hidden px-4 py-3 tabular-nums text-muted-foreground sm:table-cell">{c.documento}</td>
+                      <td className="hidden px-4 py-3 md:table-cell">{c.cargo}</td>
+                      <td className="hidden px-4 py-3 md:table-cell">
+                        <Badge variant={c.estado ? 'success' : 'secondary'}>
+                          {c.estado ? 'Activo' : 'Inactivo'}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-0.5">
                           <Button
                             variant="ghost" size="icon"
                             className="text-muted-foreground"
@@ -254,7 +267,7 @@ export default function Colaboradores() {
                             aria-label="Editar colaborador" title="Editar"
                             onClick={() => navigate(`/colaboradores/editar/${c.id}`)}
                           >
-                            <Edit className="h-4 w-4" strokeWidth={2} />
+                            <Pencil className="h-4 w-4" strokeWidth={2} />
                           </Button>
                           <Button
                             variant="ghost" size="icon"
@@ -271,7 +284,7 @@ export default function Colaboradores() {
                           </Button>
                           <Button
                             variant="ghost" size="icon"
-                            className="text-muted-foreground hover:text-destructive"
+                            className="text-muted-foreground hover:bg-destructive-soft hover:text-destructive"
                             aria-label="Eliminar colaborador" title="Eliminar"
                             onClick={() => handleEliminar(Number(c.id), getNombre(c))}
                           >

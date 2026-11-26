@@ -15,6 +15,8 @@
  *
  * Si `items` es undefined o vacío no renderiza nada.
  */
+import { Badge } from '../ui/badge';
+import { estiloDetalle } from './estiloDetalle';
 
 /** Un tramo del escalón legal de una incapacidad EPS (doc §9.6). */
 export interface TramoIncapacidad {
@@ -103,9 +105,9 @@ interface Props {
  * hay zona horaria en juego.
  */
 function rangoFechas(a: AusenciaItem): string {
-  const desde = String(a.fecha_inicio).slice(0, 10);
-  const hasta = String(a.fecha_fin).slice(0, 10);
-  return desde === hasta ? desde : `${desde} — ${hasta}`;
+  const desde = soloFecha(a.fecha_inicio);
+  const hasta = soloFecha(a.fecha_fin);
+  return desde === hasta ? desde : `${desde} a ${hasta}`;
 }
 
 /** `2026-03-30T05:00:00Z` -> `30/03/2026`, sin construir un Date. */
@@ -137,10 +139,10 @@ function TablaTramos({
   formatMoney: (n: number) => string;
 }) {
   return (
-    <div className="mt-1 space-y-1 border-l-2 border-border pl-3">
+    <div className="mt-1.5 space-y-1 border-l border-border pl-3">
       {tramos.map((t, i) => (
-        <div key={i} className="flex flex-wrap items-baseline gap-x-2 text-[10px] text-muted-foreground">
-          <span className="font-mono">
+        <div key={i} className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+          <span className="tabular-nums">
             {t.posicion_desde === t.posicion_hasta
               ? `día ${t.posicion_desde}`
               : `días ${t.posicion_desde}-${t.posicion_hasta}`}
@@ -148,18 +150,107 @@ function TablaTramos({
           <span>·</span>
           <span>{ROTULO_TRAMO[t.tramo] ?? t.tramo}</span>
           <span>·</span>
-          <span>{t.porcentaje}%</span>
+          <span className="tabular-nums">{t.porcentaje}%</span>
           <span>·</span>
-          <span>{formatMoney(t.valor_dia_pagado)}/día</span>
-          {t.piso_smlv && (
-            <span className="rounded bg-amber-100 px-1 font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-              piso SMLV
-            </span>
-          )}
-          <span className="ml-auto font-semibold text-foreground">{formatMoney(t.valor)}</span>
+          <span className="tabular-nums">{formatMoney(t.valor_dia_pagado)}/día</span>
+          {t.piso_smlv && <Badge variant="warning">Piso SMLV</Badge>}
+          <span className="ml-auto font-medium tabular-nums text-foreground">{formatMoney(t.valor)}</span>
         </div>
       ))}
     </div>
+  );
+}
+
+/** Lo que dice la fila sobre el pago, según `afecta`. */
+interface Lectura {
+  descuenta: boolean;
+  sinPago: boolean;
+  informativa: boolean;
+  horario: string | null;
+}
+
+function leer(a: AusenciaItem): Lectura {
+  /*
+   * Cualquier valor que no conozcamos se trata como informativo: sin cifra y
+   * sin signo. Es la única salida segura si el backend agrega un caso nuevo
+   * antes que el front.
+   */
+  return {
+    descuenta: a.afecta === 'DESCUENTO',
+    sinPago: a.afecta === 'SIN_PAGO',
+    informativa: a.parcial === true || !['INCAPACIDAD', 'DESCUENTO', 'SIN_PAGO'].includes(String(a.afecta)),
+    horario: a.hora_inicio && a.hora_fin
+      ? `${String(a.hora_inicio).slice(0, 5)} a ${String(a.hora_fin).slice(0, 5)}`
+      : null,
+  };
+}
+
+/** El día con jornal o cosecha se paga como trabajado y sale de la licencia. */
+function notaTrabajo(a: AusenciaItem): string | null {
+  const conTrabajo = (a.fechas_con_trabajo ?? []).map(soloFecha);
+  if (conTrabajo.length === 0) return null;
+  return conTrabajo.length === 1
+    ? `${conTrabajo[0]} se liquidó como día trabajado`
+    : `${conTrabajo.join(', ')} se liquidaron como días trabajados`;
+}
+
+/** El estilo lo manda `afecta`, no `es_remunerada`. */
+function textoValor(a: AusenciaItem, l: Lectura, formatMoney: (n: number) => string): string {
+  if (l.sinPago) return 'No se paga';
+  const valor = Number(a.valor_calculado ?? 0);
+  if (valor <= 0 || l.informativa) return '-';
+  return `${l.descuenta ? '−' : ''}${formatMoney(valor)}`;
+}
+
+/** Motivo y las notas que explican la cifra de la fila. */
+function CeldaMotivo({
+  a,
+  l,
+  isCompact,
+  formatMoney,
+}: {
+  a: AusenciaItem;
+  l: Lectura;
+  isCompact: boolean;
+  formatMoney: (n: number) => string;
+}) {
+  const tramos = a.ausencia_ids?.length ?? 0;
+  // El escalón solo llega en el preview, y solo en las EPS.
+  const escalon = !isCompact && (a.tramos?.length ?? 0) > 0 ? a.tramos! : null;
+  const nota = notaTrabajo(a);
+  /*
+   * La tasa de la novedad y la que de verdad se pagó no coinciden en una
+   * incapacidad corta: el 100 % de los dos primeros días no depende de lo que
+   * diga el motivo. Se muestran las dos cuando difieren.
+   */
+  const efectivo = a.porcentaje_efectivo;
+  const mostrarEfectivo = efectivo != null && Math.abs(efectivo - Number(a.porcentaje_pago)) >= 0.01;
+  const sub = 'block text-xs leading-snug text-muted-foreground';
+
+  return (
+    <>
+      <span className="block font-medium text-foreground">{a.motivo_nombre}</span>
+      {l.informativa && (
+        <span className={sub}>{l.horario ? `${l.horario} · ` : ''}Informativa: no descuenta día</span>
+      )}
+      {/* §9.6 — Varios tramos contiguos cuentan como un solo evento EPS. */}
+      {tramos > 1 && <span className={sub}>{tramos} tramos en un solo evento</span>}
+      {nota && <span className={sub}>{nota}</span>}
+      {/* En una fila que no se paga no va texto debajo: la columna de al lado
+          ya dijo lo único que hay que decir. */}
+      {!isCompact && !l.sinPago && a.resumen && <span className={sub}>{a.resumen}</span>}
+      {mostrarEfectivo && (
+        <span className={sub}>{a.porcentaje_pago}% de la novedad · {efectivo}% pagado</span>
+      )}
+      {escalon && <TablaTramos tramos={escalon} formatMoney={formatMoney} />}
+      {/* PR-N6 — Conservar el auxilio esos días cambia la cifra del subsidio. */}
+      {a.afecta_auxilio_transporte === false && (
+        <span className={sub}>
+          Conserva el auxilio de transporte
+          {(a.dias_con_auxilio ?? 0) > 0 && ` (${a.dias_con_auxilio} día${a.dias_con_auxilio !== 1 ? 's' : ''})`}
+        </span>
+      )}
+    </>
   );
 }
 
@@ -167,150 +258,51 @@ export function DetalleAusencias({ items, formatMoney, variant = 'default', titu
   if (!items || items.length === 0) return null;
 
   const isCompact = variant === 'compact';
-  const gridCols = isCompact
-    ? 'grid-cols-[150px_50px_1fr_90px]'
-    : 'grid-cols-[195px_60px_1fr_120px]';
-  const headerText = isCompact ? 'text-[10px]' : 'text-xs';
-  const container = isCompact
-    ? 'bg-muted/30 rounded-lg p-3 border border-border'
-    : 'rounded-lg border border-border overflow-hidden';
+  const e = estiloDetalle(variant);
 
   return (
     <div>
-      {titulo && !isCompact && <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">{titulo}</h3>}
-      {titulo && isCompact && <h3 className="mb-2 text-xs font-bold uppercase">{titulo}</h3>}
-
-      <div className={container}>
-        <div
-          className={`grid ${gridCols} ${headerText} uppercase tracking-wide text-muted-foreground ${
-            isCompact ? 'mb-1 border-b border-border pb-1' : 'border-b bg-muted/40 px-4 py-2'
-          }`}
-        >
-          <span>Fecha</span>
-          <span className="text-center">Días</span>
-          <span>Motivo</span>
-          <span className="text-right">Valor</span>
-        </div>
-
-        {items.map((a, i) => {
-          // `dias_en_rango` son los que paga la fila; `dias_calendario`, los
-          // del rango completo. Con un día trabajado adentro no son lo mismo.
-          const dias = a.dias_en_rango ?? a.dias_calendario ?? 0;
-          const conTrabajo = (a.fechas_con_trabajo ?? []).map(soloFecha);
-          const notaTrabajo = conTrabajo.length === 0
-            ? null
-            : conTrabajo.length === 1
-              ? `${conTrabajo[0]} se liquidó como día trabajado`
-              : `${conTrabajo.join(', ')} se liquidaron como días trabajados`;
-          const descuenta = a.afecta === 'DESCUENTO';
-          const sinPago = a.afecta === 'SIN_PAGO';
-          /*
-           * Cualquier valor que no conozcamos se trata como informativo: sin
-           * cifra y sin signo. Es la única salida segura si el backend
-           * agrega un caso nuevo antes que el front.
-           */
-          const informativa =
-            a.parcial === true ||
-            !['INCAPACIDAD', 'DESCUENTO', 'SIN_PAGO'].includes(String(a.afecta));
-          const horario = a.hora_inicio && a.hora_fin
-            ? `${String(a.hora_inicio).slice(0, 5)} a ${String(a.hora_fin).slice(0, 5)}`
-            : null;
-          const valor = Number(a.valor_calculado ?? 0);
-          const tramos = a.ausencia_ids?.length ?? 0;
-          // El escalón solo llega en el preview, y solo en las EPS.
-          const escalon = !isCompact && (a.tramos?.length ?? 0) > 0 ? a.tramos! : null;
-          /*
-           * La tasa de la novedad y la que de verdad se pagó no coinciden en
-           * una incapacidad corta: el 100 % de los dos primeros días no
-           * depende de lo que diga el motivo. Se muestran las dos cuando
-           * difieren, porque la del motivo es la que el usuario registró.
-           */
-          const efectivo = a.porcentaje_efectivo;
-          const mostrarEfectivo =
-            efectivo != null && Math.abs(efectivo - Number(a.porcentaje_pago)) >= 0.01;
-
-          return (
-            <div
-              key={a.id ?? `${a.fecha_inicio}-${i}`}
-              className={`grid ${gridCols} text-xs ${
-                isCompact
-                  ? 'py-0.5'
-                  : `border-b px-4 py-2 last:border-b-0 ${descuenta ? 'bg-destructive/5' : ''}`
-              }`}
-            >
-              <span className="font-mono">{rangoFechas(a)}</span>
-              {/* PR-N3: una parcial tiene 0 días; el horario es lo que la
-                  explica, y poner un 0 ahí parece un error de cálculo. */}
-              <span className="text-center">{informativa && horario ? '—' : dias}</span>
-
-              <span className="min-w-0">
-                <span className="block truncate">{a.motivo_nombre}</span>
-                {/* §9.6 — Varios tramos contiguos cuentan como un solo evento
-                    EPS, para que la regla del 100 % los dos primeros días
-                    arranque en el día real y no se reinicie en cada fila. */}
-                {informativa && (
-                  <span className="block text-[10px] text-sky-700 dark:text-sky-400">
-                    {horario ? `${horario} · ` : ''}informativa: no descuenta día
-                  </span>
-                )}
-                {tramos > 1 && (
-                  <span className="text-[10px] text-muted-foreground">
-                    {tramos} tramos en un solo evento
-                  </span>
-                )}
-                {/* El día con jornal o cosecha se paga como trabajado y sale
-                    de la licencia, así que la fila paga menos días que los
-                    del calendario. Sin esta nota la resta no se explica. */}
-                {notaTrabajo && (
-                  <span className="block text-[10px] leading-snug text-muted-foreground">
-                    {notaTrabajo}
-                  </span>
-                )}
-                {/* En una fila que no se paga no va ningún texto debajo: el
-                    backend manda una frase con el artículo del código y el
-                    valor del día, y la columna de al lado ya dijo lo único
-                    que hay que decir. */}
-                {!isCompact && !sinPago && a.resumen && (
-                  <span className="block text-[10px] leading-snug text-muted-foreground">
-                    {a.resumen}
-                  </span>
-                )}
-                {mostrarEfectivo && (
-                  <span className="block text-[10px] text-muted-foreground">
-                    {a.porcentaje_pago}% de la novedad · {efectivo}% pagado
-                  </span>
-                )}
-                {escalon && <TablaTramos tramos={escalon} formatMoney={formatMoney} />}
-                {/* PR-N6 — Conservar el auxilio esos días cambia la cifra
-                    del subsidio, así que se dice en la fila que lo causa. */}
-                {a.afecta_auxilio_transporte === false && (
-                  <span className="block text-[10px] text-muted-foreground">
-                    Conserva el auxilio de transporte
-                    {(a.dias_con_auxilio ?? 0) > 0 && ` (${a.dias_con_auxilio} día${a.dias_con_auxilio !== 1 ? 's' : ''})`}
-                  </span>
-                )}
-              </span>
-
-              {/* El estilo lo manda `afecta`, no `es_remunerada`: sin cifra
-                  ni rojo cuando el día simplemente no se paga. */}
-              <span
-                className={`text-right font-semibold ${
-                  descuenta ? 'text-destructive' : sinPago ? 'font-medium text-muted-foreground' : ''
-                }`}
-              >
-                {sinPago
-                  ? 'No se paga'
-                  : valor > 0 && !informativa
-                    ? `${descuenta ? '−' : ''}${formatMoney(valor)}`
-                    : '—'}
-              </span>
-            </div>
-          );
-        })}
+      {titulo && <h4 className={e.titulo}>{titulo}</h4>}
+      <div className={e.marco}>
+        <table className={e.tabla}>
+          <thead>
+            <tr className={e.encabezado}>
+              <th className={`${e.th} text-left`}>Fecha</th>
+              <th className={`${e.th} text-right`}>Días</th>
+              <th className={`${e.th} text-left`}>Motivo</th>
+              <th className={`${e.th} text-right`}>Valor</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {items.map((a, i) => {
+              const l = leer(a);
+              // `dias_en_rango` son los que paga la fila; `dias_calendario`,
+              // los del rango completo.
+              const dias = a.dias_en_rango ?? a.dias_calendario ?? 0;
+              return (
+                <tr key={a.id ?? `${a.fecha_inicio}-${i}`}>
+                  <td className={`${e.td} whitespace-nowrap tabular-nums text-muted-foreground`}>{rangoFechas(a)}</td>
+                  {/* PR-N3: una parcial tiene 0 días; el horario la explica. */}
+                  <td className={`${e.td} text-right tabular-nums`}>{l.informativa && l.horario ? '-' : dias}</td>
+                  <td className={`${e.td} min-w-48`}>
+                    <CeldaMotivo a={a} l={l} isCompact={isCompact} formatMoney={formatMoney} />
+                  </td>
+                  <td
+                    className={`${e.td} whitespace-nowrap text-right tabular-nums ${
+                      l.sinPago ? 'text-muted-foreground' : 'font-medium text-foreground'
+                    }`}
+                  >
+                    {textoValor(a, l, formatMoney)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
       {!isCompact && (
-        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+        <p className={e.nota}>
           Los días son los que caen dentro de esta nómina. Una incapacidad que cruza el corte de
           quincena se paga en las dos, cada una con su tramo.
         </p>

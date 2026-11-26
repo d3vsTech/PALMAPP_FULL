@@ -1,7 +1,7 @@
 import { Badge } from '../ui/badge';
 import { cn } from '../ui/utils';
 
-type StatusType = 
+type StatusType =
   | 'BORRADOR'
   | 'EN_PROGRESO'
   | 'CERRADA'
@@ -18,49 +18,40 @@ type StatusType =
   | 'Vigente'
   | 'Terminado';
 
+type Variant = 'default' | 'secondary' | 'success' | 'warning' | 'info' | 'destructive' | 'outline';
+
 interface StatusBadgeProps {
   status: StatusType;
   className?: string;
 }
 
-const statusConfig: Record<StatusType, { label: string; variant: string }> = {
-  // §10.1 — Los rótulos no son los códigos: "Finalizada" se guarda CERRADA.
+/**
+ * Variantes del diseño. Los rótulos de nómina no son los códigos (§10.1):
+ * "Finalizada" se guarda CERRADA y "En borrador" es BORRADOR.
+ */
+const statusConfig: Record<StatusType, { label: string; variant: Variant }> = {
   BORRADOR: { label: 'En borrador', variant: 'secondary' },
-  EN_PROGRESO: { label: 'En progreso', variant: 'default' },
-  CERRADA: { label: 'Finalizada', variant: 'default' },
-  APROBADO: { label: 'Aprobado', variant: 'default' },
-  EN_CAMINO: { label: 'En Camino', variant: 'default' },
-  EN_PLANTA: { label: 'En Planta', variant: 'default' },
-  FINALIZADO: { label: 'Finalizado', variant: 'outline' },
-  EN_DISPUTA: { label: 'En Disputa', variant: 'destructive' },
-  Activo: { label: 'Activo', variant: 'default' },
+  EN_PROGRESO: { label: 'En progreso', variant: 'info' },
+  CERRADA: { label: 'Finalizada', variant: 'outline' },
+  APROBADO: { label: 'Aprobado', variant: 'success' },
+  EN_CAMINO: { label: 'En camino', variant: 'info' },
+  EN_PLANTA: { label: 'En planta', variant: 'warning' },
+  FINALIZADO: { label: 'Finalizado', variant: 'secondary' },
+  EN_DISPUTA: { label: 'En disputa', variant: 'destructive' },
+  Activo: { label: 'Activo', variant: 'success' },
   Inactivo: { label: 'Inactivo', variant: 'secondary' },
-  PENDIENTE: { label: 'Pendiente', variant: 'secondary' },
-  PAGADA: { label: 'Pagada', variant: 'default' },
+  PENDIENTE: { label: 'Pendiente', variant: 'warning' },
+  PAGADA: { label: 'Pagada', variant: 'success' },
   CANCELADA: { label: 'Cancelada', variant: 'destructive' },
-  Vigente: { label: 'Vigente', variant: 'default' },
+  Vigente: { label: 'Vigente', variant: 'success' },
   Terminado: { label: 'Terminado', variant: 'secondary' },
 };
 
 export default function StatusBadge({ status, className }: StatusBadgeProps) {
-  const config = statusConfig[status];
-  
+  const config = statusConfig[status] ?? { label: status, variant: 'secondary' as Variant };
+
   return (
-    <Badge 
-      variant={config.variant as any}
-      className={cn(
-        status === 'Activo' && 'bg-success hover:bg-success/80 text-success-foreground',
-        status === 'APROBADO' && 'bg-success hover:bg-success/80 text-success-foreground',
-        status === 'FINALIZADO' && 'bg-muted hover:bg-muted/80 text-muted-foreground',
-        status === 'EN_CAMINO' && 'bg-info hover:bg-info/80 text-info-foreground',
-        status === 'EN_PLANTA' && 'bg-warning hover:bg-warning/80 text-warning-foreground',
-        status === 'EN_PROGRESO' && 'bg-info hover:bg-info/80 text-info-foreground',
-        status === 'CERRADA' && 'bg-muted hover:bg-muted/80 text-foreground',
-        status === 'PAGADA' && 'bg-success hover:bg-success/80 text-success-foreground',
-        status === 'Vigente' && 'bg-success hover:bg-success/80 text-success-foreground',
-        className
-      )}
-    >
+    <Badge variant={config.variant} className={cn(className)}>
       {config.label}
     </Badge>
   );

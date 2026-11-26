@@ -5,16 +5,17 @@
  * van al backend, no al arreglo: `meta.totales` cubre el filtro completo y no
  * solo la página visible.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Card, CardContent } from '../../components/ui/card';
+import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
-import { AlertTriangle, Loader2, Paperclip, Plus, Search, Upload, X } from 'lucide-react';
+import PageHeader from '../../components/common/PageHeader';
+import { AlertTriangle, Eye, Loader2, Paperclip, Plus, Search, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   novedadesApi,
@@ -22,25 +23,56 @@ import {
   type MetaNovedades, type NovedadFila,
 } from '../../../api/novedades';
 import type { ApiError } from '../../../api/client';
-import { ESTADO_BADGE, ESTADO_LABEL, formatFecha } from './tipos';
+import { ESTADO_BADGE, ESTADO_LABEL, ETIQUETA_CATEGORIA, formatFecha } from './tipos';
 import { DetalleNovedadDialog } from './componentes/DetalleNovedadDialog';
 
 const TODOS = 'todos';
 const POR_PAGINA = 20;
 
 /** Las cinco pestañas, en el orden del Paso 1. */
-const CATEGORIAS: { valor: CategoriaNovedad; etiqueta: string }[] = [
-  { valor: 'PERMISOS_LICENCIAS', etiqueta: 'Permisos y Licencias' },
-  { valor: 'INCAPACIDADES', etiqueta: 'Incapacidades' },
-  { valor: 'AUSENCIAS_SANCIONES', etiqueta: 'Ausencias y Sanciones' },
-  { valor: 'VACACIONES', etiqueta: 'Vacaciones' },
-  { valor: 'TERMINACION_CONTRATO', etiqueta: 'Terminación de Contrato' },
-];
+const CATEGORIAS: { valor: CategoriaNovedad; etiqueta: string }[] = (
+  ['PERMISOS_LICENCIAS', 'INCAPACIDADES', 'AUSENCIAS_SANCIONES', 'VACACIONES', 'TERMINACION_CONTRATO'] as const
+).map((valor) => ({ valor, etiqueta: ETIQUETA_CATEGORIA[valor] }));
 
 const ESTADOS = [
   'PENDIENTE', 'APROBADA', 'RECHAZADA', 'LIQUIDADA',
   'PAGADA', 'PROGRAMADA', 'EFECTIVA',
 ];
+
+type VarianteBadge = 'secondary' | 'success' | 'warning' | 'info' | 'destructive';
+
+/**
+ * Color del badge por código de tipo.
+ *
+ * `tipo.codigo` es el `tipo_base` de la ausencia, `VACACIONES` o el código del
+ * motivo de retiro. Los que están aquí se pintan con los tonos del sistema,
+ * que ya saben de modo claro y oscuro. Un motivo del tenant que no esté en la
+ * lista cae en `secondary` y lleva su color propio en el punto.
+ */
+const VARIANTE_TIPO: Record<string, VarianteBadge> = {
+  PERMISO_REMUNERADO: 'success',
+  PERMISO_NO_REMUNERADO: 'destructive',
+  CALAMIDAD_DOMESTICA: 'warning',
+  VACACIONES: 'success',
+  LICENCIA_MATERNIDAD: 'info',
+  LICENCIA_PATERNIDAD: 'info',
+  LICENCIA_LUTO: 'secondary',
+  INCAPACIDAD_EPS: 'info',
+  INCAPACIDAD_ARL: 'info',
+  AUSENCIA_INJUSTIFICADA: 'info',
+  SUSPENSION_DISCIPLINARIA: 'warning',
+  RENUNCIA: 'destructive',
+  FINALIZACION_CONTRATO: 'secondary',
+};
+
+/**
+ * El punto del badge toma el color del motivo, que es del tenant y llega en
+ * hexadecimal. Va como variable CSS porque el punto lo pinta el pseudoelemento
+ * `before` del badge, al que no llega un `style` normal.
+ */
+function colorDelPunto(color: string | null): CSSProperties {
+  return { ['--punto-tipo']: color ?? 'currentColor' } as CSSProperties;
+}
 
 export default function NovedadesPage() {
   const navigate = useNavigate();
@@ -155,46 +187,38 @@ export default function NovedadesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-foreground sm:text-3xl">Novedades</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Permisos, incapacidades, ausencias, vacaciones y terminaciones de contrato
-          </p>
-        </div>
-        <div className="flex w-full flex-wrap gap-3 sm:w-auto sm:shrink-0">
-          {init?.permisos.puede_importar && (
-            <Button
-              variant="outline"
-              onClick={() => navigate('/novedades/importar')}
-              className="w-full gap-2 border-2 border-primary text-primary hover:bg-primary/5 sm:w-auto"
-            >
-              <Upload className="h-4 w-4" />
-              Importar Novedades
+      <PageHeader
+        title="Novedades"
+        description="Permisos, incapacidades, ausencias, vacaciones y terminaciones de contrato."
+        actions={
+          <>
+            {init?.permisos.puede_importar && (
+              <Button variant="outline" onClick={() => navigate('/novedades/importar')}>
+                <Upload />
+                Importar novedades
+              </Button>
+            )}
+            <Button onClick={() => navigate('/novedades/nueva')}>
+              <Plus />
+              Nueva novedad
             </Button>
-          )}
-          <Button onClick={() => navigate('/novedades/nueva')} className="w-full gap-2 sm:w-auto">
-            <Plus className="h-4 w-4" />
-            Nueva Novedad
-          </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* Totales por categoría del filtro completo, no de la página. */}
       {meta?.totales && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <Card className="border-border">
-            <CardContent className="p-3">
-              <p className="text-xs text-muted-foreground">Total</p>
-              <p className="text-xl font-bold text-foreground">{meta.totales.total}</p>
-            </CardContent>
+          <Card className="gap-0 px-4 py-3">
+            <p className="text-[13px] text-muted-foreground">Total</p>
+            <p className="mt-0.5 text-xl font-bold tabular-nums text-foreground">{meta.totales.total}</p>
           </Card>
           {CATEGORIAS.map((c) => (
-            <Card key={c.valor} className="border-border">
-              <CardContent className="p-3">
-                <p className="truncate text-xs text-muted-foreground" title={c.etiqueta}>{c.etiqueta}</p>
-                <p className="text-xl font-bold text-foreground">{meta.totales?.[c.valor] ?? 0}</p>
-              </CardContent>
+            <Card key={c.valor} className="gap-0 px-4 py-3">
+              <p className="text-[13px] text-muted-foreground">{c.etiqueta}</p>
+              <p className="mt-0.5 text-xl font-bold tabular-nums text-foreground">
+                {meta.totales?.[c.valor] ?? 0}
+              </p>
             </Card>
           ))}
         </div>
@@ -207,206 +231,245 @@ export default function NovedadesPage() {
         <button
           type="button"
           onClick={() => { setEstado('PENDIENTE'); setFuente('AUSENCIA'); }}
-          className="flex w-full items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left transition hover:border-amber-300 dark:border-amber-800/40 dark:bg-amber-950/20 dark:hover:border-amber-700"
+          className="flex w-full flex-wrap items-center gap-3 rounded-xl border border-warning/20 bg-warning-soft px-4 py-3 text-left transition hover:border-warning/20 dark:hover:border-warning/40"
         >
-          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+          <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+            <p className="text-sm font-semibold text-warning">
               {pendientes} {pendientes === 1 ? 'novedad' : 'novedades'} pendiente{pendientes === 1 ? '' : 's'} de aprobar
             </p>
-            <p className="text-xs text-amber-700 dark:text-amber-400">
+            <p className="text-xs text-warning">
               Mientras sigan sin aprobar, la nómina no liquida a esos colaboradores ni se cierra.
             </p>
           </div>
-          <span className="shrink-0 text-xs font-medium text-amber-800 underline underline-offset-2 dark:text-amber-300">
+          <span className="shrink-0 text-xs font-medium text-warning underline underline-offset-2">
             Ver pendientes
           </span>
         </button>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[200px] max-w-xs flex-1">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <div className="relative w-full lg:w-72">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar colaborador o cédula..."
+            type="search"
+            placeholder="Buscar colaborador o cédula"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            className="h-9 pl-8 text-sm"
+            className="pl-9"
           />
         </div>
 
-        <Select value={categoria} onValueChange={setCategoria}>
-          <SelectTrigger className="h-9 w-[13rem]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value={TODOS}>Todas las categorías</SelectItem>
-            {CATEGORIAS.map((c) => (
-              <SelectItem key={c.valor} value={c.valor}>{c.etiqueta}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={categoria} onValueChange={setCategoria}>
+            <SelectTrigger className="w-full sm:w-[13rem]" aria-label="Categoría">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={TODOS}>Todas las categorías</SelectItem>
+              {CATEGORIAS.map((c) => (
+                <SelectItem key={c.valor} value={c.valor}>{c.etiqueta}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-        <Select value={estado} onValueChange={setEstado}>
-          <SelectTrigger className="h-9 w-[11rem]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value={TODOS}>Todos los estados</SelectItem>
-            {ESTADOS.map((e) => (
-              <SelectItem key={e} value={e}>{ESTADO_LABEL[e] ?? e}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <Select value={estado} onValueChange={setEstado}>
+            <SelectTrigger className="w-full sm:w-[11rem]" aria-label="Estado">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={TODOS}>Todos los estados</SelectItem>
+              {ESTADOS.map((e) => (
+                <SelectItem key={e} value={e}>{ESTADO_LABEL[e] ?? e}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-        <Select value={fuente} onValueChange={setFuente}>
-          <SelectTrigger className="h-9 w-[10rem]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value={TODOS}>Toda fuente</SelectItem>
-            <SelectItem value="AUSENCIA">Ausencias</SelectItem>
-            <SelectItem value="VACACION">Vacaciones</SelectItem>
-            <SelectItem value="TERMINACION">Terminaciones</SelectItem>
-          </SelectContent>
-        </Select>
+          <Select value={fuente} onValueChange={setFuente}>
+            <SelectTrigger className="w-full sm:w-[10rem]" aria-label="Fuente">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={TODOS}>Toda fuente</SelectItem>
+              <SelectItem value="AUSENCIA">Ausencias</SelectItem>
+              <SelectItem value="VACACION">Vacaciones</SelectItem>
+              <SelectItem value="TERMINACION">Terminaciones</SelectItem>
+            </SelectContent>
+          </Select>
 
-        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <span className="text-xs">Desde</span>
-          <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="h-9 w-36 text-sm" />
+          <label className="flex min-w-0 flex-1 basis-[40%] flex-col items-start gap-1 text-xs text-muted-foreground sm:flex-none sm:basis-auto sm:flex-row sm:items-center sm:gap-1.5">
+            Desde
+            <Input
+              type="date"
+              value={desde}
+              onChange={(e) => setDesde(e.target.value)}
+              className="w-full sm:w-36"
+            />
+          </label>
+          <label className="flex min-w-0 flex-1 basis-[40%] flex-col items-start gap-1 text-xs text-muted-foreground sm:flex-none sm:basis-auto sm:flex-row sm:items-center sm:gap-1.5">
+            Hasta
+            <Input
+              type="date"
+              value={hasta}
+              onChange={(e) => setHasta(e.target.value)}
+              className="w-full sm:w-36"
+            />
+          </label>
+
+          {hayFiltros && (
+            <Button variant="ghost" size="sm" onClick={limpiar} className="text-muted-foreground">
+              <X />
+              Limpiar
+            </Button>
+          )}
         </div>
-        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <span className="text-xs">Hasta</span>
-          <Input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="h-9 w-36 text-sm" />
-        </div>
-
-        {hayFiltros && (
-          <button
-            onClick={limpiar}
-            className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <X className="h-3.5 w-3.5" />Limpiar
-          </button>
-        )}
       </div>
 
-      <Card className="glass-subtle border-border">
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px]">
-              <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  <th className="p-4 text-left text-sm font-semibold text-muted-foreground">Colaborador</th>
-                  <th className="p-4 text-left text-sm font-semibold text-muted-foreground">Tipo de novedad</th>
-                  <th className="p-4 text-left text-sm font-semibold text-muted-foreground">Fecha inicio</th>
-                  <th className="p-4 text-left text-sm font-semibold text-muted-foreground">Fecha fin</th>
-                  <th className="p-4 text-center text-sm font-semibold text-muted-foreground">Días</th>
-                  <th className="p-4 text-left text-sm font-semibold text-muted-foreground">Estado</th>
-                  <th className="p-4 text-right text-sm font-semibold text-muted-foreground">Acciones</th>
+      <Card className="gap-0 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/60 text-[13px] font-medium text-muted-foreground">
+              <tr>
+                <th className="px-5 py-2.5 text-left font-semibold">Colaborador</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Tipo</th>
+                <th className="hidden px-4 py-2.5 text-right font-semibold lg:table-cell">Inicio</th>
+                <th className="hidden px-4 py-2.5 text-right font-semibold lg:table-cell">Fin</th>
+                <th className="hidden px-4 py-2.5 text-right font-semibold sm:table-cell">Días</th>
+                <th className="hidden px-4 py-2.5 text-left font-semibold lg:table-cell">Estado</th>
+                <th className="w-12 px-2 py-2.5">
+                  <span className="sr-only">Acciones</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {cargando ? (
+                <tr>
+                  <td colSpan={7} className="px-5 py-12 text-center">
+                    <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Cargando novedades
+                    </span>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {cargando ? (
-                  <tr>
-                    <td colSpan={7} className="py-12 text-center">
-                      <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Cargando novedades
-                      </span>
-                    </td>
-                  </tr>
-                ) : filas.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="py-12 text-center text-sm text-muted-foreground">
-                      {hayFiltros
-                        ? 'No se encontraron novedades con los filtros aplicados'
-                        : 'Todavía no hay novedades registradas'}
-                    </td>
-                  </tr>
-                ) : filas.map((n, idx) => (
-                  <tr
-                    key={`${n.fuente}-${n.id}`}
-                    className={`border-b border-border transition-colors last:border-0 hover:bg-muted/20 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}
-                  >
-                    <td className="p-4">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium text-foreground">
-                          {n.empleado.nombre_completo}
-                          {n.empleado.eliminado && (
-                            <span className="ml-2 text-xs font-normal text-muted-foreground">(eliminado)</span>
-                          )}
-                        </span>
-                        <span className="text-xs text-muted-foreground">{n.empleado.documento}</span>
+              ) : filas.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-5 py-12">
+                    <div className="flex flex-col items-center gap-3 text-center">
+                      <div className="space-y-1">
+                        <p className="font-semibold text-foreground">No se encontraron novedades</p>
+                        <p className="text-sm text-muted-foreground">
+                          {hayFiltros
+                            ? 'Ajusta o limpia los filtros para ver más resultados.'
+                            : 'Todavía no hay novedades registradas.'}
+                        </p>
                       </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="h-2 w-2 shrink-0 rounded-full"
-                          style={{ backgroundColor: n.tipo.color ?? '#9ca3af' }}
-                        />
-                        <Badge variant="outline" className="text-xs">{n.tipo.nombre}</Badge>
-                        {n.tiene_soporte && <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <span className="text-sm text-foreground">{formatFecha(n.fecha_inicio)}</span>
-                    </td>
-                    <td className="p-4">
-                      <span className="text-sm text-foreground">
-                        {n.fuente === 'TERMINACION' ? '—' : formatFecha(n.fecha_fin)}
-                      </span>
-                    </td>
-                    <td className="p-4 text-center">
-                      <span className="text-sm font-semibold text-foreground">
-                        {n.dias === null ? '—' : n.parcial ? 'Parcial' : n.dias}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      <Badge variant="outline" className={`text-xs ${ESTADO_BADGE[n.estado] ?? ''}`}>
+                      {hayFiltros && (
+                        <Button variant="outline" size="sm" onClick={limpiar}>Limpiar filtros</Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ) : filas.map((n) => (
+                <tr key={`${n.fuente}-${n.id}`} className="transition-colors hover:bg-muted/40">
+                  <td className="px-5 py-3">
+                    <button
+                      type="button"
+                      onClick={() => setVerNovedad(n)}
+                      className="text-left font-semibold text-foreground hover:text-primary"
+                    >
+                      {n.empleado.nombre_completo}
+                      {n.empleado.eliminado && (
+                        <span className="ml-2 text-xs font-normal text-muted-foreground">(eliminado)</span>
+                      )}
+                    </button>
+                    <span className="block text-xs text-muted-foreground tabular-nums">
+                      {n.empleado.documento}
+                      <span className="lg:hidden"> · {formatFecha(n.fecha_inicio)}</span>
+                    </span>
+                    {/* Estado bajo el nombre mientras su columna no cabe. */}
+                    <span className="mt-1 block lg:hidden">
+                      <Badge variant="outline" className={ESTADO_BADGE[n.estado] ?? ''}>
                         {ESTADO_LABEL[n.estado] ?? n.estado}
                       </Badge>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setVerNovedad(n)}
-                          className="hover:border-primary hover:bg-primary/10 hover:text-primary"
-                        >
-                          Ver
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant={VARIANTE_TIPO[n.tipo.codigo] ?? 'secondary'}
+                        className={VARIANTE_TIPO[n.tipo.codigo] ? undefined : 'before:bg-[var(--punto-tipo)]'}
+                        style={VARIANTE_TIPO[n.tipo.codigo] ? undefined : colorDelPunto(n.tipo.color)}
+                      >
+                        {n.tipo.nombre}
+                      </Badge>
+                      {n.tiene_soporte && (
+                        <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Con soporte" />
+                      )}
+                    </div>
+                  </td>
+                  <td className="hidden whitespace-nowrap px-4 py-3 text-right tabular-nums lg:table-cell">
+                    {formatFecha(n.fecha_inicio)}
+                  </td>
+                  <td className="hidden whitespace-nowrap px-4 py-3 text-right tabular-nums lg:table-cell">
+                    {n.fuente === 'TERMINACION'
+                      ? <span className="text-muted-foreground">—</span>
+                      : formatFecha(n.fecha_fin)}
+                  </td>
+                  <td className="hidden px-4 py-3 text-right font-semibold tabular-nums sm:table-cell">
+                    {n.dias === null
+                      ? <span className="font-normal text-muted-foreground">—</span>
+                      : n.parcial ? <span className="font-normal">Parcial</span> : n.dias}
+                  </td>
+                  <td className="hidden px-4 py-3 lg:table-cell">
+                    <Badge variant="outline" className={ESTADO_BADGE[n.estado] ?? ''}>
+                      {ESTADO_LABEL[n.estado] ?? n.estado}
+                    </Badge>
+                  </td>
+                  <td className="px-2 py-3 text-right">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground"
+                      onClick={() => setVerNovedad(n)}
+                      aria-label="Ver novedad"
+                      title="Ver"
+                    >
+                      <Eye />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3">
-            <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">{meta?.total ?? 0}</span> novedades
-              {hayFiltros && ' con los filtros aplicados'}
-            </p>
-            {meta && meta.last_page > 1 && (
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="outline" size="sm"
-                  disabled={pagina <= 1 || cargando}
-                  onClick={() => setPagina((p) => p - 1)}
-                >
-                  Anterior
-                </Button>
-                <span className="text-sm text-muted-foreground">
-                  Página {meta.current_page} de {meta.last_page}
-                </span>
-                <Button
-                  variant="outline" size="sm"
-                  disabled={pagina >= meta.last_page || cargando}
-                  onClick={() => setPagina((p) => p + 1)}
-                >
-                  Siguiente
-                </Button>
-              </div>
-            )}
-          </div>
-        </CardContent>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3">
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground tabular-nums">{meta?.total ?? 0}</span>{' '}
+            {hayFiltros ? 'novedades con los filtros aplicados' : 'novedades registradas'}
+          </p>
+          {meta && meta.last_page > 1 && (
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline" size="sm"
+                disabled={pagina <= 1 || cargando}
+                onClick={() => setPagina((p) => p - 1)}
+              >
+                Anterior
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Página {meta.current_page} de {meta.last_page}
+              </span>
+              <Button
+                variant="outline" size="sm"
+                disabled={pagina >= meta.last_page || cargando}
+                onClick={() => setPagina((p) => p + 1)}
+              >
+                Siguiente
+              </Button>
+            </div>
+          )}
+        </div>
       </Card>
 
       <DetalleNovedadDialog

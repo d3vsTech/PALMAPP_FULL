@@ -41,12 +41,12 @@ export function EtapaInfoGeneral({
   setInicioLabores,
 }: Props) {
   return (
-    <Card className="gap-4">
+    <Card>
       <CardHeader>
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-soft text-primary">
-            <FileText className="h-5 w-5" strokeWidth={2} />
-          </span>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft">
+            <FileText className="h-4 w-4 text-primary" strokeWidth={2} />
+          </div>
           <div>
             <CardTitle>Información general</CardTitle>
             <p className="text-sm text-muted-foreground">
@@ -58,7 +58,7 @@ export function EtapaInfoGeneral({
       <CardContent className="space-y-6">
         <div className="grid gap-6 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="fecha">Fecha *</Label>
+            <Label htmlFor="fecha">Fecha <span className="text-destructive">*</span></Label>
             <Input
               id="fecha"
               type="date"
@@ -68,7 +68,7 @@ export function EtapaInfoGeneral({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="elaboradoPor">Elaborado por *</Label>
+            <Label htmlFor="elaboradoPor">Elaborado por <span className="text-destructive">*</span></Label>
             <Input
               id="elaboradoPor"
               placeholder="Nombre completo"

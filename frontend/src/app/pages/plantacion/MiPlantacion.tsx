@@ -140,6 +140,32 @@ export default function MiPlantacion() {
   const totalLotes  = totales ? totales.lotes_count                : predios.reduce((s, p) => s + Number(p.lotes_count ?? 0), 0);
   const totalPalmas = totales ? totales.palmas_count               : predios.reduce((s, p) => s + Number(p.palmas_count ?? 0), 0);
 
+  /**
+   * Sublotes y hectáreas sembradas no vienen en `/predios/totales`: salen de
+   * sumar los lotes anidados del listado. Esa suma solo vale cuando el
+   * listado trae la finca entera, así que al buscar se conserva la última
+   * completa en vez de mostrar la del filtro, que sería otra cifra.
+   */
+  const [derivados, setDerivados] = useState<{ sublotes: number; haSembradas: number } | null>(null);
+
+  useEffect(() => {
+    const entero = !search.trim() && totales != null && predios.length >= totales.predios_count;
+    if (!entero) return;
+    let sublotes = 0;
+    let haSembradas = 0;
+    for (const p of predios) {
+      for (const l of (p.lotes ?? []) as PredioLoteAnidado[]) {
+        sublotes += Number(l.sublotes_count ?? 0);
+        haSembradas += Number(l.hectareas_sembradas ?? 0);
+      }
+    }
+    setDerivados({ sublotes, haSembradas });
+  }, [predios, totales, search]);
+
+  const palmasPorHa = derivados && derivados.haSembradas > 0
+    ? Math.round(totalPalmas / derivados.haSembradas)
+    : null;
+
   return (
     <div className="space-y-6">
       {/* AlertDialog eliminar */}
@@ -180,15 +206,31 @@ export default function MiPlantacion() {
       <StatStrip
         loading={loading && predios.length === 0}
         items={[
-          { label: 'Hectáreas', value: num(totalHa, 1), unit: 'ha', note: 'en toda la finca' },
-          { label: 'Predios', value: num(totales?.predios_count ?? predios.length) },
-          { label: 'Lotes', value: num(totalLotes) },
-          { label: 'Palmas', value: num(totalPalmas), note: 'sembradas' },
+          {
+            label: 'Predios',
+            value: num(totales?.predios_count ?? predios.length),
+            note: `${num(totalHa, 1)} ha en total`,
+          },
+          {
+            label: 'Lotes',
+            value: num(totalLotes),
+            note: derivados ? `${num(derivados.haSembradas, 1)} ha sembradas` : undefined,
+          },
+          {
+            label: 'Palmas',
+            value: num(totalPalmas),
+            note: palmasPorHa ? `${num(palmasPorHa)} palmas por ha` : 'sembradas',
+          },
+          {
+            label: 'Sublotes',
+            value: derivados ? num(derivados.sublotes) : '—',
+            note: 'en todos los lotes',
+          },
         ]}
       />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2>Predios</h2>
+        <h2>Predios y lotes</h2>
         <div className="relative w-full sm:w-80">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
           <Input
@@ -225,16 +267,14 @@ export default function MiPlantacion() {
             const lotes: PredioLoteAnidado[] = predio.lotes ?? [];
             return (
               <Card key={predio.id} className="gap-0 overflow-hidden">
-                {/* La banda del predio va en tinte de marca: con muchos predios,
-                    es lo que separa un bloque del siguiente de un vistazo. */}
-                <div className="flex flex-col gap-3 bg-primary-soft/50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
                       <MapPin className="h-5 w-5" strokeWidth={2} />
                     </span>
                     <div className="min-w-0">
-                      <h3 className="truncate">{predio.nombre}</h3>
-                      <p className="truncate text-xs text-muted-foreground">
+                      <h3 className="break-words">{predio.nombre}</h3>
+                      <p className="break-words text-xs text-muted-foreground">
                         {num(Number(predio.hectareas_totales ?? 0), 1)} ha
                         {predio.ubicacion && <> · {predio.ubicacion}</>}
                         {' · '}
@@ -295,7 +335,7 @@ export default function MiPlantacion() {
                             <td className="px-5 py-3">
                               <Link
                                 to={`/plantacion/lote/${lote.id}`}
-                                className="font-semibold text-foreground hover:text-primary hover:underline"
+                                className="font-semibold text-foreground hover:text-primary"
                               >
                                 {lote.nombre}
                               </Link>
@@ -334,7 +374,9 @@ export default function MiPlantacion() {
                   </div>
                 ) : (
                   <p className="border-t border-border px-5 py-3 text-sm text-muted-foreground">
-                    Este predio todavía no tiene lotes.
+                    {search.trim()
+                      ? 'Ningún lote coincide con la búsqueda.'
+                      : 'Este predio todavía no tiene lotes.'}
                   </p>
                 )}
               </Card>

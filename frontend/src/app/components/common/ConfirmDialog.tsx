@@ -25,34 +25,34 @@ const variantConfig: Record<VariantType, {
 }> = {
   warning: {
     icon: AlertTriangle,
-    iconColor: 'text-yellow-400',
-    iconBg: 'bg-yellow-500/10',
-    iconBorder: 'border-yellow-500/30',
-    btnClass: 'bg-yellow-500 hover:bg-yellow-600 text-white',
+    iconColor: 'text-warning',
+    iconBg: 'bg-warning-soft',
+    iconBorder: 'border-warning/20',
+    btnClass: 'bg-warning hover:bg-warning text-white',
     confirmLabel: 'Confirmar',
   },
   danger: {
     icon: XCircle,
-    iconColor: 'text-red-400',
-    iconBg: 'bg-red-500/10',
-    iconBorder: 'border-red-500/30',
-    btnClass: 'bg-red-500 hover:bg-red-600 text-white',
+    iconColor: 'text-destructive',
+    iconBg: 'bg-destructive-soft',
+    iconBorder: 'border-destructive/20',
+    btnClass: 'bg-destructive hover:bg-destructive text-white',
     confirmLabel: 'Eliminar',
   },
   info: {
     icon: Info,
-    iconColor: 'text-blue-400',
-    iconBg: 'bg-blue-500/10',
-    iconBorder: 'border-blue-500/30',
-    btnClass: 'bg-blue-500 hover:bg-blue-600 text-white',
+    iconColor: 'text-info',
+    iconBg: 'bg-info-soft',
+    iconBorder: 'border-info/20',
+    btnClass: 'bg-info hover:bg-info text-white',
     confirmLabel: 'Aceptar',
   },
   success: {
     icon: CheckCircle,
-    iconColor: 'text-green-400',
-    iconBg: 'bg-green-500/10',
-    iconBorder: 'border-green-500/30',
-    btnClass: 'bg-green-500 hover:bg-green-600 text-white',
+    iconColor: 'text-success',
+    iconBg: 'bg-success-soft',
+    iconBorder: 'border-success/20',
+    btnClass: 'bg-success hover:bg-success text-white',
     confirmLabel: 'Confirmar',
   },
 };
@@ -93,7 +93,7 @@ export default function ConfirmDialog({
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl shadow-black/60">
+      <div className="relative w-full max-w-sm rounded-2xl border border-border bg-muted shadow-md">
         <div className="p-6 text-center">
           {/* Icono */}
           <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border ${config.iconBg} ${config.iconBorder}`}>
@@ -104,15 +104,15 @@ export default function ConfirmDialog({
           <h3 className="mb-2 text-lg font-bold text-white">{title}</h3>
 
           {/* Descripción */}
-          <p className="text-sm text-slate-400 leading-relaxed">{description}</p>
+          <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
         </div>
 
         {/* Botones */}
-        <div className="flex gap-3 border-t border-slate-700/60 px-6 py-4">
+        <div className="flex gap-3 border-t border-border px-6 py-4">
           <button
             onClick={onClose}
             disabled={loading}
-            className="flex-1 rounded-xl border border-slate-600 bg-slate-800 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 disabled:opacity-50"
+            className="flex-1 rounded-xl border border-border bg-muted py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
           >
             {cancelText}
           </button>
@@ -155,18 +155,18 @@ export function AlertDialog({ open, onClose, title, description, variant = 'info
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       <div aria-hidden="true" className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
+      <div className="relative w-full max-w-sm rounded-2xl border border-border bg-muted shadow-md">
         <div className="p-6 text-center">
           <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border ${config.iconBg} ${config.iconBorder}`}>
             <Icon className={`h-8 w-8 ${config.iconColor}`} />
           </div>
           <h3 className="mb-2 text-lg font-bold text-white">{title}</h3>
-          <p className="text-sm text-slate-400 leading-relaxed">{description}</p>
+          <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
         </div>
-        <div className="border-t border-slate-700/60 px-6 py-4">
+        <div className="border-t border-border px-6 py-4">
           <button
             onClick={onClose}
-            className="w-full rounded-xl bg-slate-700 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-600"
+            className="w-full rounded-xl bg-muted py-2.5 text-sm font-semibold text-white transition-colors hover:bg-muted"
           >
             Aceptar
           </button>

@@ -30,7 +30,6 @@ import { lotesApi, sublotesApi, palmasApi, lineasApi } from '../../../api/planta
 import { toast } from 'sonner';
 import { useRefrescoAlVolver, useVengoDeGuardar, type EstadoNavegacion } from './refresco';
 import PageHeader from '../../components/common/PageHeader';
-import IlustracionPalma from '../../components/common/IlustracionPalma';
 
 const PER_PAGE = 50;
 
@@ -88,12 +87,12 @@ const PalmasSection = memo(({
         <div className="flex gap-2 flex-wrap">
           {enSel ? (
             <>
-              <Button size="sm" variant="outline" onClick={() => onSelTodas(palmasKey)} className="gap-2">
+              <Button size="sm" variant="outline" onClick={() => onSelTodas(palmasKey)} >
                 <CheckSquare className="h-3.5 w-3.5" /> Seleccionar todas
               </Button>
               {selIds.size > 0 && (
                 <Button size="sm" variant="destructive"
-                  onClick={() => onEliminarMasivo(subId, lineaId, palmasKey, params)} className="gap-2">
+                  onClick={() => onEliminarMasivo(subId, lineaId, palmasKey, params)} >
                   <Trash2 className="h-3.5 w-3.5" /> Eliminar ({selIds.size})
                 </Button>
               )}
@@ -102,11 +101,11 @@ const PalmasSection = memo(({
           ) : (
             <>
               {ps.total > 1 && (
-                <Button size="sm" variant="outline" onClick={() => onActivarSel(palmasKey)} className="gap-2">
+                <Button size="sm" variant="outline" onClick={() => onActivarSel(palmasKey)} >
                   <CheckSquare className="h-3.5 w-3.5" /> Seleccionar varias
                 </Button>
               )}
-              <Button size="sm" onClick={() => onNavegar(agregarUrl)} className="gap-2">
+              <Button size="sm" onClick={() => onNavegar(agregarUrl)} >
                 <Plus className="h-3.5 w-3.5" /> Agregar palmas
               </Button>
             </>
@@ -180,7 +179,7 @@ const PalmasSection = memo(({
                     </Button>
                   ));
                 })()}
-                <Button size="sm" variant="outline" disabled={ps.page >= ps.lastPage}
+                <Button size="sm" variant="outline" disabled={ps.page>= ps.lastPage}
                   onClick={() => onCargar(palmasKey, params, ps.page + 1)}>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
@@ -462,7 +461,11 @@ export default function LoteDetalle() {
       <AlertDialog open={elimOpen} onOpenChange={setElimOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {elimItem?.tipo === 'sublote' && '¿Eliminar el sublote?'}
+              {elimItem?.tipo === 'linea' && '¿Eliminar la línea?'}
+              {elimItem?.tipo === 'palma' && '¿Eliminar la palma?'}
+            </AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
               {elimItem?.tipo === 'sublote' && (
                 <div>
@@ -602,7 +605,6 @@ export default function LoteDetalle() {
         {sublotes.length === 0 ? (
           <Card className="border-dashed">
             <CardContent className="flex flex-col items-center justify-center py-12">
-              <IlustracionPalma variante="palma" className="mb-3" />
               <p className="mb-1 font-semibold">Todavía no hay sublotes</p>
               <p className="mb-4 max-w-md text-center text-sm text-muted-foreground">
                 Crea el primer sublote para organizar las líneas y palmas de este lote.

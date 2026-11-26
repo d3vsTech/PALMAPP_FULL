@@ -67,17 +67,17 @@ export function TabPoda({
   return (
     <>
                       <div className="flex justify-end">
-                        <Button onClick={agregarPoda} className="gap-2" disabled={podaEnEdicion !== null}>
+                        <Button onClick={agregarPoda}  disabled={podaEnEdicion !== null}>
                           <Plus className="h-4 w-4" />
-                          Agregar Poda
+                          Agregar poda
                         </Button>
                       </div>
 
                       {/* Formulario de edición */}
                       {podaEnEdicion && (
                         <div ref={setFormRef('poda')} className="scroll-mt-24">
-                        <Card className="border-border border-2 border-primary/50">
-                          <CardContent className="pt-6 space-y-4">
+                        <Card className="border-primary/40 bg-muted/40">
+                          <CardContent className="space-y-4">
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Colaboradores</Label>
@@ -98,7 +98,7 @@ export function TabPoda({
                                             {col.nombres} {col.apellidos}
                                             {col.terceroNombre && (
                                               <span
-                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle"
+                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-warning-soft text-warning border border-warning/20 font-medium align-middle"
                                                 title={`Operario del tercero ${col.terceroNombre}`}
                                               >
                                                 Tercero · {col.terceroNombre}
@@ -165,7 +165,7 @@ export function TabPoda({
                                 </Select>
                               </div>
                               <div className="space-y-2">
-                                <Label htmlFor="tabpoda-numero-de-palmas">Número de Palmas</Label>
+                                <Label htmlFor="tabpoda-numero-de-palmas">Número de palmas</Label>
                                 <Input id="tabpoda-numero-de-palmas"
                                   type="number" step="0.001"
                                   placeholder="0"
@@ -178,7 +178,7 @@ export function TabPoda({
                               <Button variant="outline" onClick={cancelarPoda} type="button">
                                 Cancelar
                               </Button>
-                              <Button onClick={guardarPoda} className="gap-2" type="button">
+                              <Button onClick={guardarPoda}  type="button">
                                 <Save className="h-4 w-4" />
                                 Guardar
                               </Button>
@@ -193,7 +193,7 @@ export function TabPoda({
                         const lote = lotesData.find(l => l.id === trabajo.lote);
                         const sublote = sublotes.find(s => s.id === trabajo.sublote);
                         return (
-                          <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
+                          <Card key={trabajo.id}>
                             <CardContent className="p-4">
                               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 md:gap-4">
                                 <div className="order-1 min-w-0 flex-1 md:order-none">
@@ -219,7 +219,7 @@ export function TabPoda({
                                 </div>
                                 <div className="order-5 w-20 shrink-0 text-right max-md:empty:hidden md:order-none md:w-20">
                                   <p className="text-xs text-muted-foreground">Palmas</p>
-                                  <p className="font-bold text-lg">{trabajo.numeroPalmas}</p>
+                                  <p className="text-lg font-bold tabular-nums">{trabajo.numeroPalmas}</p>
                                 </div>
                                 <div className="order-2 ml-auto flex shrink-0 items-center gap-1 md:order-none md:ml-0">
                                   <Button
@@ -247,9 +247,9 @@ export function TabPoda({
                       })}
 
                       {trabajosPoda.length === 0 && !podaEnEdicion && (
-                        <div className="text-center py-12 text-muted-foreground">
+                        <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
                           <p>No hay registros de poda</p>
-                          <p className="text-sm">Haz clic en "Agregar Poda" para crear uno</p>
+                          <p className="text-sm">Haz clic en "Agregar poda" para crear uno</p>
                         </div>
                       )}
     </>

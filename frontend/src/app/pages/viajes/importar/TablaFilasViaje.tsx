@@ -164,7 +164,7 @@ export function TablaFilasViaje({
             <tr
               key={fila.fila}
               className={`border-b border-border/40 last:border-0 ${
-                fila.estado === 'ERROR' ? 'bg-destructive/5' : ''
+                fila.estado === 'ERROR' ? 'bg-destructive-soft' : ''
               }`}
             >
               <td className="px-3 py-2 align-top text-xs text-muted-foreground">{fila.fila}</td>

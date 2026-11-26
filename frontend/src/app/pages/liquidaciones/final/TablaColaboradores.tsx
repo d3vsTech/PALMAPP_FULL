@@ -19,20 +19,20 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Input } from '../../../components/ui/input';
+import { Label } from '../../../components/ui/label';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
+import { Card } from '../../../components/ui/card';
 import {
   ChevronLeft,
   ChevronRight,
   Loader2,
   Search,
-  UserCheck,
-  Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { colaboradoresApi, type Colaborador } from '../../../../api/colaboradores';
 import type { ColaboradorLiquidable } from '../../../../api/liquidacionFinal';
-import { fmtFecha, getIniciales, mensajeErrorLiquidacion } from './comunes';
+import { fmtFecha, mensajeErrorLiquidacion } from './comunes';
 
 const POR_PAGINA = 10;
 
@@ -71,7 +71,7 @@ interface Props {
   onSeleccionar: (empleadoId: number) => void;
   /** En edición el colaborador ya está fijado y no se cambia. */
   deshabilitado?: boolean;
-  /** Texto del botón de cada fila, según el flujo. */
+  /** Ya no se usa: la lista del diseño elige con un clic en el nombre. */
   etiquetaAccion?: string;
   /** Marca la fila cuya ficha se está cargando. */
   cargandoId?: number | null;
@@ -81,7 +81,6 @@ export function TablaColaboradores({
   seleccionado,
   onSeleccionar,
   deshabilitado = false,
-  etiquetaAccion = 'Seleccionar',
   cargandoId = null,
 }: Props) {
   const [filas, setFilas] = useState<FilaColaborador[]>([]);
@@ -135,194 +134,136 @@ export function TablaColaboradores({
     void cargar();
   }, [cargar, deshabilitado]);
 
-  // Ya hay uno elegido: se muestra plegado hasta que pidan cambiarlo.
-  if (seleccionado && !cambiando) {
-    return (
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-primary/30 bg-primary/5 p-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary">
-            {getIniciales(seleccionado.nombre_completo)}
-          </div>
-          <div className="min-w-0">
-            <p className="truncate font-medium">{seleccionado.nombre_completo}</p>
-            <p className="truncate text-xs text-muted-foreground">
-              CC {seleccionado.documento}
-              {seleccionado.cargo ? ` · ${seleccionado.cargo}` : ''}
-            </p>
-          </div>
-        </div>
+  const [abierto, setAbierto] = useState(false);
 
-        {!deshabilitado && (
-          <Button type="button" variant="outline" size="sm" onClick={() => setCambiando(true)}>
-            Cambiar colaborador
-          </Button>
+  /** Elige la fila y cierra la lista, como el buscador del diseño. */
+  const elegir = (id: number) => {
+    onSeleccionar(id);
+    setCambiando(false);
+    setAbierto(false);
+    setBusqueda('');
+  };
+
+  // Con alguien elegido el campo muestra su nombre; escribir abre otra búsqueda.
+  const mostrandoElegido = !!seleccionado && !cambiando;
+  const valorCampo = mostrandoElegido ? seleccionado.nombre_completo : busqueda;
+
+  return (
+    <div className="relative space-y-2">
+      <Label htmlFor="busqueda-colaborador">Buscar colaborador *</Label>
+      <div className="relative">
+        <Search
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          strokeWidth={2}
+        />
+        <Input
+          id="busqueda-colaborador"
+          type="text"
+          value={valorCampo}
+          disabled={deshabilitado}
+          onChange={(e) => {
+            setCambiando(true);
+            setBusqueda(e.target.value);
+            setAbierto(true);
+          }}
+          onFocus={() => setAbierto(true)}
+          // La espera deja que el clic en una opción llegue antes de cerrar.
+          onBlur={() => setTimeout(() => setAbierto(false), 150)}
+          placeholder="Nombre o cédula"
+          className="pl-9"
+          autoComplete="off"
+        />
+        {cargando && abierto && (
+          <Loader2
+            className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground"
+            strokeWidth={2}
+          />
         )}
       </div>
+
+      {abierto && !deshabilitado && (
+        <ListaResultados
+          filas={filas}
+          cargando={cargando}
+          termino={termino}
+          total={total}
+          pagina={pagina}
+          ultimaPagina={ultimaPagina}
+          cargandoId={cargandoId}
+          onElegir={elegir}
+          onPagina={setPagina}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Lista desplegable bajo el buscador: nombre, cargo y cédula de cada uno. */
+function ListaResultados({
+  filas, cargando, termino, total, pagina, ultimaPagina, cargandoId, onElegir, onPagina,
+}: {
+  filas: FilaColaborador[];
+  cargando: boolean;
+  termino: string;
+  total: number;
+  pagina: number;
+  ultimaPagina: number;
+  cargandoId: number | null;
+  onElegir: (id: number) => void;
+  onPagina: (p: number) => void;
+}) {
+  // El mousedown evita que el campo pierda el foco y cierre la lista antes del clic.
+  const sinFoco = (e: React.MouseEvent) => e.preventDefault();
+
+  if (!cargando && filas.length === 0) {
+    return (
+      <Card className="absolute z-50 mt-1 w-full gap-0 px-4 py-3 text-center shadow-sm">
+        <p className="text-sm text-muted-foreground">
+          {termino ? 'No se encontraron colaboradores' : 'No hay colaboradores registrados'}
+        </p>
+      </Card>
     );
   }
 
   return (
-    <div className="space-y-3">
-      <div className="relative">
-        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-        <Input
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar por nombre o cédula..."
-          className="pl-9"
-        />
-        {cargando && (
-          <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-muted-foreground" />
-        )}
-      </div>
+    <Card className="absolute z-50 mt-1 max-h-72 w-full gap-0 overflow-y-auto py-1 shadow-sm" onMouseDown={sinFoco}>
+      {filas.map((c) => (
+        <button
+          key={c.id}
+          type="button"
+          disabled={cargandoId != null}
+          onClick={() => onElegir(c.id)}
+          className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2 text-left transition-colors hover:bg-muted disabled:opacity-60"
+        >
+          <span className="min-w-0">
+            <span className="block text-sm font-medium text-foreground">{c.nombre_completo}</span>
+            <span className="block text-xs text-muted-foreground">
+              {c.cargo ? `${c.cargo} · ` : ''}CC {c.documento}
+            </span>
+          </span>
+          <span className="flex items-center gap-2">
+            {c.fecha_retiro && <Badge variant="secondary">Retirado {fmtFecha(c.fecha_retiro)}</Badge>}
+            {cargandoId === c.id && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" strokeWidth={2} />}
+          </span>
+        </button>
+      ))}
 
-      <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-border bg-muted/30">
-              <th className="p-3 text-left text-xs font-semibold text-muted-foreground">
-                Colaborador
-              </th>
-              <th className="p-3 text-left text-xs font-semibold text-muted-foreground">Cédula</th>
-              <th className="hidden p-3 text-left text-xs font-semibold text-muted-foreground sm:table-cell">
-                Modalidad
-              </th>
-              <th className="hidden p-3 text-left text-xs font-semibold text-muted-foreground md:table-cell">
-                Ingreso
-              </th>
-              <th className="p-3 text-right text-xs font-semibold text-muted-foreground">Acción</th>
-            </tr>
-          </thead>
-          <tbody>
-            {cargando ? (
-              <tr>
-                <td colSpan={5} className="py-10 text-center">
-                  <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
-                </td>
-              </tr>
-            ) : filas.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="py-10 text-center">
-                  <Users className="mx-auto mb-2 h-7 w-7 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">
-                    {termino
-                      ? 'Ningún colaborador coincide con esa búsqueda'
-                      : 'No hay colaboradores registrados'}
-                  </p>
-                </td>
-              </tr>
-            ) : (
-              filas.map((c, i) => (
-                <tr
-                  key={c.id}
-                  className={`border-b border-border transition-colors last:border-0 hover:bg-muted/20 ${
-                    i % 2 === 0 ? 'bg-background' : 'bg-muted/5'
-                  }`}
-                >
-                  <td className="p-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
-                        {getIniciales(c.nombre_completo)}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{c.nombre_completo}</p>
-                        <p className="truncate text-xs text-muted-foreground">{c.cargo ?? '—'}</p>
-                      </div>
-                    </div>
-                  </td>
-
-                  <td className="p-3 text-sm text-muted-foreground">{c.documento}</td>
-
-                  <td className="hidden p-3 text-sm text-muted-foreground sm:table-cell">
-                    {c.modalidad_pago === 'FIJO'
-                      ? 'Fijo'
-                      : c.modalidad_pago === 'PRODUCCION'
-                        ? 'Producción'
-                        : '—'}
-                  </td>
-
-                  <td className="hidden p-3 text-sm text-muted-foreground md:table-cell">
-                    {fmtFecha(c.fecha_ingreso)}
-                  </td>
-
-                  <td className="p-3">
-                    <div className="flex items-center justify-end gap-2">
-                      {c.fecha_retiro && (
-                        <Badge variant="outline" className="text-[10px]">
-                          Retirado {fmtFecha(c.fecha_retiro)}
-                        </Badge>
-                      )}
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={cargandoId != null}
-                        onClick={() => {
-                          onSeleccionar(c.id);
-                          setCambiando(false);
-                        }}
-                        className="gap-1.5"
-                      >
-                        {cargandoId === c.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <UserCheck className="h-3.5 w-3.5" />
-                        )}
-                        {etiquetaAccion}
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {total > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-muted-foreground">
-            {filas.length} de <span className="font-medium text-foreground">{total}</span>{' '}
-            colaborador{total === 1 ? '' : 'es'}
-            {termino ? ' con esa búsqueda' : ''}
-          </p>
-
-          {ultimaPagina > 1 && (
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={pagina <= 1 || cargando}
-                onClick={() => setPagina((p) => Math.max(1, p - 1))}
-                className="gap-1"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Anterior
-              </Button>
-              <span className="text-xs text-muted-foreground">
-                {pagina} de {ultimaPagina}
-              </span>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={pagina >= ultimaPagina || cargando}
-                onClick={() => setPagina((p) => p + 1)}
-                className="gap-1"
-              >
-                Siguiente
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
+      {ultimaPagina > 1 && (
+        <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2 text-xs text-muted-foreground">
+          <span>{total} colaborador{total === 1 ? '' : 'es'}</span>
+          <span className="flex items-center gap-1">
+            <Button type="button" size="icon" variant="ghost" className="size-7" aria-label="Página anterior"
+              disabled={pagina <= 1 || cargando} onClick={() => onPagina(Math.max(1, pagina - 1))}>
+              <ChevronLeft strokeWidth={2} />
+            </Button>
+            <span className="tabular-nums">{pagina} de {ultimaPagina}</span>
+            <Button type="button" size="icon" variant="ghost" className="size-7" aria-label="Página siguiente"
+              disabled={pagina >= ultimaPagina || cargando} onClick={() => onPagina(pagina + 1)}>
+              <ChevronRight strokeWidth={2} />
+            </Button>
+          </span>
         </div>
       )}
-
-      {seleccionado && cambiando && (
-        <Button type="button" variant="ghost" size="sm" onClick={() => setCambiando(false)}>
-          Cancelar
-        </Button>
-      )}
-    </div>
+    </Card>
   );
 }

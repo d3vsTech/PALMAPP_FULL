@@ -9,9 +9,12 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
 import {
-  ArrowLeft, MapPin, CreditCard, CheckCircle, Truck, User, Phone, Home, Loader2,
+  MapPin, CreditCard, CheckCircle, Check, Truck, User, Phone, Home, Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import PageHeader from '../../components/common/PageHeader';
+import { cop } from '../../lib/formato';
+import { cn } from '../../components/lib/utils';
 import { marketApi, toNumber, type Carrito as CarritoT } from '../../../api/market';
 import { getDepartamentos, getMunicipios } from '../../../api/plantacion';
 import { pagosApi, abrirCheckoutEpayco, type MetodoPago, type BillingInfo } from '../../../api/pagos';
@@ -287,92 +290,63 @@ export default function Checkout() {
   const total = toNumber(resumen.total);
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate('/market/carrito')}
-          className="mb-4 gap-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Volver al carrito
-        </Button>
-        <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Finalizar Compra</h1>
-        <p className="text-muted-foreground mt-2">
-          Completa la información para procesar tu pedido
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        backTo="/market/carrito"
+        eyebrow="Tienda de insumos"
+        title="Finalizar compra"
+        description="Completa la información para procesar tu pedido."
+      />
 
-      {/* Indicador de pasos */}
-      <Card className="border-border">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            {ETAPAS_CHECKOUT.map((etapa, index) => {
-              const Icon = etapa.icon;
-              const estaCompleta = paso > etapa.numero;
-              const estaActiva = paso === etapa.numero;
-
-              return (
-                <div
-                  key={etapa.numero}
-                  className="flex items-center"
-                  style={{ flex: index < 2 ? 1 : 'none' }}
-                >
-                  <div className="flex shrink-0 flex-col items-center gap-2">
-                    <div
-                      className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition md:h-12 md:w-12 ${
-                        estaCompleta
-                          ? 'bg-primary border-primary text-white'
-                          : estaActiva
-                            ? 'bg-primary/10 border-primary text-primary'
-                            : 'bg-muted border-border text-muted-foreground'
-                      }`}
-                    >
-                      {estaCompleta ? <CheckCircle className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
-                    </div>
-                    <div
-                      className={`hidden text-sm font-semibold whitespace-nowrap md:block ${
-                        estaActiva || estaCompleta ? 'text-foreground' : 'text-muted-foreground'
-                      }`}
-                    >
-                      {etapa.nombre}
-                    </div>
-                  </div>
-
-                  {index < 2 && (
-                    <div className="relative mx-2 h-0.5 min-w-[12px] flex-1 bg-border sm:mx-3">
-                      <div
-                        className={`absolute inset-0 bg-primary transition ${
-                          estaCompleta ? 'w-full' : 'w-0'
-                        }`}
-                      />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          {/* Reemplaza a los rotulos, escondidos en celular. */}
-          <p className="mt-3 text-center text-[13px] font-semibold text-foreground md:hidden">
-            Paso {paso} de {ETAPAS_CHECKOUT.length}: {ETAPAS_CHECKOUT.find((x) => x.numero === paso)?.nombre}
-          </p>
-        </CardContent>
-      </Card>
+      {/* Pasos */}
+      <ol className="flex items-center gap-2 text-sm">
+        {ETAPAS_CHECKOUT.map((etapa, index) => {
+          const completa = paso > etapa.numero;
+          const activa = paso === etapa.numero;
+          return (
+            <li
+              key={etapa.numero}
+              className={cn('flex items-center gap-2', index < ETAPAS_CHECKOUT.length - 1 && 'flex-1')}
+            >
+              <span
+                className={cn(
+                  'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-semibold',
+                  completa && 'border-primary bg-primary text-primary-foreground',
+                  activa && 'border-primary bg-primary-soft text-primary',
+                  !completa && !activa && 'border-border bg-card text-muted-foreground',
+                )}
+              >
+                {completa ? <Check className="h-3.5 w-3.5" strokeWidth={2.5} /> : etapa.numero}
+              </span>
+              <span
+                className={cn(
+                  'whitespace-nowrap font-medium',
+                  activa || completa ? 'text-foreground' : 'text-muted-foreground',
+                  !activa && 'hidden sm:inline',
+                )}
+              >
+                {etapa.nombre}
+              </span>
+              {index < ETAPAS_CHECKOUT.length - 1 && (
+                <span className={cn('h-px flex-1', completa ? 'bg-primary' : 'bg-border')} />
+              )}
+            </li>
+          );
+        })}
+      </ol>
 
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
           {/* Paso 1: Dirección */}
           {paso === 1 && (
-            <Card className="border-border">
+            <Card>
               <CardContent className="p-6 space-y-6">
                 <div className="flex items-center gap-3">
                   <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
                     <MapPin className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold">Dirección de Entrega</h2>
+                    <h2>Dirección de entrega</h2>
                     <p className="text-sm text-muted-foreground">
                       Completa los datos para recibir tu pedido
                     </p>
@@ -535,14 +509,14 @@ export default function Checkout() {
 
           {/* Paso 2: Método de pago */}
           {paso === 2 && (
-            <Card className="border-border">
+            <Card>
               <CardContent className="p-6 space-y-6">
                 <div className="flex items-center gap-3">
                   <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
                     <CreditCard className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold">Método de Pago</h2>
+                    <h2>Método de pago</h2>
                     <p className="text-sm text-muted-foreground">
                       Selecciona cómo deseas pagar
                     </p>
@@ -585,7 +559,7 @@ export default function Checkout() {
                 {metodoPago === 'epayco' && (
                   <div className="space-y-3 border-t border-border pt-4">
                     <div>
-                      <h3 className="font-semibold text-foreground">Datos de facturación</h3>
+                      <h3>Datos de facturación</h3>
                       <p className="text-xs text-muted-foreground">
                         Requeridos por ePayco para procesar el pago.
                       </p>
@@ -679,14 +653,14 @@ export default function Checkout() {
 
           {/* Paso 3: Confirmación */}
           {paso === 3 && (
-            <Card className="border-border">
+            <Card>
               <CardContent className="p-6 space-y-6">
                 <div className="flex items-center gap-3">
                   <div className="h-12 w-12 rounded-xl bg-success/10 flex items-center justify-center">
                     <CheckCircle className="h-6 w-6 text-success" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold">Confirmar Pedido</h2>
+                    <h2>Confirmar pedido</h2>
                     <p className="text-sm text-muted-foreground">
                       Revisa los detalles antes de confirmar
                     </p>
@@ -762,9 +736,9 @@ export default function Checkout() {
         {/* Resumen del pedido */}
         <div className="lg:col-span-1">
           <div className="sticky top-8 space-y-4">
-            <Card className="border-border">
+            <Card>
               <CardContent className="p-6 space-y-4">
-                <h2 className="text-xl font-bold text-foreground">Resumen del Pedido</h2>
+                <h2>Resumen del pedido</h2>
 
                 <div className="space-y-3">
                   {items.map((item) => (
@@ -772,11 +746,11 @@ export default function Checkout() {
                       <div>
                         <p className="font-medium">{item.producto.nombre}</p>
                         <p className="text-muted-foreground">
-                          {item.cantidad} × ${toNumber(item.precio_unitario).toLocaleString('es-CO')}
+                          {item.cantidad} × {cop(toNumber(item.precio_unitario))}
                         </p>
                       </div>
                       <p className="font-semibold">
-                        ${toNumber(item.subtotal).toLocaleString('es-CO')}
+                        {cop(toNumber(item.subtotal))}
                       </p>
                     </div>
                   ))}
@@ -787,14 +761,14 @@ export default function Checkout() {
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Subtotal</span>
-                    <span className="font-semibold">${subtotal.toLocaleString('es-CO')}</span>
+                    <span className="font-semibold tabular-nums">{cop(subtotal)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Envío</span>
                     <span className="font-semibold">
                       {toNumber(resumen.costo_envio) === 0
                         ? 'Gratis'
-                        : `$${toNumber(resumen.costo_envio).toLocaleString('es-CO')}`}
+                        : cop(toNumber(resumen.costo_envio))}
                     </span>
                   </div>
 
@@ -802,15 +776,13 @@ export default function Checkout() {
 
                   <div className="flex justify-between">
                     <span className="text-lg font-semibold">Total</span>
-                    <span className="text-2xl font-bold text-success">
-                      ${total.toLocaleString('es-CO')}
-                    </span>
+                    <span className="text-2xl font-bold tabular-nums">{cop(total)}</span>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-border bg-primary/5">
+            <Card className="bg-primary/5">
               <CardContent className="p-4 flex items-start gap-3">
                 <Truck className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
                 <div>

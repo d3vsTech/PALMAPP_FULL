@@ -24,9 +24,11 @@ import { useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import {
-  AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Info, Loader2, Upload,
+  AlertTriangle, CheckCircle2, Info, Loader2, Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import PageHeader from '../../components/common/PageHeader';
+import StatStrip from '../../components/common/StatStrip';
 import {
   novedadesApi,
   ADVERTENCIA_NOVEDAD_LABEL,
@@ -38,8 +40,9 @@ import {
 import { ACCEPT_ARCHIVO, MAX_FILAS_ARCHIVO } from '../../../api/historicoComun';
 import { descargarBlob } from '../liquidaciones/final/comunes';
 import {
-  BotonesPlantilla, CabecerasIgnoradas, CeldaColaborador, EstadoValidacion,
-  IncidenciasFila, PasoCard, Regla, VistaPreviaPlantilla, ZonaArchivo,
+  Aviso, BadgeDetectados, BadgeEstadoFila, BotonesPlantilla, CabecerasIgnoradas,
+  CeldaColaborador, EstadoValidacion, IncidenciasFila, PasoCard, Regla,
+  VistaPreviaPlantilla, ZonaArchivo, TD, TH, THEAD,
   mensajeArchivo,
 } from '../liquidaciones/historico/comunes';
 import { formatFecha, formatHora } from './tipos';
@@ -70,11 +73,6 @@ const FILAS_EJEMPLO = [
 ];
 
 /** `OK` se carga, `ERROR` bloquea el archivo completo. */
-const ESTADO_FILA_BADGE: Record<string, string> = {
-  OK: 'bg-success/10 text-success border-success/30',
-  ERROR: 'bg-destructive/10 text-destructive border-destructive/30',
-};
-
 const ESTADO_FILA_LABEL: Record<string, string> = {
   OK: 'Se carga',
   ERROR: 'Con error',
@@ -88,7 +86,7 @@ function periodoFila(f: FilaImportacionNovedad): string {
     return `${formatFecha(n.fecha_inicio)} · ${formatHora(n.hora_inicio)} a ${formatHora(n.hora_fin)}`;
   }
   if (!n.fecha_fin || n.fecha_fin === n.fecha_inicio) return formatFecha(n.fecha_inicio);
-  return `${formatFecha(n.fecha_inicio)} — ${formatFecha(n.fecha_fin)}`;
+  return `${formatFecha(n.fecha_inicio)} a ${formatFecha(n.fecha_fin)}`;
 }
 
 export default function ImportarNovedadesPage() {
@@ -166,25 +164,25 @@ export default function ImportarNovedadesPage() {
   const puedeCargar = !!analisis && conError === 0 && (resumen?.validas ?? 0) > 0 && !cargando;
 
   return (
-    <div className="space-y-6">
-      <Button variant="ghost" size="sm" onClick={() => navigate('/novedades')} className="gap-2">
-        <ArrowLeft className="h-4 w-4" />Volver a Novedades
-      </Button>
-
-      <div>
-        <h1 className="text-2xl font-bold text-primary sm:text-3xl">Importar novedades</h1>
-        <p className="mt-1 text-muted-foreground">
-          Carga permisos, incapacidades y licencias en lote desde un archivo
-        </p>
-      </div>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeader
+        backTo="/novedades"
+        eyebrow="Novedades"
+        title="Importar novedades"
+        description="Carga permisos, incapacidades y licencias en lote desde un archivo."
+      />
 
       <PasoCard
         n={1}
         titulo="Descarga la plantilla"
-        subtitulo="Las cabeceras se reconocen por nombre: no las renombres ni las reordenes"
+        subtitulo="Las cabeceras se reconocen por nombre: no las renombres ni las reordenes."
         accion={<BotonesPlantilla descargando={descargando} onDescargar={descargarPlantilla} />}
       >
-        <VistaPreviaPlantilla columnas={COLUMNAS_PLANTILLA} filas={FILAS_EJEMPLO} />
+        <VistaPreviaPlantilla
+          columnas={COLUMNAS_PLANTILLA}
+          filas={FILAS_EJEMPLO}
+          formatos=".xlsx, .xls y .csv"
+        />
         <div className="space-y-1.5 text-sm text-muted-foreground">
           <Regla n={1}>
             <strong className="text-foreground">tipo_novedad</strong> es el nombre del motivo tal
@@ -206,7 +204,11 @@ export default function ImportarNovedadesPage() {
         </div>
       </PasoCard>
 
-      <PasoCard n={2} titulo="Sube el archivo" subtitulo="Se revisa al instante, sin guardar nada">
+      <PasoCard
+        n={2}
+        titulo="Carga tu archivo"
+        subtitulo="Arrastra el archivo o haz clic para seleccionarlo."
+      >
         <ZonaArchivo
           archivo={archivo}
           analisis={analisis?.archivo}
@@ -215,7 +217,12 @@ export default function ImportarNovedadesPage() {
           onQuitar={quitarArchivo}
           inputRef={inputRef}
           accept={ACCEPT_ARCHIVO}
+          bloqueado={cargando}
         />
+        <p className="text-xs text-muted-foreground">
+          Hasta {MAX_FILAS_ARCHIVO} filas por archivo. Se revisa al instante y todavía no se
+          guarda nada.
+        </p>
         <EstadoValidacion validando={validando} error={error} />
         {analisis && <CabecerasIgnoradas cabeceras={analisis.archivo.cabeceras_ignoradas} />}
       </PasoCard>
@@ -224,80 +231,66 @@ export default function ImportarNovedadesPage() {
         <>
           <PasoCard
             n={3}
-            titulo="Revisa lo que se va a cargar"
+            titulo="Revisa los datos"
             subtitulo="Una fila es una novedad. La misma cédula puede repetirse si los rangos no se cruzan."
+            accion={<BadgeDetectados total={resumen.filas} />}
+            contenidoClassName="space-y-6"
           >
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-lg border border-border bg-muted/20 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Se cargan</p>
-                <p className="text-2xl font-bold text-success">{resumen.validas}</p>
-              </div>
-              <div className="rounded-lg border border-border bg-muted/20 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Con error</p>
-                <p className={`text-2xl font-bold ${conError > 0 ? 'text-destructive' : 'text-foreground'}`}>
-                  {conError}
-                </p>
-              </div>
-              <div className="rounded-lg border border-border bg-muted/20 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Colaboradores</p>
-                <p className="text-2xl font-bold text-foreground">{resumen.colaboradores}</p>
-              </div>
-              <div className="rounded-lg border border-border bg-muted/20 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Días calendario</p>
-                <p className="text-2xl font-bold text-foreground">{resumen.dias_calendario}</p>
-                {resumen.parciales > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {resumen.parciales} por horas, no cuentan como día
-                  </p>
-                )}
-              </div>
-            </div>
+            <StatStrip
+              items={[
+                { label: 'Se cargan', value: resumen.validas },
+                {
+                  label: 'Con error',
+                  value: conError > 0 ? <span className="text-destructive">{conError}</span> : conError,
+                },
+                { label: 'Colaboradores', value: resumen.colaboradores },
+                {
+                  label: 'Días calendario',
+                  value: resumen.dias_calendario,
+                  note: resumen.parciales > 0
+                    ? `${resumen.parciales} por horas, no cuentan como día`
+                    : undefined,
+                },
+              ]}
+            />
 
             {/* D5 — Con qué estado nacen. Si es PENDIENTE, la nómina no las
                 toma hasta que alguien las apruebe, y eso hay que decirlo
                 antes de cargar, no después. */}
-            <div className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50/60 p-3 text-sm text-sky-800 dark:border-sky-900 dark:bg-sky-950/20 dark:text-sky-300">
-              <Info className="mt-0.5 h-4 w-4 shrink-0" />
-              <p>
-                Las novedades van a quedar en estado{' '}
-                <strong>{analisis.estado_inicial === 'APROBADA' ? 'Aprobada' : 'Pendiente'}</strong>.
-                {analisis.estado_inicial === 'PENDIENTE'
-                  ? ' No entran a la nómina hasta que alguien con permiso las apruebe.'
-                  : ' Entran a la nómina del período sin pasos adicionales.'}
-              </p>
-            </div>
+            <Aviso tono="info" icono={Info}>
+              Las novedades van a quedar en estado{' '}
+              <strong>{analisis.estado_inicial === 'APROBADA' ? 'Aprobada' : 'Pendiente'}</strong>.
+              {analisis.estado_inicial === 'PENDIENTE'
+                ? ' No entran a la nómina hasta que alguien con permiso las apruebe.'
+                : ' Entran a la nómina del período sin pasos adicionales.'}
+            </Aviso>
 
-            {analisis.advertencias.length > 0 && (
-              <div className="space-y-1">
-                {analisis.advertencias.map((a, i) => (
-                  <p
-                    key={`${a.code}-${i}`}
-                    className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400"
-                  >
-                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    {a.mensaje || ADVERTENCIA_NOVEDAD_LABEL[a.code] || a.code}
-                  </p>
-                ))}
-              </div>
-            )}
+            {analisis.advertencias.map((a, i) => (
+              <Aviso key={`${a.code}-${i}`} tono="warning" icono={AlertTriangle}>
+                {a.mensaje || ADVERTENCIA_NOVEDAD_LABEL[a.code] || a.code}
+              </Aviso>
+            ))}
 
             <div className="overflow-x-auto rounded-lg border border-border">
               <table className="w-full min-w-[820px] text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/40 text-left">
-                    <th className="px-3 py-2.5 font-semibold">Fila</th>
-                    <th className="px-3 py-2.5 font-semibold">Colaborador</th>
-                    <th className="px-3 py-2.5 font-semibold">Novedad</th>
-                    <th className="px-3 py-2.5 font-semibold">Periodo</th>
-                    <th className="px-3 py-2.5 text-center font-semibold">Días</th>
-                    <th className="px-3 py-2.5 font-semibold">Estado</th>
+                <thead className={THEAD}>
+                  <tr>
+                    <th className={`${TH} w-8`}>#</th>
+                    <th className={TH}>Colaborador</th>
+                    <th className={TH}>Novedad</th>
+                    <th className={TH}>Periodo</th>
+                    <th className={`${TH} text-center`}>Días</th>
+                    <th className={TH}>Estado</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-border">
                   {analisis.filas.map((f) => (
-                    <tr key={f.fila} className="border-b border-border last:border-0">
-                      <td className="px-3 py-2.5 align-top text-muted-foreground">{f.fila}</td>
-                      <td className="px-3 py-2.5 align-top">
+                    <tr
+                      key={f.fila}
+                      className={f.estado === 'ERROR' ? 'bg-destructive-soft/40' : undefined}
+                    >
+                      <td className={`${TD} text-xs text-muted-foreground`}>{f.fila}</td>
+                      <td className={TD}>
                         <CeldaColaborador
                           nombre={f.empleado?.nombre_completo}
                           documento={f.empleado?.documento}
@@ -310,27 +303,27 @@ export default function ImportarNovedadesPage() {
                           etiquetasAdvertencia={ADVERTENCIA_NOVEDAD_LABEL}
                         />
                       </td>
-                      <td className="px-3 py-2.5 align-top">
-                        <p>{f.novedad.motivo?.nombre ?? f.novedad.tipo_novedad ?? '—'}</p>
+                      <td className={TD}>
+                        <p className="break-words">
+                          {f.novedad.motivo?.nombre ?? f.novedad.tipo_novedad ?? '—'}
+                        </p>
                         {f.novedad.resuelto_por === 'TIPO_BASE' && (
                           <p className="text-xs text-muted-foreground">cruzado por tipo base</p>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 align-top">
-                        {periodoFila(f)}
-                        {f.novedad.parcial && (
-                          <span className="ml-2 rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-800 dark:bg-sky-950/40 dark:text-sky-300">
-                            Parcial
-                          </span>
-                        )}
+                      <td className={TD}>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span>{periodoFila(f)}</span>
+                          {f.novedad.parcial && <Badge variant="info">Parcial</Badge>}
+                        </div>
                       </td>
-                      <td className="px-3 py-2.5 text-center align-top">
+                      <td className={`${TD} text-center`}>
                         {f.novedad.parcial ? '—' : (f.novedad.dias_calendario ?? '—')}
                       </td>
-                      <td className="px-3 py-2.5 align-top">
-                        <Badge variant="outline" className={ESTADO_FILA_BADGE[f.estado]}>
+                      <td className={TD}>
+                        <BadgeEstadoFila estado={f.estado}>
                           {ESTADO_FILA_LABEL[f.estado]}
-                        </Badge>
+                        </BadgeEstadoFila>
                       </td>
                     </tr>
                   ))}
@@ -342,35 +335,43 @@ export default function ImportarNovedadesPage() {
           <PasoCard
             n={4}
             titulo="Carga las novedades"
-            subtitulo="Todo o nada: con una sola fila en error no se carga ninguna"
+            subtitulo="Todo o nada: con una sola fila en error no se carga ninguna."
           >
             {conError > 0 ? (
-              <p className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <Aviso tono="destructive" icono={AlertTriangle}>
                 Hay {conError} fila{conError !== 1 ? 's' : ''} con error. Corrígelas en el archivo
                 y vuelve a subirlo.
-              </p>
+              </Aviso>
             ) : (
-              <p className="flex items-start gap-2 rounded-lg border border-success/30 bg-success/5 p-3 text-sm text-success">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                El archivo está listo: se van a crear {resumen.validas} novedades.
-              </p>
+              <Aviso tono="success" icono={CheckCircle2}>
+                El archivo está listo: ninguna fila quedó con error.
+              </Aviso>
             )}
-            <div className="flex flex-wrap justify-end gap-3">
-              <Button variant="outline" onClick={() => navigate('/novedades')} disabled={cargando}>
-                Cancelar
-              </Button>
-              <Button
-                onClick={confirmar}
-                disabled={!puedeCargar}
-                className="gap-2 bg-success hover:bg-success/90"
-              >
-                {cargando
-                  ? <Loader2 className="h-4 w-4 animate-spin" />
-                  : <Upload className="h-4 w-4" />}
-                Cargar {resumen.validas} novedades
-                <ArrowRight className="h-4 w-4" />
-              </Button>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted-foreground">
+                {conError > 0 ? (
+                  'Corrige las filas con error para poder cargar el archivo.'
+                ) : (
+                  <>
+                    Se crearán{' '}
+                    <span className="font-semibold text-foreground">
+                      {resumen.validas} novedad{resumen.validas === 1 ? '' : 'es'}
+                    </span>{' '}
+                    en el módulo de novedades.
+                  </>
+                )}
+              </p>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button variant="outline" onClick={() => navigate('/novedades')} disabled={cargando}>
+                  Cancelar
+                </Button>
+                <Button onClick={confirmar} disabled={!puedeCargar}>
+                  {cargando
+                    ? <Loader2 className="animate-spin" strokeWidth={2} />
+                    : <Upload strokeWidth={2} />}
+                  {cargando ? 'Cargando…' : `Cargar ${resumen.validas} novedades`}
+                </Button>
+              </div>
             </div>
           </PasoCard>
         </>

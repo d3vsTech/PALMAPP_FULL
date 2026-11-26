@@ -25,7 +25,7 @@ import {
 } from '../../../../api/liquidaciones';
 import type { ApiError } from '../../../../api/client';
 import { formatFecha } from '../../../utils/fecha';
-import { fmtCOP, type TipoPeriodoDetalle, TEXTOS_PERIODO } from './textos';
+import { fmtCOP, METODO_PAGO_LABEL, type TipoPeriodoDetalle, TEXTOS_PERIODO } from './textos';
 
 const METODOS: MetodoPago[] = ['TRANSFERENCIA', 'EFECTIVO', 'CHEQUE', 'PILA'];
 
@@ -137,7 +137,7 @@ export default function RegistrarPagoDialog({ periodoId, tipo, objetivo, onClose
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {fila ? `${txt.girarFila} — ${fila.empleado.nombre_completo}` : txt.girarTodos}
+            {fila ? `${txt.girarFila} · ${fila.empleado.nombre_completo}` : txt.girarTodos}
           </AlertDialogTitle>
           <AlertDialogDescription>
             {fila
@@ -157,7 +157,7 @@ export default function RegistrarPagoDialog({ periodoId, tipo, objetivo, onClose
               <SelectTrigger id="registrarp-metodo"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {METODOS.map(m => (
-                  <SelectItem key={m} value={m}>{m.charAt(0) + m.slice(1).toLowerCase()}</SelectItem>
+                  <SelectItem key={m} value={m}>{METODO_PAGO_LABEL[m]}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -179,7 +179,7 @@ export default function RegistrarPagoDialog({ periodoId, tipo, objetivo, onClose
               <p className="text-xs text-muted-foreground">Vacío usa el fondo elegido por cada colaborador</p>
             </div>
           )}
-          <div className={`space-y-1.5 ${esCesantias ? 'col-span-2' : ''}`}>
+          <div className={`space-y-1.5 ${esCesantias ? 'sm:col-span-2' : ''}`}>
             <Label htmlFor="observacion">Observación</Label>
             <Input id="observacion" placeholder="Opcional" maxLength={500} value={observacion} onChange={(e) => setObservacion(e.target.value)} />
           </div>
@@ -188,7 +188,7 @@ export default function RegistrarPagoDialog({ periodoId, tipo, objetivo, onClose
         <AlertDialogFooter>
           <AlertDialogCancel disabled={guardando}>Cancelar</AlertDialogCancel>
           <AlertDialogAction onClick={registrar} disabled={guardando}>
-            {guardando && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
             Registrar
           </AlertDialogAction>
         </AlertDialogFooter>

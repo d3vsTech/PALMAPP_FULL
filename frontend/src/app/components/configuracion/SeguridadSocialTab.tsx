@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { ConfigSection, ConfigRowActions } from './ConfigSection';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus } from 'lucide-react';
+import { cn } from '../lib/utils';
 import { toast } from 'sonner';
 import { useConfirmDelete } from '../../hooks/useConfirmDelete';
 import { TabLoadingGate } from './TabLoadingGate';
@@ -44,33 +45,33 @@ const FONDOS_CESANTIAS_DEFAULT = [
 const SECCIONES: SeccionConfig[] = [
   {
     key: 'eps',
-    titulo: 'Entidades Promotoras de Salud (EPS)',
-    descripcion: 'Administradoras de salud disponibles para los colaboradores',
+    titulo: 'Entidades promotoras de salud (EPS)',
+    descripcion: 'Administradoras de salud disponibles para los colaboradores.',
     etiqueta: 'EPS',
     api: configuracionApi.eps,
     defaults: EPS_DEFAULT,
   },
   {
     key: 'arl',
-    titulo: 'Administradoras de Riesgos Laborales (ARL)',
-    descripcion: 'Entidades de riesgos laborales',
+    titulo: 'Administradoras de riesgos laborales (ARL)',
+    descripcion: 'Entidades de riesgos laborales.',
     etiqueta: 'ARL',
     api: configuracionApi.arl,
     defaults: ARL_DEFAULT,
   },
   {
     key: 'fondos',
-    titulo: 'Fondos de Pensiones',
-    descripcion: 'Administradoras de fondos pensionales',
-    etiqueta: 'Fondo de Pensiones',
+    titulo: 'Fondos de pensiones',
+    descripcion: 'Administradoras de fondos pensionales.',
+    etiqueta: 'Fondo de pensiones',
     api: configuracionApi.fondosPension,
     defaults: FONDOS_PENSION_DEFAULT,
   },
   {
     key: 'fondos-cesantias',
-    titulo: 'Fondos de Cesantías',
-    descripcion: 'Administradoras de fondos de cesantías',
-    etiqueta: 'Fondo de Cesantías',
+    titulo: 'Fondos de cesantías',
+    descripcion: 'Administradoras de fondos de cesantías.',
+    etiqueta: 'Fondo de cesantías',
     api: configuracionApi.fondosCesantias,
     defaults: FONDOS_CESANTIAS_DEFAULT,
   },
@@ -170,51 +171,50 @@ export function SeguridadSocialTab() {
   const renderSeccion = (seccion: SeccionConfig) => {
     const lista = items[seccion.key] ?? [];
     return (
-      <Card key={seccion.key} className="border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
-          <CardTitle>{seccion.titulo}</CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">{seccion.descripcion}</p>
-        </CardHeader>
-        <CardContent className="p-6">
-          {/* Lista de entidades */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-            {[...lista].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((entidad) => (
-              <div
-                key={entidad.id}
-                className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border"
-              >
-                <span className="font-medium">{entidad.nombre}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => eliminarEntidad(seccion, entidad)}
-                  className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+      <ConfigSection title={seccion.titulo} description={seccion.descripcion} flush>
+        {lista.length > 0 ? (
+          <ul className="grid divide-y divide-border sm:grid-cols-2 sm:divide-y-0">
+            {[...lista]
+              .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' }))
+              .map((entidad, i) => (
+                <li
+                  key={entidad.id}
+                  className={cn(
+                    'flex items-center justify-between gap-2 py-1.5 pl-5 pr-3',
+                    'sm:border-b sm:border-border',
+                    i % 2 === 1 && 'sm:border-l',
+                  )}
                 >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
-          </div>
+                  <span className="break-words text-sm font-medium text-foreground">{entidad.nombre}</span>
+                  <ConfigRowActions
+                    label={entidad.nombre}
+                    onDelete={() => eliminarEntidad(seccion, entidad)}
+                  />
+                </li>
+              ))}
+          </ul>
+        ) : (
+          <p className="px-5 py-4 text-sm text-muted-foreground">
+            Todavía no hay entidades registradas.
+          </p>
+        )}
 
-          {/* Agregar nueva entidad */}
-          <div className="flex gap-2">
-            <Input
-              value={nuevoNombre}
-              onChange={(e) => setNuevoNombre(e.target.value)}
-              placeholder={`Nombre del ${seccion.etiqueta.toLowerCase()}`}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') {
-                  agregarEntidad(seccion);
-                }
-              }}
-            />
-            <Button onClick={() => agregarEntidad(seccion)} className="gap-2">
-              <Plus className="h-4 w-4" />
-              Agregar
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        <div className="flex gap-2 border-t border-border px-5 py-4 sm:border-t-0">
+          <Input
+            value={nuevoNombre}
+            onChange={(e) => setNuevoNombre(e.target.value)}
+            placeholder={`Nombre de la ${/^[A-Z]+$/.test(seccion.etiqueta) ? seccion.etiqueta : seccion.etiqueta.toLowerCase()}`}
+            aria-label={`Nombre de la nueva entidad (${seccion.etiqueta})`}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') agregarEntidad(seccion);
+            }}
+          />
+          <Button variant="outline" onClick={() => agregarEntidad(seccion)}>
+            <Plus strokeWidth={2} />
+            Agregar
+          </Button>
+        </div>
+      </ConfigSection>
     );
   };
 

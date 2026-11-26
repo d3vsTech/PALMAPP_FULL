@@ -16,10 +16,12 @@
  * (§7.2 de API_PRESTAMOS).
  */
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams, Link } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import PageHeader from '../../components/common/PageHeader';
+import StatStrip from '../../components/common/StatStrip';
+import { Card, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Badge } from '../../components/ui/badge';
@@ -32,7 +34,7 @@ import {
 } from '../../components/ui/select';
 import { Checkbox } from '../../components/ui/checkbox';
 import {
-  ArrowLeft, Plus, DollarSign, Calendar, CheckCircle2, Clock, Download, Loader2,
+  Plus, Download, Loader2, Check, Landmark, CircleCheck, Wallet, CalendarClock,
 } from 'lucide-react';
 import {
   prestamosApi,
@@ -46,6 +48,13 @@ import { descargarComprobanteAbono } from './prestamoPdf';
 import type { ApiError } from '../../../api/client';
 import { formatThousands, parseCOP } from '../../components/lib/format';
 import { formatFecha } from '../../utils/fecha';
+import { FilaMonto, thead, th, td } from '../../components/nomina/piezas';
+
+const ESTADO_BADGE = {
+  VIGENTE:   { label: 'Vigente',   variant: 'info' },
+  PAGADO:    { label: 'Pagado',    variant: 'success' },
+  CANCELADO: { label: 'Cancelado', variant: 'secondary' },
+} as const;
 
 // Sin LIQUIDACION_FINAL a propósito: ese medio solo lo escribe el módulo de
 // liquidaciones al pagar una liquidación final, y el backend lo rechaza aquí.
@@ -144,15 +153,21 @@ export default function AbonosPrestamo() {
 
   if (cargando) {
     return (
-      <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" />
-        Cargando pagos del préstamo...
-      </div>
+      <Card className="flex-row items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Cargando abonos del préstamo...
+      </Card>
     );
   }
   if (!historial) {
     return (
-      <div className="p-8 text-muted-foreground">Préstamo no encontrado.</div>
+      <div className="space-y-6">
+        <PageHeader
+          backTo="/nomina/prestamos"
+          title="Préstamo no encontrado"
+          description="El préstamo que buscas no existe o fue eliminado."
+        />
+      </div>
     );
   }
 
@@ -167,12 +182,7 @@ export default function AbonosPrestamo() {
   const cuotasPendientes = p.num_cuotas - p.cuotas_pagadas;
   const puedeRegistrarAbono = estaVigente && cuotasPendientes > 0;
 
-  const estadoBadgeClass =
-    p.estado === 'VIGENTE'
-      ? 'bg-primary/10 text-primary border-primary/20'
-      : p.estado === 'PAGADO'
-        ? 'bg-success/10 text-success border-success/20'
-        : 'bg-success/10 text-success border-success/20';
+  const estadoBadge = ESTADO_BADGE[p.estado] ?? ESTADO_BADGE.CANCELADO;
 
   const guardarAbono = async () => {
     if (!prestamoId) return;
@@ -214,197 +224,108 @@ export default function AbonosPrestamo() {
 
   return (
     <div className="space-y-6">
-      {/* Volver + header */}
-      <div>
-        <Button variant="ghost" size="sm" asChild className="mb-4 gap-2">
-          <Link to="/nomina/prestamos">
-            <ArrowLeft className="h-4 w-4" />
-            Volver a Préstamos
-          </Link>
-        </Button>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-primary">Pagos del Préstamo</h1>
-            <p className="text-muted-foreground mt-1">
-              {p.concepto}
-            </p>
-          </div>
-          {puedeRegistrarAbono && (
-            <Button
-              onClick={() => setModalAbierto(true)}
-              className="bg-primary hover:bg-primary/90 gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              Registrar pago
-            </Button>
-          )}
+      <PageHeader
+        backTo="/nomina/prestamos"
+        eyebrow={p.concepto}
+        title={
+          <span className="flex flex-wrap items-center gap-3">
+            Abonos del préstamo
+            <Badge variant={estadoBadge.variant}>{estadoBadge.label}</Badge>
+          </span>
+        }
+        description={prestamo?.empleado
+          ? `${prestamo.empleado.nombre_completo} · C.C. ${prestamo.empleado.documento}`
+          : undefined}
+        actions={puedeRegistrarAbono ? (
+          <Button onClick={() => setModalAbierto(true)}>
+            <Plus strokeWidth={2} />
+            Nuevo abono
+          </Button>
+        ) : undefined}
+      />
+
+      <StatStrip
+        items={[
+          { label: 'Monto total', value: `$${montoTotal.toLocaleString('es-CO')}`, icon: Landmark, tone: 'blue' },
+          {
+            label: 'Total abonado',
+            value: `$${totalAbonado.toLocaleString('es-CO')}`,
+            note: `${abonos.length} abono${abonos.length === 1 ? '' : 's'} realizado${abonos.length === 1 ? '' : 's'}`,
+            icon: CircleCheck,
+            tone: 'green',
+          },
+          { label: 'Saldo pendiente', value: `$${saldoPendiente.toLocaleString('es-CO')}`, icon: Wallet, tone: 'amber' },
+          { label: 'Cuota', value: `$${cuota.toLocaleString('es-CO')}`, icon: CalendarClock, tone: 'neutral' },
+        ]}
+      />
+
+      {/* Barra de progreso */}
+      <Card className="gap-2 px-6 py-4">
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span>Avance del préstamo · {p.cuotas_pagadas}/{p.num_cuotas} cuotas</span>
+          <span className="tabular-nums">{pct} % abonado</span>
         </div>
-      </div>
-
-      {/* Resumen del préstamo */}
-      <Card className="border-border">
-        <CardContent className="p-5">
-          <div className="flex flex-wrap gap-6 items-start justify-between">
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                {p.concepto}
-              </p>
-              <div className="flex items-center gap-3 mt-2">
-                <Badge variant="outline" className={estadoBadgeClass}>
-                  {p.estado === 'VIGENTE' ? 'Vigente' : p.estado === 'PAGADO' ? 'Pagado' : 'Cancelado'}
-                </Badge>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 text-sm">
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Monto Total</p>
-                <p className="font-bold text-lg">${montoTotal.toLocaleString('es-CO')}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Total Abonado</p>
-                <p className="font-bold text-lg text-primary">
-                  ${totalAbonado.toLocaleString('es-CO')}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Saldo Pendiente</p>
-                <p className={`font-bold text-lg ${saldoPendiente === 0 ? 'text-success' : 'text-foreground'}`}>
-                  ${saldoPendiente.toLocaleString('es-CO')}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Cuota</p>
-                <p className="font-bold text-lg">${cuota.toLocaleString('es-CO')}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Barra de progreso */}
-          <div className="mt-4">
-            <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
-              <span>Avance del préstamo ({p.cuotas_pagadas}/{p.num_cuotas} cuotas)</span>
-              <span>{pct}% abonado</span>
-            </div>
-            <div className="h-2 rounded-full bg-muted overflow-hidden">
-              <div
-                className="h-full bg-primary rounded-full transition"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-          </div>
-        </CardContent>
+        <div className="h-2 overflow-hidden rounded-full bg-muted">
+          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+        </div>
       </Card>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        <Card className="border-border">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <CheckCircle2 className="h-4 w-4 text-primary" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Cuotas pagadas</p>
-              <p className="text-xl font-bold">{abonos.length}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-border">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <DollarSign className="h-4 w-4 text-primary" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Total abonado</p>
-              <p className="text-xl font-bold text-primary">
-                ${totalAbonado.toLocaleString('es-CO')}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-border">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
-              <Clock className="h-4 w-4 text-amber-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Saldo pendiente</p>
-              <p className={`text-xl font-bold ${saldoPendiente === 0 ? 'text-success' : 'text-amber-600'}`}>
-                ${saldoPendiente.toLocaleString('es-CO')}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Tabla de pagos */}
-      <Card className="border-border">
-        <CardHeader className="pb-0">
-          <CardTitle className="text-base">Historial de pagos</CardTitle>
+      {/* Historial de abonos */}
+      <Card className="gap-0 overflow-hidden">
+        <CardHeader className="border-b pb-5">
+          <CardTitle>Historial de abonos</CardTitle>
+          <CardDescription>Del más reciente al más antiguo</CardDescription>
         </CardHeader>
-        <CardContent className="p-0 mt-4">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  <th className="text-left p-4 text-xs font-semibold text-muted-foreground">Fecha</th>
-                  <th className="text-right p-4 text-xs font-semibold text-muted-foreground">Valor pagado</th>
-                  <th className="text-left p-4 text-xs font-semibold text-muted-foreground">Medio de Pago</th>
-                  <th className="text-left p-4 text-xs font-semibold text-muted-foreground">Referencia</th>
-                  <th className="text-left p-4 text-xs font-semibold text-muted-foreground">Nota</th>
-                  <th className="text-right p-4 text-xs font-semibold text-muted-foreground">Saldo tras el pago</th>
-                  {RECIBO_DE_ABONO_VISIBLE && <th className="p-4"></th>}
+              <thead className={thead}>
+                <tr>
+                  <th className="px-6 py-2.5 text-left font-semibold">Fecha</th>
+                  <th className={`${th} text-right`}>Valor</th>
+                  <th className={`${th} hidden text-left sm:table-cell`}>Medio de pago</th>
+                  <th className={`${th} hidden text-left md:table-cell`}>Referencia</th>
+                  <th className={`${th} hidden text-left lg:table-cell`}>Nota</th>
+                  <th className={`${RECIBO_DE_ABONO_VISIBLE ? th : 'px-6 py-2.5 font-semibold'} text-right`}>Saldo tras abono</th>
+                  {RECIBO_DE_ABONO_VISIBLE && <th className={th}></th>}
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-border">
                 {abonos.length === 0 ? (
                   <tr>
-                    <td colSpan={RECIBO_DE_ABONO_VISIBLE ? 7 : 6} className="p-8 text-center text-muted-foreground">
-                      Sin pagos registrados aún.
+                    <td colSpan={RECIBO_DE_ABONO_VISIBLE ? 7 : 6} className="px-6 py-10 text-center text-muted-foreground">
+                      Sin abonos registrados aún.
                     </td>
                   </tr>
                 ) : (
                   // Mostrar de más reciente a más antiguo (backend devuelve ASC).
-                  [...abonos].reverse().map((a: AbonoPrestamo, idx) => (
-                    <tr
-                      key={a.id}
-                      className={`border-b border-border last:border-0 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}
-                    >
-                      <td className="p-4">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                          {fmtFecha(a.fecha)}
-                        </div>
+                  [...abonos].reverse().map((a: AbonoPrestamo) => (
+                    <tr key={a.id}>
+                      <td className="whitespace-nowrap px-6 py-3">
+                        {fmtFecha(a.fecha)}
+                        <span className="block text-xs text-muted-foreground sm:hidden">{a.medio_pago_label}</span>
                       </td>
-                      <td className="p-4 text-right font-bold text-primary">
+                      <td className={`${td} text-right tabular-nums text-foreground`}>
                         ${toNumber(a.valor).toLocaleString('es-CO')}
                       </td>
-                      <td className="p-4 text-muted-foreground">
+                      <td className={`${td} hidden text-muted-foreground sm:table-cell`}>
                         {a.medio_pago_label}
                         {a.tipo === 'NOMINA' && (
-                          <span
-                            className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 font-medium align-middle"
-                            title={`Registrado por ${a.registrado_por}`}
-                          >
+                          <Badge variant="secondary" className="ml-1.5" title={`Registrado por ${a.registrado_por}`}>
                             Nómina
-                          </span>
+                          </Badge>
                         )}
                         {a.tipo === 'LIQUIDACION_FINAL' && (
-                          <span
-                            className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 font-medium align-middle dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/30"
-                            title="Saldado al pagar la liquidación final de contrato"
-                          >
+                          <Badge variant="warning" className="ml-1.5" title="Saldado al pagar la liquidación final de contrato">
                             Liquidación final
-                          </span>
+                          </Badge>
                         )}
                       </td>
-                      <td className="p-4 text-muted-foreground font-mono text-xs">{a.referencia || '—'}</td>
-                      <td className="p-4 text-muted-foreground">{a.nota || '—'}</td>
-                      <td className="p-4 text-right">
-                        <span className={`font-semibold ${toNumber(a.saldo_tras_abono) === 0 ? 'text-success' : 'text-foreground'}`}>
-                          ${toNumber(a.saldo_tras_abono).toLocaleString('es-CO')}
-                        </span>
+                      <td className={`${td} hidden text-xs text-muted-foreground md:table-cell`}>{a.referencia || '—'}</td>
+                      <td className={`${td} hidden text-muted-foreground lg:table-cell`}>{a.nota || '—'}</td>
+                      <td className={`${RECIBO_DE_ABONO_VISIBLE ? td : 'px-6 py-3'} text-right font-semibold tabular-nums text-foreground`}>
+                        ${toNumber(a.saldo_tras_abono).toLocaleString('es-CO')}
                       </td>
-                      {RECIBO_DE_ABONO_VISIBLE && <td className="p-4 text-right">
+                      {RECIBO_DE_ABONO_VISIBLE && <td className={`${td} text-right`}>
                         {/* El recibo de este pago, para entregárselo al
                             colaborador. Sin el préstamo cargado no se puede
                             armar la cabecera, así que el botón no sale. */}
@@ -413,10 +334,9 @@ export default function AbonosPrestamo() {
                             size="sm"
                             variant="outline"
                             onClick={() => void descargarComprobanteAbono(prestamo, a)}
-                            className="gap-1.5 text-xs"
-                            title="Descargar el comprobante de este pago"
+                            title="Descargar el comprobante de este abono"
                           >
-                            <Download className="h-3.5 w-3.5" />
+                            <Download strokeWidth={2} />
                             Recibo
                           </Button>
                         )}
@@ -427,38 +347,32 @@ export default function AbonosPrestamo() {
               </tbody>
             </table>
           </div>
-        </CardContent>
       </Card>
 
-      {/* Modal de pago de cuota */}
+      {/* Modal nuevo abono */}
       <Dialog open={modalAbierto} onOpenChange={setModalAbierto}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-primary" />
-              Registrar pago de cuota
-            </DialogTitle>
+            <DialogTitle>Registrar abono</DialogTitle>
             <DialogDescription>
-              {p.concepto}
-              {saldarTodo
-                ? ` · Se aplican las ${cuotasPendientes} cuotas pendientes ($${saldoPendiente.toLocaleString('es-CO')})`
-                : ` · Se aplica la próxima cuota pendiente del calendario ($${cuota.toLocaleString('es-CO')})`}
+              {prestamo?.empleado ? `${prestamo.empleado.nombre_completo} · ` : ''}{p.concepto}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             {/* Info saldo actual */}
-            <div className="rounded-lg border border-border bg-muted/20 px-4 py-3 flex justify-between text-sm">
-              <span className="text-muted-foreground">Saldo pendiente actual</span>
-              <span className="font-bold text-foreground">
-                ${saldoPendiente.toLocaleString('es-CO')}
-              </span>
+            <div className="rounded-lg bg-muted/60 px-4 py-3">
+              <FilaMonto
+                label="Saldo pendiente actual"
+                value={`$${saldoPendiente.toLocaleString('es-CO')}`}
+                strong
+              />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="abonospres-fecha-del-pago">Fecha del pago</Label>
-                <Input id="abonospres-fecha-del-pago"
+                <Label htmlFor="abono-fecha">Fecha del abono</Label>
+                <Input id="abono-fecha"
                   type="date"
                   value={form.fecha}
                   max={new Date().toISOString().split('T')[0]}
@@ -466,37 +380,36 @@ export default function AbonosPrestamo() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>{saldarTodo ? 'Valor a pagar' : 'Valor de la cuota'}</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder={(saldarTodo ? saldoPendiente : cuota).toLocaleString('es-CO')}
-                    value={formatThousands(form.valor)}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, valor: parseCOP(e.target.value) }))
-                    }
-                    className="pl-7"
-                    disabled
-                    title="Es el valor de la próxima cuota pendiente del calendario"
-                  />
-                </div>
-                <p className="text-[10px] text-muted-foreground">
+                <Label htmlFor="abono-valor">{saldarTodo ? 'Valor a pagar' : 'Valor del abono'}</Label>
+                <Input
+                  id="abono-valor"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder={saldarTodo
+                    ? `Saldo: $${saldoPendiente.toLocaleString('es-CO')}`
+                    : `Cuota: $${cuota.toLocaleString('es-CO')}`}
+                  value={formatThousands(form.valor)}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, valor: parseCOP(e.target.value) }))
+                  }
+                  disabled
+                  title="Es el valor de la próxima cuota pendiente del calendario"
+                />
+                <p className="text-xs text-muted-foreground">
                   {saldarTodo
-                    ? 'Es la suma de las cuotas pendientes.'
-                    : 'Se paga la cuota completa: el monto no se puede partir.'}
+                    ? `Se aplican las ${cuotasPendientes} cuotas pendientes.`
+                    : 'Se aplica la próxima cuota completa. No se puede partir.'}
                 </p>
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Medio de pago</Label>
+              <Label htmlFor="abono-medio">Medio de pago</Label>
               <Select
                 value={form.medioPago}
                 onValueChange={(v) => setForm((f) => ({ ...f, medioPago: v as MedioPagoAbono }))}
               >
-                <SelectTrigger>
+                <SelectTrigger id="abono-medio">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -508,11 +421,11 @@ export default function AbonosPrestamo() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="abonospres-referencia-comprobante-span-classname-text-muted-foreground-font-normal-opcional-span">
-                Referencia / Comprobante <span className="text-muted-foreground font-normal">(opcional)</span>
+              <Label htmlFor="abono-ref">
+                Referencia o comprobante <span className="font-normal text-muted-foreground">(opcional)</span>
               </Label>
-              <Input id="abonospres-referencia-comprobante-span-classname-text-muted-foreground-font-normal-opcional-span"
-                placeholder="Ej: TRF-20260713, Cheque 001234..."
+              <Input id="abono-ref"
+                placeholder="Ej: TRF-20260713, cheque 001234"
                 value={form.referencia}
                 onChange={(e) => setForm((f) => ({ ...f, referencia: e.target.value }))}
                 maxLength={100}
@@ -520,11 +433,11 @@ export default function AbonosPrestamo() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="abonospres-nota-span-classname-text-muted-foreground-font-normal-opcional-span">
-                Nota <span className="text-muted-foreground font-normal">(opcional)</span>
+              <Label htmlFor="abono-nota">
+                Nota <span className="font-normal text-muted-foreground">(opcional)</span>
               </Label>
-              <Input id="abonospres-nota-span-classname-text-muted-foreground-font-normal-opcional-span"
-                placeholder="Observación sobre este pago..."
+              <Input id="abono-nota"
+                placeholder="Observación sobre este abono"
                 value={form.nota}
                 onChange={(e) => setForm((f) => ({ ...f, nota: e.target.value }))}
                 maxLength={500}
@@ -539,7 +452,7 @@ export default function AbonosPrestamo() {
                 onCheckedChange={(v) => setSaldarTodo(v === true)}
                 className="mt-0.5"
               />
-              <span className="text-sm">
+              <span className="text-sm text-foreground">
                 <span className="font-medium">Saldar el préstamo completo</span>
                 <span className="mt-0.5 block text-xs text-muted-foreground">
                   Paga las {cuotasPendientes} cuota{cuotasPendientes === 1 ? '' : 's'} que
@@ -549,21 +462,18 @@ export default function AbonosPrestamo() {
             </label>
 
             {/* Vista previa */}
-            <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm space-y-1">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Saldo antes</span>
-                <span>${saldoPendiente.toLocaleString('es-CO')}</span>
-              </div>
-              <div className="flex justify-between text-destructive">
-                <span>{saldarTodo ? '— Saldo completo' : '— Cuota'}</span>
-                <span>-${(saldarTodo ? saldoPendiente : cuota).toLocaleString('es-CO')}</span>
-              </div>
-              <div className="flex justify-between font-bold border-t border-border pt-1 mt-1">
-                <span>Saldo después</span>
-                <span className={saldarTodo || saldoPendiente - cuota <= 0 ? 'text-success' : 'text-foreground'}>
-                  ${saldarTodo ? 0 : Math.max(0, saldoPendiente - cuota).toLocaleString('es-CO')}
-                </span>
-              </div>
+            <div className="space-y-1 rounded-lg bg-muted/60 px-4 py-3">
+              <FilaMonto label="Saldo antes" value={`$${saldoPendiente.toLocaleString('es-CO')}`} />
+              <FilaMonto
+                label="Abono"
+                value={`−$${(saldarTodo ? saldoPendiente : cuota).toLocaleString('es-CO')}`}
+              />
+              <FilaMonto
+                label="Saldo después"
+                value={`$${saldarTodo ? 0 : Math.max(0, saldoPendiente - cuota).toLocaleString('es-CO')}`}
+                strong
+                className="border-t border-border pt-1"
+              />
             </div>
           </div>
 
@@ -578,10 +488,11 @@ export default function AbonosPrestamo() {
             <Button
               onClick={guardarAbono}
               disabled={guardando}
-              className="bg-primary hover:bg-primary/90 gap-2"
             >
-              {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              {saldarTodo ? 'Saldar préstamo' : 'Registrar pago'}
+              {guardando
+                ? <Loader2 className="animate-spin" strokeWidth={2} />
+                : <Check strokeWidth={2} />}
+              {saldarTodo ? 'Saldar préstamo' : 'Registrar abono'}
             </Button>
           </DialogFooter>
         </DialogContent>

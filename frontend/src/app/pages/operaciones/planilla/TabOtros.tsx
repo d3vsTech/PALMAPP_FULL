@@ -78,17 +78,17 @@ export function TabOtros({
   return (
     <>
                       <div className="flex justify-end">
-                        <Button onClick={agregarOtros} className="gap-2">
+                        <Button onClick={agregarOtros}>
                           <Plus className="h-4 w-4" />
-                          Agregar Otros
+                          Agregar otros
                         </Button>
                       </div>
 
                       {/* Formulario de edición */}
                       {otrosEnEdicion && (
                         <div ref={setFormRef('otros')} className="scroll-mt-24">
-                        <Card className="gap-4 border-primary/40">
-                          <CardContent className="pt-6 space-y-4">
+                        <Card className="border-primary/40 bg-muted/40">
+                          <CardContent className="space-y-4">
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Colaboradores</Label>
@@ -113,7 +113,7 @@ export function TabOtros({
                                             {col.nombres} {col.apellidos}
                                             {col.terceroNombre && (
                                               <span
-                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle"
+                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-warning-soft text-warning border border-warning/20 font-medium align-middle"
                                                 title={`Operario del tercero ${col.terceroNombre}`}
                                               >
                                                 Tercero · {col.terceroNombre}
@@ -202,7 +202,7 @@ export function TabOtros({
                                   guardar la tarjeta se crea la actividad en el catálogo
                                   y aparece en Configuración → Labores → Otros. */}
                               <div className="space-y-2 md:col-span-2">
-                                <Label>Trabajo Realizado</Label>
+                                <Label>Trabajo realizado</Label>
                                 <SelectActividadLabor
                                   laborId={otrosEnEdicion.laborOtrosRawId}
                                   actividades={actividadesPorLabor[String(otrosEnEdicion.laborOtrosRawId ?? '')] ?? []}
@@ -221,10 +221,10 @@ export function TabOtros({
                                   hay una labor escogida. */}
                               {otrosEnEdicion.laborOtrosTipoPago === 'POR_PALMA' && (
                                 <div className="space-y-2">
-                                  <Label htmlFor="tabotros-numero-de-palmas-span-classname-text-destructive-span">
-                                    Número de Palmas <span className="text-destructive">*</span>
+                                  <Label htmlFor="tabotros-numero-de-palmas">
+                                    Número de palmas <span className="text-destructive">*</span>
                                   </Label>
-                                  <Input id="tabotros-numero-de-palmas-span-classname-text-destructive-span"
+                                  <Input id="tabotros-numero-de-palmas"
                                     type="number" step="0.001"
                                     placeholder="0"
                                     value={otrosEnEdicion.numeroPalmas ?? ''}
@@ -243,7 +243,7 @@ export function TabOtros({
                               <Button variant="outline" onClick={cancelarOtros}>
                                 Cancelar
                               </Button>
-                              <Button onClick={guardarOtros} className="gap-2">
+                              <Button onClick={guardarOtros}>
                                 <Check className="h-4 w-4" />
                                 Guardar
                               </Button>
@@ -258,7 +258,7 @@ export function TabOtros({
                         const lote = lotesData.find(l => l.id === trabajo.lote);
                         const sublote = sublotes.find(s => s.id === trabajo.sublote);
                         return (
-                          <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
+                          <Card key={trabajo.id}>
                             <CardContent className="p-4">
                               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 md:gap-4">
                                 {/* Colaboradores */}
@@ -319,9 +319,9 @@ export function TabOtros({
                       })}
 
                       {trabajosOtros.length === 0 && !otrosEnEdicion && (
-                        <div className="text-center py-12 text-muted-foreground">
+                        <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
                           <p>No hay registros de otros trabajos</p>
-                          <p className="text-sm">Haz clic en "Agregar Otros" para crear uno</p>
+                          <p className="text-sm">Haz clic en "Agregar otros" para crear uno</p>
                         </div>
                       )}
     </>

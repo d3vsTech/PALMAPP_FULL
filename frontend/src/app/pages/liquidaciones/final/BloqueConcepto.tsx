@@ -34,6 +34,8 @@ interface Props {
   onLimpiar: () => void;
   /** Cómo se llaman los días de este concepto: "acumulados", "del semestre". */
   unidadDias?: string;
+  /** Etiqueta del subtotal. Por defecto "Total" más el título. */
+  etiquetaTotal?: string;
   /** Se oculta el bloque completo cuando el concepto no aplica. */
   oculto?: boolean;
   soloLectura?: boolean;
@@ -49,6 +51,7 @@ export function BloqueConcepto({
   onAjuste,
   onLimpiar,
   unidadDias = 'días',
+  etiquetaTotal,
   oculto = false,
   soloLectura = false,
 }: Props) {
@@ -59,27 +62,26 @@ export function BloqueConcepto({
   const faltaMotivo = ajusteFaltaMotivo(ajuste);
   const valor = concepto?.valor ?? 0;
   const subtitulo = subtituloDe(concepto, unidadDias);
+  const rotuloTotal = etiquetaTotal ?? `Total ${titulo.toLowerCase()}`;
+  // Igual que el diseño: dos campos van en dos columnas, más en tres.
+  const columnas = campos.length === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3';
 
   return (
-    <div className="space-y-3 rounded-lg border border-border p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="flex items-center gap-2 font-semibold">
-            <span className="h-2 w-2 rounded-full bg-primary" />
-            {titulo}
-            {concepto?.es_manual && (
-              <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                Ajustado
-              </Badge>
-            )}
-          </h3>
-          {descripcion && <p className="mt-0.5 text-xs text-muted-foreground">{descripcion}</p>}
-        </div>
+    <div className="space-y-3">
+      <div className="min-w-0">
+        <p className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
+          {titulo}
+          {concepto?.es_manual && <Badge variant="warning">Ajustado</Badge>}
+        </p>
+        {descripcion && <p className="mt-0.5 text-xs text-muted-foreground">{descripcion}</p>}
+      </div>
 
-        <div className="text-right">
-          <p className="text-lg font-bold text-primary">{fmtCOP(valor)}</p>
-          {subtitulo && <p className="text-xs text-muted-foreground">{subtitulo}</p>}
-        </div>
+      <div className="flex items-center justify-between gap-4 rounded-lg bg-muted/60 px-4 py-2.5 text-sm">
+        <span className="text-muted-foreground">
+          {rotuloTotal}
+          {subtitulo && ` · ${subtitulo}`}
+        </span>
+        <span className="font-semibold tabular-nums text-foreground">{fmtCOP(valor)}</span>
       </div>
 
       {/* En el estado de cuenta no se pintan avisos: es una consulta, no hay
@@ -87,13 +89,10 @@ export function BloqueConcepto({
           ahí son la señal de que un concepto quedó mal calculado. */}
       {!soloLectura &&
         concepto?.advertencias?.map((a, i) => (
-          <p
-            key={`${a.code}-${i}`}
-            className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400"
-          >
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            {a.mensaje}
-          </p>
+          <div key={`${a.code}-${i}`} className="flex gap-2 rounded-lg bg-warning-soft p-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+            <p className="text-sm text-foreground">{a.mensaje}</p>
+          </div>
         ))}
 
       {!soloLectura && (
@@ -103,24 +102,24 @@ export function BloqueConcepto({
             variant="ghost"
             size="sm"
             onClick={() => setAbierto((v) => !v)}
-            className="h-8 gap-1.5 px-2 text-xs"
+            className="text-muted-foreground"
           >
-            <Pencil className="h-3.5 w-3.5" />
+            <Pencil strokeWidth={2} />
             Ajustar a mano
-            {abierto ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            {abierto ? <ChevronUp strokeWidth={2} /> : <ChevronDown strokeWidth={2} />}
           </Button>
 
           {abierto && (
-            <div className="space-y-3 rounded-md bg-muted/30 p-3">
+            <div className="space-y-4 rounded-lg bg-muted/60 p-4">
               <p className="text-xs text-muted-foreground">
-                Lo que escriba aquí reemplaza el dato con el que el sistema calcula. Queda
+                Lo que escribas aquí reemplaza el dato con el que el sistema calcula. Queda
                 guardado en el comprobante con su motivo.
               </p>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className={`grid grid-cols-1 gap-4 ${columnas}`}>
                 {campos.map(({ campo, label, tipo = 'number' }) => (
-                  <div key={String(campo)} className="space-y-1.5">
-                    <Label htmlFor={`${codigo}-${String(campo)}`} className="text-xs">
+                  <div key={String(campo)} className="space-y-2">
+                    <Label htmlFor={`${codigo}-${String(campo)}`}>
                       {label}
                     </Label>
                     <Input
@@ -129,26 +128,24 @@ export function BloqueConcepto({
                       value={(ajuste?.[campo] as string | undefined) ?? ''}
                       onChange={(e) => onAjuste(campo, e.target.value)}
                       placeholder="Calculado"
-                      className="h-9"
                     />
                   </div>
                 ))}
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor={`${codigo}-motivo`} className="text-xs">
-                  Motivo del ajuste {ajustado && <span className="text-destructive">*</span>}
+              <div className="space-y-2">
+                <Label htmlFor={`${codigo}-motivo`}>
+                  Motivo del ajuste{ajustado && ' *'}
                 </Label>
                 <Input
                   id={`${codigo}-motivo`}
                   value={ajuste?.motivo ?? ''}
                   onChange={(e) => onAjuste('motivo', e.target.value)}
                   placeholder="Por qué se cambia este valor"
-                  className="h-9"
                 />
                 {faltaMotivo && (
-                  <p className="flex items-center gap-1.5 text-xs text-destructive">
-                    <AlertTriangle className="h-3.5 w-3.5" />
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <AlertTriangle className="h-3.5 w-3.5 text-destructive" strokeWidth={2} />
                     Sin motivo el ajuste no se aplica.
                   </p>
                 )}
@@ -160,9 +157,9 @@ export function BloqueConcepto({
                   variant="ghost"
                   size="sm"
                   onClick={onLimpiar}
-                  className="h-8 gap-1.5 px-2 text-xs"
+                  className="text-muted-foreground"
                 >
-                  <RotateCcw className="h-3.5 w-3.5" />
+                  <RotateCcw strokeWidth={2} />
                   Volver al valor calculado
                 </Button>
               )}
@@ -194,7 +191,7 @@ function subtituloDe(
 export const CAMPOS_AJUSTE: Record<CodigoAjustable, CampoAjuste[]> = {
   CESANTIAS: [
     { campo: 'salario_basico', label: 'Salario básico' },
-    { campo: 'auxilio_transporte', label: 'Aux. transporte' },
+    { campo: 'auxilio_transporte', label: 'Auxilio de transporte' },
     { campo: 'promedio_variables', label: 'Promedio variables' },
     { campo: 'dias_computados', label: 'Días' },
     { campo: 'fecha_computo_desde', label: 'Calcular desde', tipo: 'date' },
@@ -204,15 +201,15 @@ export const CAMPOS_AJUSTE: Record<CodigoAjustable, CampoAjuste[]> = {
     { campo: 'dias_base_intereses', label: 'Días' },
   ],
   PRIMA: [
-    { campo: 'salario_basico', label: 'Salario básico' },
-    { campo: 'auxilio_transporte', label: 'Aux. transporte' },
+    { campo: 'salario_basico', label: 'Salario' },
+    { campo: 'auxilio_transporte', label: 'Auxilio de transporte' },
     { campo: 'promedio_variables', label: 'Promedio variables' },
     { campo: 'dias_computados', label: 'Días' },
     { campo: 'fecha_computo_desde', label: 'Calcular desde', tipo: 'date' },
   ],
   VACACIONES: [
-    { campo: 'base_mensual', label: 'Salario base' },
-    { campo: 'dias', label: 'Días a compensar' },
+    { campo: 'base_mensual', label: 'Salario' },
+    { campo: 'dias', label: 'Días' },
   ],
   INDEMNIZACION: [
     { campo: 'base', label: 'Salario base' },

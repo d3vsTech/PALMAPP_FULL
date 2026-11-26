@@ -25,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../../components/ui/select';
-import { AlertTriangle, Ban, Banknote, CheckCircle, Loader2 } from 'lucide-react';
+import { AlertTriangle, Ban, Banknote, CheckCircle, Info, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   liquidacionFinalApi,
@@ -33,7 +33,8 @@ import {
   type ComprobanteLiquidacionFinal,
   type MetodoPagoLiquidacion,
 } from '../../../../api/liquidacionFinal';
-import { fmtCOP, fmtFecha, mensajeErrorLiquidacion, tieneCodigo } from './comunes';
+import { fmtCOP, fmtDias, fmtFecha, mensajeErrorLiquidacion, tieneCodigo } from './comunes';
+import { FilaMonto } from '../../../components/nomina/piezas';
 import { LiquidacionFinalErrorCodes as E } from '../../../../api/liquidacionFinal';
 
 const METODOS: Array<{ valor: MetodoPagoLiquidacion; label: string }> = [
@@ -43,6 +44,16 @@ const METODOS: Array<{ valor: MetodoPagoLiquidacion; label: string }> = [
 ];
 
 const hoyISO = () => new Date().toISOString().slice(0, 10);
+
+/** Colaborador y neto a pagar, en el recuadro gris de los diálogos del diseño. */
+function ResumenDialogo({ liquidacion }: { liquidacion: ComprobanteLiquidacionFinal }) {
+  return (
+    <div className="space-y-1 rounded-lg bg-muted/60 px-4 py-3">
+      <FilaMonto label="Colaborador" value={liquidacion.empleado.nombre_completo} />
+      <FilaMonto label="Neto a pagar" value={fmtCOP(liquidacion.totales.total_neto)} strong />
+    </div>
+  );
+}
 
 // ─── Aprobar ──────────────────────────────────────────────────────────────────
 
@@ -106,56 +117,48 @@ export function AprobarLiquidacionDialog({
     <Dialog open onOpenChange={(o) => !o && onCerrar()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CheckCircle className="h-5 w-5 text-primary" />
-            Aprobar liquidación
-          </DialogTitle>
-          <DialogDescription>
-            {liquidacion.empleado.nombre_completo} · {fmtCOP(liquidacion.totales.total_neto)}
-          </DialogDescription>
+          <DialogTitle>Aprobar liquidación</DialogTitle>
+          <DialogDescription>Confirma la liquidación final de este colaborador.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800/30 dark:bg-amber-950/30 dark:text-amber-400">
-            <p className="font-medium">Al aprobar, el sistema hace tres cosas:</p>
-            <ul className="ml-4 list-disc space-y-1 text-xs">
-              <li>Congela el cálculo: los valores ya no se recalculan.</li>
-              <li>
-                Termina el contrato y registra el retiro el{' '}
-                {fmtFecha(liquidacion.retiro.fecha_retiro)} en la ficha del colaborador.
-              </li>
+          <ResumenDialogo liquidacion={liquidacion} />
+
+          <div className="flex gap-2 rounded-lg bg-warning-soft p-3 text-sm text-foreground">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+            <div className="space-y-1">
+              <p>Al aprobar, el cálculo queda congelado y los valores ya no se recalculan.</p>
+              <p>
+                El contrato termina y el retiro del {fmtFecha(liquidacion.retiro.fecha_retiro)} queda
+                registrado en la ficha del colaborador.
+              </p>
               {liquidacion.vacaciones.saldo_dias > 0 && (
-                <li>
-                  Crea la compensación de {liquidacion.vacaciones.saldo_dias} días de vacaciones.
-                </li>
+                <p>
+                  Se crea la compensación de {fmtDias(liquidacion.vacaciones.saldo_dias)} días de vacaciones.
+                </p>
               )}
-            </ul>
-            <p className="text-xs">
-              Se puede anular después, pero solo si nadie toca la ficha ni el contrato entretanto.
-            </p>
+              <p className="text-muted-foreground">
+                Se puede anular después, pero solo si nadie toca la ficha ni el contrato entretanto.
+              </p>
+            </div>
           </div>
 
           {duros.map((b, i) => (
-            <p
-              key={`${b.code}-${i}`}
-              className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
-            >
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              {b.mensaje}
-            </p>
+            <div key={`${b.code}-${i}`} className="flex gap-2 rounded-lg bg-destructive-soft p-3 text-sm text-foreground">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" strokeWidth={2} />
+              <p>{b.mensaje}</p>
+            </div>
+          ))}
+
+          {forzables.map((b, i) => (
+            <div key={`${b.code}-${i}`} className="flex gap-2 rounded-lg bg-warning-soft p-3 text-sm text-foreground">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+              <p>{b.mensaje}</p>
+            </div>
           ))}
 
           {forzables.length > 0 && (
-            <div className="space-y-2">
-              {forzables.map((b, i) => (
-                <p
-                  key={`${b.code}-${i}`}
-                  className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400"
-                >
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  {b.mensaje}
-                </p>
-              ))}
+            <div className="space-y-1.5">
               <Label htmlFor="motivo-forzado">
                 Motivo para continuar igual <span className="text-destructive">*</span>
               </Label>
@@ -175,8 +178,8 @@ export function AprobarLiquidacionDialog({
           <Button variant="outline" onClick={onCerrar} disabled={enviando}>
             Cancelar
           </Button>
-          <Button onClick={() => void aprobar()} disabled={!listo || enviando} className="gap-2">
-            {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+          <Button onClick={() => void aprobar()} disabled={!listo || enviando}>
+            {enviando ? <Loader2 className="animate-spin" /> : <CheckCircle strokeWidth={2} />}
             Aprobar y aplicar el retiro
           </Button>
         </DialogFooter>
@@ -241,49 +244,50 @@ export function PagoLiquidacionDialog({ liquidacion, onCerrar, onPagada }: Props
     <Dialog open onOpenChange={(o) => !o && onCerrar()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Banknote className="h-5 w-5 text-primary" />
-            Registrar pago
-          </DialogTitle>
-          <DialogDescription>
-            {liquidacion.empleado.nombre_completo} · {fmtCOP(liquidacion.totales.total_neto)}
-          </DialogDescription>
+          <DialogTitle>Registrar pago</DialogTitle>
+          <DialogDescription>Registra el pago de la liquidación final.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="fecha-pago">
-              Fecha del pago <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="fecha-pago"
-              type="date"
-              max={hoyISO()}
-              value={fechaPago}
-              onChange={(e) => setFechaPago(e.target.value)}
-            />
+          <ResumenDialogo liquidacion={liquidacion} />
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="fecha-pago">
+                Fecha del pago <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="fecha-pago"
+                type="date"
+                max={hoyISO()}
+                value={fechaPago}
+                onChange={(e) => setFechaPago(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="medio-pago">
+                Medio de pago <span className="text-destructive">*</span>
+              </Label>
+              <Select value={metodo} onValueChange={(v) => setMetodo(v as MetodoPagoLiquidacion)}>
+                <SelectTrigger id="medio-pago">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {METODOS.map((m) => (
+                    <SelectItem key={m.valor} value={m.valor}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>
-              Medio de pago <span className="text-destructive">*</span>
+          <div className="space-y-1.5">
+            <Label htmlFor="referencia-pago">
+              Referencia <span className="font-normal text-muted-foreground">(opcional)</span>
             </Label>
-            <Select value={metodo} onValueChange={(v) => setMetodo(v as MetodoPagoLiquidacion)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {METODOS.map((m) => (
-                  <SelectItem key={m.valor} value={m.valor}>
-                    {m.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="referencia-pago">Referencia</Label>
             <Input
               id="referencia-pago"
               value={referencia}
@@ -292,8 +296,10 @@ export function PagoLiquidacionDialog({ liquidacion, onCerrar, onPagada }: Props
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="observacion-pago">Observación</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="observacion-pago">
+              Observación <span className="font-normal text-muted-foreground">(opcional)</span>
+            </Label>
             <Textarea
               id="observacion-pago"
               value={observacion}
@@ -303,9 +309,10 @@ export function PagoLiquidacionDialog({ liquidacion, onCerrar, onPagada }: Props
           </div>
 
           {hayPrestamos && (
-            <p className="text-xs text-muted-foreground">
-              Al registrar el pago, los préstamos descontados quedan saldados por completo.
-            </p>
+            <div className="flex gap-2 rounded-lg bg-info-soft p-3 text-sm text-foreground">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-info" strokeWidth={2} />
+              <p>Al registrar el pago, los préstamos descontados quedan saldados por completo.</p>
+            </div>
           )}
         </div>
 
@@ -313,8 +320,8 @@ export function PagoLiquidacionDialog({ liquidacion, onCerrar, onPagada }: Props
           <Button variant="outline" onClick={onCerrar} disabled={enviando}>
             Cancelar
           </Button>
-          <Button onClick={() => void registrar()} disabled={!fechaPago || enviando} className="gap-2">
-            {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />}
+          <Button onClick={() => void registrar()} disabled={!fechaPago || enviando}>
+            {enviando ? <Loader2 className="animate-spin" /> : <Banknote strokeWidth={2} />}
             Registrar pago
           </Button>
         </DialogFooter>
@@ -378,10 +385,7 @@ export function AnularLiquidacionDialog({
     <Dialog open onOpenChange={(o) => !o && onCerrar()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Ban className="h-5 w-5 text-destructive" />
-            {esPago ? 'Anular el pago' : 'Anular la liquidación'}
-          </DialogTitle>
+          <DialogTitle>{esPago ? 'Anular pago' : 'Anular liquidación'}</DialogTitle>
           <DialogDescription>
             {esPago
               ? 'La liquidación vuelve a quedar aprobada y sin pagar. Los préstamos vuelven a tener saldo.'
@@ -389,29 +393,33 @@ export function AnularLiquidacionDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {!esPago && aplicoRetiro && (
-          <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800/30 dark:bg-amber-950/30 dark:text-amber-400">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            Esta liquidación aplicó el retiro. Al anularla se intenta revertirlo; si alguien
-            cambió la ficha o el contrato después, habrá que corregirlo a mano.
-          </p>
-        )}
+        <div className="space-y-4 empty:hidden">
+          {!esPago && aplicoRetiro && (
+            <div className="flex gap-2 rounded-lg bg-warning-soft p-3 text-sm text-foreground">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+              <p>
+                Esta liquidación aplicó el retiro. Al anularla se intenta revertirlo; si alguien
+                cambió la ficha o el contrato después, habrá que corregirlo a mano.
+              </p>
+            </div>
+          )}
 
-        {!esPago && (
-          <div className="space-y-2">
-            <Label htmlFor="motivo-anulacion">
-              Motivo <span className="text-destructive">*</span>
-            </Label>
-            <Textarea
-              id="motivo-anulacion"
-              value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              placeholder="Por qué se anula"
-              rows={3}
-            />
-            <p className="text-xs text-muted-foreground">Mínimo cinco caracteres.</p>
-          </div>
-        )}
+          {!esPago && (
+            <div className="space-y-1.5">
+              <Label htmlFor="motivo-anulacion">
+                Motivo <span className="text-destructive">*</span>
+              </Label>
+              <Textarea
+                id="motivo-anulacion"
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                placeholder="Por qué se anula"
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">Mínimo cinco caracteres.</p>
+            </div>
+          )}
+        </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onCerrar} disabled={enviando}>
@@ -421,9 +429,8 @@ export function AnularLiquidacionDialog({
             variant="destructive"
             onClick={() => void anular()}
             disabled={!listo || enviando}
-            className="gap-2"
           >
-            {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
+            {enviando ? <Loader2 className="animate-spin" /> : <Ban strokeWidth={2} />}
             {esPago ? 'Anular pago' : 'Anular liquidación'}
           </Button>
         </DialogFooter>

@@ -13,11 +13,11 @@
  */
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
+import { Card, CardContent, CardHeader } from '../../../components/ui/card';
+import PageHeader from '../../../components/common/PageHeader';
+import StatStrip from '../../../components/common/StatStrip';
 import { Button } from '../../../components/ui/button';
-import { Badge } from '../../../components/ui/badge';
 import { Label } from '../../../components/ui/label';
-import { Checkbox } from '../../../components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -25,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../../components/ui/select';
-import { AlertTriangle, ArrowLeft, CheckCircle2, Gift, Info, Loader2, Upload } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../../contexts/AuthContext';
 import {
@@ -43,17 +43,27 @@ import {
 } from '../../../../api/historicoPrima';
 import {
   ACCEPT_ARCHIVO,
-  ESTADO_FILA_BADGE,
   ESTADO_FILA_LABEL,
   HistoricoArchivoErrorCodes as E,
   MAX_FILAS_ARCHIVO,
 } from '../../../../api/historicoComun';
 import { descargarBlob, fmtCOP, fmtFecha } from '../final/comunes';
 import {
+  Aviso,
+  BadgeDetectados,
+  BadgeEstadoFila,
+  BarraSubida,
+  CasillaSobrescribir,
+  ExitoCargue,
+  TD,
+  TH,
+  THEAD,
   CabecerasIgnoradas,
   CeldaColaborador,
+  CeldaObservacion,
   EstadoValidacion,
   IncidenciasFila,
+  LineaMora,
   Regla,
   BotonesPlantilla,
   PasoCard,
@@ -211,39 +221,25 @@ export default function CargaHistoricoPrima() {
   const listoParaCargar =
     Boolean(archivo) && Boolean(analisis) && !hayErrores && !validando && !cargando && !cargado;
 
+  const aCargar = (resumen?.validas ?? 0) + (resumen?.a_sobrescribir ?? 0);
+
   const rango = seleccion ? rangoSemestre(seleccion.semestre) : null;
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate('/liquidaciones?tab=prima')}
-          className="gap-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Volver a Liquidaciones
-        </Button>
-
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-            <Gift className="h-6 w-6 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-primary sm:text-3xl">Cargar histórico de prima</h1>
-            <p className="mt-0.5 text-muted-foreground">
-              Registre la prima que ya pagó antes de usar el sistema. Un archivo por semestre.
-            </p>
-          </div>
-        </div>
-      </div>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeader
+        backTo="/liquidaciones?tab=prima"
+        eyebrow="Prima de servicios"
+        title="Cargar histórico de prima de servicios"
+        description="Registra la prima que ya pagaste antes de usar el sistema. Un archivo por semestre."
+      />
 
       {/* Paso 1: plantilla + el semestre, que no va dentro del archivo. */}
       <PasoCard
         n={1}
         titulo="Descarga la plantilla"
-        subtitulo="Usa esta plantilla para preparar tus datos correctamente"
+        subtitulo="Prepara tus datos con las columnas que espera el sistema."
+        contenidoClassName="space-y-2"
         accion={
           <BotonesPlantilla
             descargando={descargandoPlantilla}
@@ -251,12 +247,11 @@ export default function CargaHistoricoPrima() {
           />
         }
       >
-        <VistaPreviaPlantilla columnas={COLUMNAS_PLANTILLA} filas={FILAS_EJEMPLO} />
+        <VistaPreviaPlantilla columnas={COLUMNAS_PLANTILLA} filas={FILAS_EJEMPLO} formatos=".xlsx, .xls y .csv" />
 
         <p className="text-xs text-muted-foreground">
           La plantilla trae estas columnas y la cédula en formato de texto, que es lo
-          que evita que Excel le quite los ceros de la izquierda. Formatos aceptados:{' '}
-          <strong className="text-foreground">.xlsx, .xls, .csv</strong>. Las fechas se leen
+          que evita que Excel le quite los ceros de la izquierda. Las fechas se leen
           como día/mes: <strong className="text-foreground">26/06/2026 es el 26 de junio</strong>.
         </p>
       </PasoCard>
@@ -265,7 +260,7 @@ export default function CargaHistoricoPrima() {
       <PasoCard
         n={2}
         titulo="Carga tu archivo"
-        subtitulo="Arrastra el archivo o haz clic para seleccionarlo"
+        subtitulo="Arrastra el archivo o haz clic para seleccionarlo."
       >
         {/* El semestre va aquí y no en el paso 1: el paso 1 solo baja la
             plantilla, y el semestre define contra qué se valida el archivo. */}
@@ -298,6 +293,7 @@ export default function CargaHistoricoPrima() {
           analisis={analisis?.archivo}
           inputRef={inputRef}
           accept={ACCEPT_ARCHIVO}
+          bloqueado={cargando}
           onArchivo={elegirArchivo}
           onQuitar={limpiar}
           detalle={
@@ -322,136 +318,112 @@ export default function CargaHistoricoPrima() {
         {analisis && <CabecerasIgnoradas cabeceras={analisis.archivo.cabeceras_ignoradas} />}
 
         {analisis?.periodos.prima && !cargado && (
-          <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/30 dark:bg-amber-950/30 dark:text-amber-400">
-            <Info className="mt-0.5 h-4 w-4 shrink-0" />
+          <Aviso tono="info" icono={Info}>
             El {etiquetaSemestre(analisis.anio, analisis.semestre)} ya tiene un histórico
             cargado con {analisis.periodos.prima.total_colaboradores} colaboradores. Lo que
-            suba ahora se agrega a ese mismo período.
-          </p>
+            subas ahora se agrega a ese mismo período.
+          </Aviso>
         )}
       </PasoCard>
 
       {/* Paso 3: revisión */}
       {analisis && resumen && (
-        <Card>
-          <CardHeader className="border-b">
-            <CardTitle>3. Revise antes de cargar</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 p-6">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-lg border border-border p-3">
-                <p className="text-xs text-muted-foreground">Se cargan</p>
-                <p className="text-2xl font-bold text-success">{resumen.validas}</p>
-              </div>
-              <div className="rounded-lg border border-border p-3">
-                <p className="text-xs text-muted-foreground">Reemplazan</p>
-                <p className="text-2xl font-bold text-amber-600">{resumen.a_sobrescribir}</p>
-              </div>
-              <div className="rounded-lg border border-border p-3">
-                <p className="text-xs text-muted-foreground">Con error</p>
-                <p
-                  className={`text-2xl font-bold ${
-                    hayErrores ? 'text-destructive' : 'text-muted-foreground'
-                  }`}
-                >
-                  {resumen.con_error}
-                </p>
-              </div>
-              <div className="rounded-lg border border-border p-3">
-                <p className="text-xs text-muted-foreground">Total prima</p>
-                <p className="text-lg font-bold text-foreground">{fmtCOP(resumen.total_prima)}</p>
-                <p className="text-xs text-muted-foreground">
-                  límite legal: {fechaLimiteSemestre(analisis.semestre)}
-                </p>
-              </div>
-            </div>
+        <PasoCard
+          n={3}
+          titulo="Revisa los datos"
+          subtitulo="Confirma que todo esté bien antes de subirlo."
+          accion={<BadgeDetectados total={analisis.archivo.filas_leidas} />}
+          contenidoClassName="space-y-6"
+        >
+            <StatStrip
+              items={[
+                { label: 'Se cargan', value: resumen.validas },
+                { label: 'Reemplazan', value: resumen.a_sobrescribir },
+                {
+                  label: 'Con error',
+                  value: hayErrores ? <span className="text-destructive">{resumen.con_error}</span> : resumen.con_error,
+                },
+                {
+                  label: 'Total prima',
+                  value: fmtCOP(resumen.total_prima),
+                  note: `Límite legal: ${fechaLimiteSemestre(analisis.semestre)}`,
+                },
+              ]}
+            />
 
             {analisis.advertencias.map((a, i) => (
               <p
                 key={`${a.code}-${i}`}
                 className="flex items-start gap-2 text-sm text-muted-foreground"
               >
-                <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                <Info className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
                 {a.mensaje}
               </p>
             ))}
 
             {hayYaCargados && (
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/30 dark:bg-amber-950/30">
-                <Checkbox
-                  checked={sobrescribir}
-                  onCheckedChange={(v) => cambiarSobrescribir(v === true)}
-                  className="mt-0.5"
-                />
-                <div>
-                  <p className="text-sm font-medium">Reemplazar a los que ya estaban cargados</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Hay colaboradores con ese semestre ya registrado. Sin marcar esta casilla el
-                    archivo no se puede cargar.
-                  </p>
-                </div>
-              </label>
+              <CasillaSobrescribir
+                checked={sobrescribir}
+                onChange={cambiarSobrescribir}
+                titulo="Reemplazar a los que ya estaban cargados"
+              >
+                Hay colaboradores con ese semestre ya registrado. Sin marcar esta casilla el
+                archivo no se puede subir.
+              </CasillaSobrescribir>
             )}
 
             <TablaFilasPrima filas={analisis.filas} />
 
             {hayErrores && (
-              <p className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <Aviso tono="destructive" icono={AlertCircle}>
                 Hay {resumen.con_error} fila{resumen.con_error === 1 ? '' : 's'} con error. El
-                cargue es todo o nada: corrija el archivo y vuelva a subirlo.
-              </p>
+                cargue es todo o nada: corrige el archivo y vuelve a subirlo.
+              </Aviso>
             )}
 
             {cargado ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-success/30 bg-success/5 p-4">
-                <p className="flex items-center gap-2 text-sm font-medium text-success">
-                  <CheckCircle2 className="h-4 w-4" />
-                  Prima del {etiquetaSemestre(analisis.anio, analisis.semestre)} cargada.
-                </p>
-                <div className="flex gap-2">
-                  {analisis.periodos.prima && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => navigate(`/liquidaciones/prima/${analisis.periodos.prima!.id}`)}
-                    >
-                      Ver período
-                    </Button>
-                  )}
-                  <Button size="sm" onClick={limpiar}>
-                    Cargar otro semestre
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex justify-end">
-                <Button
-                  onClick={() => void cargar()}
-                  disabled={!listoParaCargar || !puedeCargar}
-                  className="gap-2"
-                >
-                  {cargando ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Upload className="h-4 w-4" />
-                  )}
-                  Cargar {resumen.validas + resumen.a_sobrescribir} colaborador
-                  {resumen.validas + resumen.a_sobrescribir === 1 ? '' : 'es'}
+              <ExitoCargue
+                total={aCargar}
+                modulo={`prima de servicios del ${etiquetaSemestre(analisis.anio, analisis.semestre)}`}
+              >
+                <Button variant="outline" onClick={limpiar}>
+                  Cargar otro archivo
                 </Button>
-              </div>
+                {/* Siempre hay salida: con el período a la vista se entra a él,
+                    y sin él a la pestaña. */}
+                <Button
+                  onClick={() =>
+                    navigate(
+                      analisis.periodos.prima
+                        ? `/liquidaciones/prima/${analisis.periodos.prima.id}`
+                        : '/liquidaciones?tab=prima',
+                    )
+                  }
+                >
+                  Ir a prima de servicios
+                </Button>
+              </ExitoCargue>
+            ) : (
+              <BarraSubida
+                total={aCargar}
+                modulo="prima de servicios"
+                bloqueado={hayErrores}
+                cargando={cargando}
+                deshabilitado={!listoParaCargar || !puedeCargar}
+                onCancelar={limpiar}
+                onSubir={() => void cargar()}
+              />
             )}
-          </CardContent>
-        </Card>
+        </PasoCard>
       )}
 
       {/* Las mismas reglas que trae la hoja de instrucciones de la plantilla,
           aquí donde se leen antes de subir el archivo. */}
-      <Card className="border-border">
-        <CardHeader className="border-b">
-          <CardTitle className="text-base">Cómo llenar el archivo</CardTitle>
+      <Card className="gap-4">
+        <CardHeader>
+          <h3>Cómo llenar el archivo</h3>
         </CardHeader>
-        <CardContent className="space-y-5 p-6">
+        <CardContent className="space-y-5">
           <div className="space-y-2 text-sm text-muted-foreground">
             <Regla n={1}>
               <strong className="text-foreground">Un archivo por semestre.</strong> El semestre se
@@ -467,7 +439,7 @@ export default function CargaHistoricoPrima() {
             </Regla>
             <Regla n={4}>
               <strong className="text-foreground">Fecha de pago</strong>, opcional. AÑO-MES-DÍA o
-              DÍA/MES/AÑO. Si la deja vacía se usa el 30 de junio o el 20 de diciembre del mismo
+              DÍA/MES/AÑO. Si la dejas vacía se usa el 30 de junio o el 20 de diciembre del mismo
               año, que es la fecha límite legal del semestre.
             </Regla>
             <Regla n={5}>
@@ -502,11 +474,10 @@ export default function CargaHistoricoPrima() {
             </Regla>
           </div>
 
-          <p className="flex items-start gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+          <Aviso tono="warning" icono={AlertTriangle}>
             Las fechas se leen como día/mes. <strong>10/02/2024 es el 10 de febrero</strong>, no el
-            2 de octubre. Revíselas en la tabla antes de cargar.
-          </p>
+            2 de octubre. Revísalas en la tabla antes de subir.
+          </Aviso>
         </CardContent>
       </Card>
     </div>
@@ -522,39 +493,32 @@ export default function CargaHistoricoPrima() {
  */
 function TablaFilasPrima({ filas }: { filas: FilaHistoricoPrima[] }) {
   if (filas.length === 0) {
-    return <p className="py-6 text-center text-sm text-muted-foreground">El archivo está vacío.</p>;
+    return <p className="rounded-lg bg-muted/60 py-6 text-center text-sm text-muted-foreground">El archivo está vacío.</p>;
   }
 
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full">
-        <thead>
-          <tr className="border-b border-border bg-muted/30">
-            <th className="p-3 text-left text-xs font-semibold text-muted-foreground">Fila</th>
-            <th className="p-3 text-left text-xs font-semibold text-muted-foreground">
-              Colaborador
-            </th>
-            <th className="hidden p-3 text-left text-xs font-semibold text-muted-foreground md:table-cell">
-              Días
-            </th>
-            <th className="p-3 text-right text-xs font-semibold text-muted-foreground">Prima</th>
-            <th className="hidden p-3 text-right text-xs font-semibold text-muted-foreground lg:table-cell">
-              Base implícita
-            </th>
-            <th className="p-3 text-left text-xs font-semibold text-muted-foreground">Estado</th>
+      <table className="w-full text-sm">
+        <thead className={THEAD}>
+          <tr>
+            <th className={`${TH} w-8`}>#</th>
+            <th className={TH}>Colaborador</th>
+            <th className={`${TH} hidden md:table-cell`}>Días</th>
+            <th className={`${TH} text-right`}>Prima</th>
+            <th className={`${TH} hidden text-right lg:table-cell`}>Base implícita</th>
+            <th className={`${TH} hidden xl:table-cell`}>Observación</th>
+            <th className={TH}>Estado</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-border">
           {filas.map((f) => (
             <tr
               key={f.fila}
-              className={`border-b border-border last:border-0 ${
-                f.estado === 'ERROR' ? 'bg-destructive/[0.03]' : ''
-              }`}
+              className={f.estado === 'ERROR' ? 'bg-destructive-soft/40' : undefined}
             >
-              <td className="p-3 align-top text-sm text-muted-foreground">{f.fila}</td>
+              <td className={`${TD} text-xs text-muted-foreground`}>{f.fila}</td>
 
-              <td className="p-3 align-top">
+              <td className={TD}>
                 <CeldaColaborador
                   nombre={f.empleado?.nombre_completo}
                   documento={f.empleado?.documento}
@@ -570,12 +534,12 @@ function TablaFilasPrima({ filas }: { filas: FilaHistoricoPrima[] }) {
                 />
               </td>
 
-              <td className="hidden p-3 align-top text-sm text-muted-foreground md:table-cell">
+              <td className={`${TD} hidden text-muted-foreground md:table-cell`}>
                 {f.dias ? `${f.dias.dias_computados}` : '—'}
               </td>
 
-              <td className="p-3 align-top text-right">
-                <p className="text-sm font-medium">
+              <td className={`${TD} text-right`}>
+                <p className="font-medium tabular-nums text-foreground">
                   {f.prima?.valor != null ? fmtCOP(f.prima.valor) : '—'}
                 </p>
                 {f.prima?.fecha_pago && (
@@ -584,16 +548,21 @@ function TablaFilasPrima({ filas }: { filas: FilaHistoricoPrima[] }) {
                     {f.prima.fecha_por_defecto && ' (por defecto)'}
                   </p>
                 )}
+                <LineaMora dias={f.prima?.dias_mora} />
               </td>
 
-              <td className="hidden p-3 align-top text-right text-sm text-muted-foreground lg:table-cell">
+              <td className="hidden px-4 py-3 text-right align-top tabular-nums text-muted-foreground lg:table-cell">
                 {f.prima?.base_implicita != null ? fmtCOP(f.prima.base_implicita) : '—'}
               </td>
 
-              <td className="p-3 align-top">
-                <Badge variant="outline" className={ESTADO_FILA_BADGE[f.estado]}>
+              <td className={`${TD} hidden xl:table-cell`}>
+                <CeldaObservacion texto={f.observacion} />
+              </td>
+
+              <td className={TD}>
+                <BadgeEstadoFila estado={f.estado}>
                   {ESTADO_FILA_LABEL[f.estado]}
-                </Badge>
+                </BadgeEstadoFila>
               </td>
             </tr>
           ))}

@@ -20,7 +20,7 @@ import { Badge } from '../../components/ui/badge';
 import { Progress } from '../../components/ui/progress';
 import {
   Loader2, CheckCircle2, AlertTriangle, XCircle, Upload, Download,
-  X, FileText, ArrowLeft,
+  X, ArrowLeft,
 } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
 import {
@@ -313,7 +313,7 @@ export default function ImportarColaboradores() {
         }
       />
 
-      <Card className="border-border">
+      <Card>
         <CardContent className="flex flex-col p-0">
 
         {/* input file oculto, lo dispara el botón "Seleccionar archivo" */}
@@ -419,7 +419,7 @@ function Paso({ n, titulo, descripcion, accion }: {
   return (
     <div className="flex items-start justify-between gap-4">
       <div className="flex items-center gap-3">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
           {n}
         </div>
         <div>
@@ -459,7 +459,7 @@ function VistaIntro({
             titulo="Descarga la plantilla"
             descripcion="Usa esta plantilla para preparar tus datos correctamente"
             accion={
-              <Button variant="outline" onClick={onDescargarPlantilla} className="shrink-0 gap-2">
+              <Button variant="outline" onClick={onDescargarPlantilla} className="shrink-0">
                 <Download className="h-4 w-4" /> Descargar plantilla
               </Button>
             }
@@ -468,7 +468,7 @@ function VistaIntro({
           <div className="mt-4 overflow-auto rounded-lg border border-border">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border bg-primary/5">
+                <tr className="border-b border-border bg-primary-soft">
                   {COLUMNAS_PLANTILLA.map((col) => (
                     <th key={col} className="whitespace-nowrap px-4 py-2.5 text-left font-semibold text-foreground">
                       {col}
@@ -509,14 +509,14 @@ function VistaIntro({
             onDragOver={(e) => { e.preventDefault(); setArrastrando(true); }}
             onDragLeave={() => setArrastrando(false)}
             {...comoBoton(onSeleccionarArchivo)}
-            className={`mt-4 flex cursor-pointer flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed p-12 transition-colors ${
+            className={`mt-4 flex cursor-pointer flex-col items-center justify-center gap-4 rounded-xl border border-dashed p-12 transition-colors ${
               arrastrando
-                ? 'border-primary bg-primary/5'
+                ? 'border-primary bg-primary-soft'
                 : 'border-border hover:border-primary/50 hover:bg-muted/30'
             }`}
           >
             <div className={`flex h-16 w-16 items-center justify-center rounded-2xl transition-colors ${
-              arrastrando ? 'bg-primary/10' : 'bg-muted'
+              arrastrando ? 'bg-primary-soft' : 'bg-muted'
             }`}>
               <Upload className={`h-8 w-8 transition-colors ${
                 arrastrando ? 'text-primary' : 'text-muted-foreground'
@@ -538,7 +538,7 @@ function VistaIntro({
       </div>
 
       <div className="flex shrink-0 justify-end border-t border-border bg-background p-4">
-        <Button variant="outline" onClick={onCancelar} className="gap-2">
+        <Button variant="outline" onClick={onCancelar}>
           <X className="h-4 w-4" /> Cancelar
         </Button>
       </div>
@@ -573,7 +573,7 @@ function VistaPreview({
     return (
       <>
         <div className="overflow-auto p-6">
-          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 flex gap-3">
+          <div className="rounded-lg border border-destructive/30 bg-destructive-soft p-4 flex gap-3">
             <XCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
             <div>
               <p className="text-sm font-semibold text-destructive">No se pudo leer el archivo</p>
@@ -582,7 +582,7 @@ function VistaPreview({
           </div>
         </div>
         <div className="shrink-0 border-t border-border p-4 flex justify-end bg-background">
-          <Button variant="outline" onClick={onCancelar} className="gap-2">
+          <Button variant="outline" onClick={onCancelar}>
             <X className="h-4 w-4" /> Cerrar
           </Button>
         </div>
@@ -603,11 +603,11 @@ function VistaPreview({
       {/* Encabezado de info */}
       <div className="shrink-0 px-6 py-3 border-b border-border flex items-center justify-between flex-wrap gap-3 bg-background">
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge className="bg-primary/10 text-primary border-primary/20">
+          <Badge className="bg-primary-soft text-primary border-primary/20">
             {total} {total === 1 ? 'fila detectada' : 'filas detectadas'}
           </Badge>
           {docsRepetidos.size > 0 && (
-            <Badge className="bg-warning/10 text-warning border-warning/20">
+            <Badge className="bg-warning-soft text-warning border-warning/20">
               {docsRepetidos.size} documento(s) repetido(s)
             </Badge>
           )}
@@ -660,7 +660,7 @@ function VistaPreview({
               const dup = !!f.documento && docsRepetidos.has(f.documento.trim());
               return (
                 <tr key={`${f.fila}-${i}`}
-                    className={`border-b border-border last:border-0 ${dup ? 'bg-warning/5' : i % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}>
+                    className={`border-b border-border last:border-0 ${dup ? 'bg-warning-soft' : i % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}>
                   <Td className="font-mono text-muted-foreground">{f.fila}</Td>
                   <Td>{[f.primer_nombre, f.segundo_nombre].filter(Boolean).join(' ') || '—'}</Td>
                   <Td>{[f.primer_apellido, f.segundo_apellido].filter(Boolean).join(' ') || '—'}</Td>
@@ -700,10 +700,10 @@ function VistaPreview({
 
       {/* Footer fijo con los botones */}
       <div className="shrink-0 border-t border-border p-4 flex justify-end gap-2 bg-background">
-        <Button variant="outline" onClick={onCancelar} disabled={enviando} className="gap-2">
+        <Button variant="outline" onClick={onCancelar} disabled={enviando}>
           <X className="h-4 w-4" /> Cancelar
         </Button>
-        <Button onClick={onConfirmar} disabled={enviando || filas.length === 0} className="gap-2">
+        <Button onClick={onConfirmar} disabled={enviando || filas.length === 0}>
           {enviando
             ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando...</>
             : <><Upload className="h-4 w-4" /> Confirmar e importar {total} {total === 1 ? 'fila' : 'filas'}</>
@@ -781,7 +781,7 @@ function VistaResultado({
         </div>
 
         {estado.error_fatal && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 flex gap-3">
+          <div className="rounded-lg border border-destructive/30 bg-destructive-soft p-4 flex gap-3">
             <XCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
             <div>
               <p className="text-sm font-semibold text-destructive">Error fatal</p>
@@ -797,7 +797,7 @@ function VistaResultado({
                 <AlertTriangle className="h-4 w-4 text-destructive" />
                 <span className="font-semibold text-sm">Filas con errores ({fallidos.length})</span>
               </div>
-              <Button variant="outline" size="sm" onClick={onDescargarErrores} className="gap-2">
+              <Button variant="outline" size="sm" onClick={onDescargarErrores}>
                 <Download className="h-4 w-4" /> CSV
               </Button>
             </div>
@@ -826,7 +826,7 @@ function VistaResultado({
       </div>
 
       <div className="shrink-0 border-t border-border p-4 flex justify-end gap-2 bg-background">
-        <Button onClick={onCerrar} className="gap-2">
+        <Button onClick={onCerrar}>
           Cerrar
         </Button>
       </div>
@@ -838,7 +838,7 @@ function VistaResultado({
 // UI helpers
 // ────────────────────────────────────────────────────────────────────────────────
 function Th({ children }: { children: React.ReactNode }) {
-  return <th className="text-left p-3 font-semibold text-xs uppercase tracking-wide text-muted-foreground whitespace-nowrap">{children}</th>;
+  return <th className="whitespace-nowrap p-3 text-left text-[13px] font-semibold text-muted-foreground">{children}</th>;
 }
 function Td({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return <td className={`p-3 align-top whitespace-nowrap ${className}`}>{children}</td>;
@@ -851,15 +851,17 @@ function iconoEstado(e: EstadoImportacion) {
   return <Loader2 className="h-5 w-5 text-primary animate-spin" />;
 }
 
+type BadgeTono = 'secondary' | 'info' | 'success' | 'warning' | 'destructive';
+
 function EstadoBadge({ estado }: { estado: EstadoImportacion }) {
-  const map: Record<EstadoImportacion, { label: string; cls: string }> = {
-    PENDIENTE:   { label: 'Pendiente',   cls: 'bg-muted text-muted-foreground border-border' },
-    PROCESANDO:  { label: 'Procesando',  cls: 'bg-primary/10 text-primary border-primary/20' },
-    COMPLETADO:  { label: 'Completado',  cls: 'bg-success/10 text-success border-success/20' },
-    CON_ERRORES: { label: 'Con errores', cls: 'bg-warning/10 text-warning border-warning/20' },
-    FALLIDO:     { label: 'Fallido',     cls: 'bg-destructive/10 text-destructive border-destructive/20' },
+  const map: Record<EstadoImportacion, { label: string; tono: BadgeTono }> = {
+    PENDIENTE:   { label: 'Pendiente',   tono: 'secondary' },
+    PROCESANDO:  { label: 'Procesando',  tono: 'info' },
+    COMPLETADO:  { label: 'Completado',  tono: 'success' },
+    CON_ERRORES: { label: 'Con errores', tono: 'warning' },
+    FALLIDO:     { label: 'Fallido',     tono: 'destructive' },
   };
-  return <Badge className={map[estado].cls}>{map[estado].label}</Badge>;
+  return <Badge variant={map[estado].tono}>{map[estado].label}</Badge>;
 }
 
 function Stat({
@@ -872,8 +874,8 @@ function Stat({
 }) {
   const tones: Record<typeof tone, string> = {
     default: 'border-border',
-    success: 'border-success/30 bg-success/5',
-    error:   'border-destructive/30 bg-destructive/5',
+    success: 'border-success/30 bg-success-soft',
+    error:   'border-destructive/30 bg-destructive-soft',
   };
   const valueColor = tone === 'success' ? 'text-success'
                    : tone === 'error'   ? 'text-destructive' : 'text-foreground';

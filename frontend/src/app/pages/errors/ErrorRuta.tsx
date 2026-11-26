@@ -56,11 +56,11 @@ export default function ErrorRuta() {
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-2">
-          <Button variant="outline" onClick={() => navigate(-1)} className="gap-2">
+          <Button variant="outline" onClick={() => navigate(-1)} >
             <ArrowLeft className="h-4 w-4" />
             Volver
           </Button>
-          <Button onClick={() => window.location.reload()} className="gap-2">
+          <Button onClick={() => window.location.reload()} >
             <RotateCw className="h-4 w-4" />
             Recargar
           </Button>

@@ -11,6 +11,9 @@
  * Si `items` es undefined o vacío no renderiza nada.
  */
 
+import { estiloDetalle } from './estiloDetalle';
+import { formatFecha } from '../../utils/fecha';
+
 export interface FaltaInjustificadaItem {
   fecha: string;
   origen: string;
@@ -60,73 +63,50 @@ export function FaltasInjustificadas({
 }: Props) {
   if (!items || items.length === 0) return null;
 
-  const isCompact = variant === 'compact';
-  // Anchos fijos en las columnas numéricas (VALOR DÍA y DOMINGO PERDIDO)
-  // para que cada valor caiga debajo de su header. Con `auto` el "—" (más
-  // angosto que el título) colapsaba y desalineaba la tabla.
-  const gridCols = isCompact
-    ? 'grid-cols-[80px_1fr_120px_100px_100px]'
-    : 'grid-cols-[100px_1fr_160px_120px_140px]';
-  const headerText = isCompact ? 'text-[10px]' : 'text-xs';
-  const container = isCompact
-    ? 'bg-muted/30 rounded-lg p-3 border border-border'
-    : 'rounded-lg border border-border overflow-hidden';
+  const e = estiloDetalle(variant);
   const totalCount = total ?? items.length;
 
   return (
     <div>
-      {titulo && !isCompact && (
-        <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
+      {titulo && (
+        <h4 className={e.titulo}>
           {titulo}
-          <span className="text-xs font-normal text-muted-foreground">
-            · {totalCount} día{totalCount !== 1 ? 's' : ''}
+          <span className="font-normal text-muted-foreground">
+            {' · '}{totalCount} día{totalCount !== 1 ? 's' : ''}
           </span>
-        </h3>
+        </h4>
       )}
-      {titulo && isCompact && (
-        <h3 className="font-bold text-xs uppercase mb-2">
-          {titulo}
-          <span className="ml-1 font-normal text-muted-foreground normal-case">
-            ({totalCount})
-          </span>
-        </h3>
-      )}
-      <div className={container}>
-        <div
-          className={`grid ${gridCols} ${headerText} uppercase tracking-wide text-muted-foreground ${
-            isCompact ? 'pb-1 mb-1 border-b border-border' : 'px-4 py-2 bg-muted/40 border-b'
-          }`}
-        >
-          <span>Fecha</span>
-          <span>Origen</span>
-          <span>Impacto</span>
-          <span className="text-right pr-2">Valor día</span>
-          <span className="text-right">Domingo perdido</span>
-        </div>
-        {items.map((f, i) => (
-          <div
-            key={`${f.fecha}-${i}`}
-            className={`grid ${gridCols} text-xs ${
-              isCompact
-                ? 'py-0.5'
-                : 'px-4 py-2 border-b last:border-b-0 bg-destructive/5'
-            }`}
-          >
-            <span className="font-mono">{f.fecha}</span>
-            <span className="truncate">{labelOrigen(f.origen)}</span>
-            <span className={f.impacto === 'DIA_DESCONTADO' ? 'text-destructive' : ''}>
-              {labelImpacto(f.impacto)}
-            </span>
-            <span className="text-right pr-2 font-semibold">
-              {f.impacto === 'DIA_DESCONTADO' ? formatMoney(f.valor_dia) : '—'}
-            </span>
-            <span className="text-right font-mono">
-              {f.consecuencia_dominical ?? '—'}
-            </span>
-          </div>
-        ))}
+      <div className={e.marco}>
+        <table className={e.tabla}>
+          <thead>
+            <tr className={e.encabezado}>
+              <th className={`${e.th} text-left`}>Fecha</th>
+              <th className={`${e.th} text-left`}>Origen</th>
+              <th className={`${e.th} text-left`}>Impacto</th>
+              <th className={`${e.th} text-right`}>Valor día</th>
+              <th className={`${e.th} text-right`}>Domingo perdido</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {items.map((f, i) => (
+              <tr key={`${f.fecha}-${i}`}>
+                <td className={`${e.td} whitespace-nowrap tabular-nums text-muted-foreground`}>{formatFecha(f.fecha)}</td>
+                <td className={e.td}>{labelOrigen(f.origen)}</td>
+                <td className={`${e.td} ${f.impacto === 'DIA_DESCONTADO' ? 'text-foreground' : 'text-muted-foreground'}`}>
+                  {labelImpacto(f.impacto)}
+                </td>
+                <td className={`${e.td} whitespace-nowrap text-right tabular-nums`}>
+                  {f.impacto === 'DIA_DESCONTADO' ? formatMoney(f.valor_dia) : '-'}
+                </td>
+                <td className={`${e.td} whitespace-nowrap text-right tabular-nums text-muted-foreground`}>
+                  {f.consecuencia_dominical ?? '-'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-      <p className={`${isCompact ? 'text-[10px]' : 'text-xs'} text-muted-foreground mt-2 italic leading-relaxed`}>
+      <p className={e.nota}>
         Días con planilla aprobada donde el colaborador no aparece y no tiene
         novedad de ausencia registrada. Se tratan como inasistencia injustificada.
       </p>

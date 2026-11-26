@@ -184,6 +184,18 @@ export interface ViajeDetalle {
   reconteo_aprobado: boolean;
   reconteo_aprobado_at?: string | null;
   reconteo_aprobado_por?: number | null;
+  /**
+   * §5.5.1 — El detalle admite lápiz y papelera: el viaje está en CREADO y el
+   * reconteo no está aprobado. Opcional por compatibilidad con un backend
+   * anterior a 2026-11-21; sin el campo se cae a `!reconteo_aprobado`.
+   */
+  reconteo_editable?: boolean;
+  /** Gajos de esa cosecha que ya van en otros camiones. 0 = sin partir. */
+  gajos_en_otros_viajes?: number;
+  /** Techo del input al editar. `null` = sin techo (va completa aquí). */
+  maximo_gajos_permitido?: number | null;
+  /** §5.6.1 — El detalle está aprobado y se puede devolver a pendiente. */
+  reconteo_desaprobable?: boolean;
   estado?: boolean;
   cosecha?: {
     id: number;
@@ -928,10 +940,42 @@ export const viajesApi = {
    * incluye `advertencia` (string informativo, NO bloquea la operación).
    */
   hidratarReconteo: (viajeId: number, detalleId: number, payload: HidratarReconteoPayload) =>
-    put<{ data: ViajeDetalle; advertencia?: string }>(
+    put<{
+      data: ViajeDetalle;
+      /** Totales del viaje ya refrescados: evita volver a pedir el detalle. */
+      viaje?: { id: number; cantidad_gajos_total: number | null };
+      advertencia?: string | null;
+      /** §5.5 — El estado de los gajos de esa cosecha tras guardar. */
+      gajos?: {
+        gajos_reportados: number;
+        gajos_reconteo: number;
+        gajos_en_viaje: number;
+        gajos_en_otros_viajes: number;
+        /** `null` cuando la cosecha no está partida. */
+        maximo_permitido: number | null;
+      };
+    }>(
       `/viajes/${viajeId}/detalles/${detalleId}/reconteo`,
       payload,
     ),
+
+  /**
+   * POST /viajes/{id}/detalles/{detalleId}/desaprobar-reconteo (§5.6.1)
+   *
+   * Devuelve a pendiente un detalle aprobado por error, con el viaje todavía
+   * en CREADO. No toca los gajos ni el estado del viaje. Desde EN_VALIDACION
+   * ya no sirve: ahí la única vuelta atrás es reabrir el viaje finalizado.
+   */
+  desaprobarReconteo: (viajeId: number, detalleId: number) =>
+    post<{
+      message: string;
+      data: {
+        detalle_id: number;
+        reconteo_aprobado: boolean;
+        reconteo_editable: boolean;
+        viaje_estado: string;
+      };
+    }>(`/viajes/${viajeId}/detalles/${detalleId}/desaprobar-reconteo`),
 
   /**
    * POST /viajes/{id}/detalles/{detalleId}/aprobar-reconteo
@@ -955,6 +999,25 @@ export const viajesApi = {
     post<{ data: Viaje }>(
       `/viajes/${id}/saltar-validacion`,
       observaciones ? { observaciones } : undefined,
+    ),
+
+  /**
+   * POST /viajes/{id}/devolver-a-creado — EN_VALIDACION a CREADO (seccion 5.11)
+   *
+   * La vuelta atras liviana: no deshace ningun calculo porque pasar a
+   * validacion no calcula nada. Conserva las cosechas con sus gajos, el peso,
+   * los datos de extractora y los documentos; solo devuelve los reconteos a
+   * pendiente y limpia `validacion_at`. Permiso `viajes.editar`, sin guarda
+   * de nomina y sin `verificar` previo. El `motivo` es opcional (max. 500).
+   */
+  devolverACreado: (id: number, motivo?: string) =>
+    post<{
+      message: string;
+      data: Viaje;
+      efectos: { detalles_reiniciados: number };
+    }>(
+      `/viajes/${id}/devolver-a-creado`,
+      motivo?.trim() ? { motivo: motivo.trim() } : undefined,
     ),
 
   /**
@@ -1158,6 +1221,8 @@ export const ViajesErrorCodes = {
   VIAJE_NO_EDITABLE: 'VIAJE_NO_EDITABLE',
   /** 409 — intento de editar/eliminar un detalle con `reconteo_aprobado = true`. */
   DETALLE_APROBADO: 'DETALLE_APROBADO',
+  /** 409 (§5.6.1) — desaprobar un detalle que ya estaba pendiente. */
+  DETALLE_NO_APROBADO: 'DETALLE_NO_APROBADO',
   /** 422 — finalizar viaje con detalles pero sin `peso_viaje` o `cantidad_gajos_total`. */
   VIAJE_INCOMPLETO: 'VIAJE_INCOMPLETO',
   /** 422 — aprobar reconteo sin haber hidratado `gajos_en_viaje` del detalle. */

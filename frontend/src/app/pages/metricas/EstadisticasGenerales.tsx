@@ -1,4 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import {
+  CHART_COLORS, gridProps, xAxisProps, yAxisProps, barProps, barCategoryGap, tooltipProps,
+} from '../../components/common/chartTheme';
+import PageHeader from '../../components/common/PageHeader';
 import { Button } from '../../components/ui/button';
 import KPICard from '../../components/common/KPICard';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -21,16 +25,16 @@ const laborData = [
 export default function EstadisticasGenerales() {
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Estadísticas Generales</h1>
-          <p className="text-muted-foreground">Dashboard analítico completo</p>
-        </div>
-        <Button>
-          <Download className="mr-2 h-4 w-4" />
-          Exportar
-        </Button>
-      </div>
+      <PageHeader
+        title="Estadísticas generales"
+        description="Panel analítico de la finca."
+        actions={
+          <Button variant="outline">
+            <Download strokeWidth={2} />
+            Exportar
+          </Button>
+        }
+      />
 
       {/* KPIs principales */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -61,7 +65,7 @@ export default function EstadisticasGenerales() {
         {/* Distribución por lotes */}
         <Card>
           <CardHeader>
-            <CardTitle>Distribución de Producción por Lote</CardTitle>
+            <CardTitle>Distribución de producción por lote</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
@@ -79,7 +83,7 @@ export default function EstadisticasGenerales() {
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip {...tooltipProps} />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>
@@ -88,16 +92,16 @@ export default function EstadisticasGenerales() {
         {/* Productividad por labor */}
         <Card>
           <CardHeader>
-            <CardTitle>Productividad por Labor</CardTitle>
+            <CardTitle>Productividad por labor</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={laborData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="labor" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="productividad" fill="hsl(var(--chart-1))" />
+              <BarChart data={laborData} barCategoryGap={barCategoryGap}>
+                <CartesianGrid {...gridProps} />
+                <XAxis dataKey="labor" {...xAxisProps} />
+                <YAxis {...yAxisProps} />
+                <Tooltip {...tooltipProps} />
+                <Bar dataKey="productividad" fill={CHART_COLORS[0]} {...barProps} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>

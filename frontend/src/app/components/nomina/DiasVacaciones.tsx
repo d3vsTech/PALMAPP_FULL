@@ -20,6 +20,7 @@
  */
 import type { DetalleVacacionNomina } from '../../../api/nomina';
 import { formatFecha } from '../../utils/fecha';
+import { estiloDetalle } from './estiloDetalle';
 
 interface Props {
   items?: DetalleVacacionNomina[] | null;
@@ -45,98 +46,73 @@ export function DiasVacaciones({
 }: Props) {
   if (!items || items.length === 0) return null;
 
-  const isCompact = variant === 'compact';
+  const e = estiloDetalle(variant);
   // PR-L15 — La columna de valor solo aparece cuando hay algo que pagar aquí.
   const pagaAlgo = items.some((v) => v.pagada_aqui);
   const totalPagado = items.reduce((s, v) => s + pagadoAqui(v), 0);
   const hayCompensacion = items.some((v) => v.paga_dinero_aqui && (v.dias_dinero ?? 0) > 0);
-
-  const gridCols = pagaAlgo
-    ? (isCompact
-      ? 'grid-cols-[90px_1fr_55px_90px_100px]'
-      : 'grid-cols-[130px_1fr_70px_120px_130px]')
-    : (isCompact
-      ? 'grid-cols-[100px_1fr_70px_110px]'
-      : 'grid-cols-[140px_1fr_90px_140px]');
-  const headerText = isCompact ? 'text-[10px]' : 'text-xs';
-  const container = isCompact
-    ? 'bg-muted/30 rounded-lg p-3 border border-border'
-    : 'rounded-lg border border-border overflow-hidden';
   const totalDias = total ?? items.reduce((s, v) => s + v.dias, 0);
 
   return (
     <div>
-      {titulo && !isCompact && (
-        <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
+      {titulo && (
+        <h4 className={e.titulo}>
           {titulo}
-          <span className="text-xs font-normal text-muted-foreground">
-            · {totalDias} día{totalDias !== 1 ? 's' : ''}
+          <span className="font-normal text-muted-foreground">
+            {' · '}{totalDias} día{totalDias !== 1 ? 's' : ''}
           </span>
-        </h3>
+        </h4>
       )}
-      {titulo && isCompact && (
-        <h3 className="font-bold text-xs uppercase mb-2">
-          {titulo}
-          <span className="ml-1 font-normal text-muted-foreground normal-case">
-            ({totalDias})
-          </span>
-        </h3>
-      )}
-      <div className={container}>
-        <div
-          className={`grid ${gridCols} ${headerText} uppercase tracking-wide text-muted-foreground ${
-            isCompact ? 'pb-1 mb-1 border-b border-border' : 'px-4 py-2 bg-muted/40 border-b'
-          }`}
-        >
-          <span>Comprobante</span>
-          <span>Rango</span>
-          <span className="text-right pr-2">Días</span>
-          <span className="text-right">Valor día</span>
-          {pagaAlgo && <span className="text-right">Paga esta nómina</span>}
-        </div>
-        {items.map((v, i) => (
-          <div
-            key={`${v.vacacion_id}-${i}`}
-            className={`grid ${gridCols} text-xs ${
-              isCompact
-                ? 'py-0.5'
-                : 'px-4 py-2 border-b last:border-b-0 bg-primary/5'
-            }`}
-          >
-            <span className="font-mono">{v.numero_comprobante}</span>
-            <span className="truncate">
-              {formatFecha(v.fecha_desde)} — {formatFecha(v.fecha_hasta)}
-              {v.paga_dinero_aqui && (v.dias_dinero ?? 0) > 0 && (
-                <span className="text-muted-foreground">
-                  {' '}+ {v.dias_dinero} en dinero
-                </span>
-              )}
-            </span>
-            <span className="text-right pr-2 font-semibold">
-              {/* Los días remunerados del tramo son comerciales; sin PR-L15 no
-                  llegan y `dias` ya es la cifra comercial. */}
-              {v.dias_remunerados ?? v.dias}
-            </span>
-            <span className="text-right">{formatMoney(v.valor_dia)}</span>
-            {pagaAlgo && (
-              <span className={`text-right ${v.pagada_aqui ? 'font-semibold' : 'text-muted-foreground'}`}>
-                {v.pagada_aqui ? formatMoney(pagadoAqui(v)) : '—'}
-              </span>
-            )}
-          </div>
-        ))}
-        {pagaAlgo && (
-          <div
-            className={`grid ${gridCols} text-xs font-semibold ${
-              isCompact ? 'pt-1 mt-1 border-t border-border' : 'px-4 py-2 border-t bg-muted/40'
-            }`}
-          >
-            <span className="col-span-4">Total pagado en esta nómina</span>
-            <span className="text-right">{formatMoney(totalPagado)}</span>
-          </div>
-        )}
+      <div className={e.marco}>
+        <table className={e.tabla}>
+          <thead>
+            <tr className={e.encabezado}>
+              <th className={`${e.th} text-left`}>Comprobante</th>
+              <th className={`${e.th} text-left`}>Rango</th>
+              <th className={`${e.th} text-right`}>Días</th>
+              <th className={`${e.th} text-right`}>Valor día</th>
+              {pagaAlgo && <th className={`${e.th} text-right`}>Paga esta nómina</th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {items.map((v, i) => (
+              <tr key={`${v.vacacion_id}-${i}`}>
+                <td className={`${e.td} whitespace-nowrap font-medium text-foreground`}>{v.numero_comprobante}</td>
+                <td className={`${e.td} text-muted-foreground`}>
+                  <span className="whitespace-nowrap">{formatFecha(v.fecha_desde)} a {formatFecha(v.fecha_hasta)}</span>
+                  {v.paga_dinero_aqui && (v.dias_dinero ?? 0) > 0 && (
+                    <span className="block text-xs">+ {v.dias_dinero} en dinero</span>
+                  )}
+                </td>
+                {/* Los días remunerados del tramo son comerciales; sin PR-L15
+                    no llegan y `dias` ya es la cifra comercial. */}
+                <td className={`${e.td} text-right tabular-nums`}>{v.dias_remunerados ?? v.dias}</td>
+                <td className={`${e.td} whitespace-nowrap text-right tabular-nums text-muted-foreground`}>
+                  {formatMoney(v.valor_dia)}
+                </td>
+                {pagaAlgo && (
+                  <td
+                    className={`${e.td} whitespace-nowrap text-right tabular-nums ${
+                      v.pagada_aqui ? 'font-medium text-foreground' : 'text-muted-foreground'
+                    }`}
+                  >
+                    {v.pagada_aqui ? formatMoney(pagadoAqui(v)) : '-'}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+          {pagaAlgo && (
+            <tfoot>
+              <tr className={e.pie}>
+                <td className={e.td} colSpan={4}>Total pagado en esta nómina</td>
+                <td className={`${e.td} whitespace-nowrap text-right tabular-nums`}>{formatMoney(totalPagado)}</td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
       </div>
-      <p className={`${isCompact ? 'text-[10px]' : 'text-xs'} text-muted-foreground mt-2 italic leading-relaxed`}>
+      <p className={e.nota}>
         {pagaAlgo ? (
           <>
             Vacaciones pagadas en esta nómina: el valor entra como salario del

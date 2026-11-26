@@ -7,16 +7,22 @@
  * de un error no haya que hacerlo dos veces.
  */
 import { useState } from 'react';
-import { AlertTriangle, Download, FileSpreadsheet, Info, Loader2, Upload, X } from 'lucide-react';
+import {
+  AlertCircle, AlertTriangle, CheckCircle2, Download, FileSpreadsheet, Info, Loader2, RefreshCw,
+  Upload, X, type LucideIcon,
+} from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
+import { Checkbox } from '../../../components/ui/checkbox';
 import { Card, CardContent, CardHeader } from '../../../components/ui/card';
+import { cn } from '../../../components/ui/utils';
 import type { ApiError } from '../../../../api/client';
 import {
   descripcionFormato,
   HistoricoArchivoErrorCodes as E,
   MOTIVO_ARCHIVO_LABEL,
   type ArchivoHistorico,
+  type EstadoFilaHistorico,
   type IncidenciaFila,
 } from '../../../../api/historicoComun';
 
@@ -55,6 +61,70 @@ export function mensajeArchivo(e: unknown): string {
 
 // ─── Piezas visuales ──────────────────────────────────────────────────────────
 
+const VARIANTE_FILA: Record<EstadoFilaHistorico, 'success' | 'warning' | 'destructive'> = {
+  OK: 'success',
+  SOBRESCRIBIR: 'warning',
+  ERROR: 'destructive',
+};
+
+const ICONO_FILA: Record<EstadoFilaHistorico, LucideIcon> = {
+  OK: CheckCircle2,
+  SOBRESCRIBIR: RefreshCw,
+  ERROR: AlertCircle,
+};
+
+/** Estado de una fila del archivo, con la variante y el ícono del diseño. */
+export function BadgeEstadoFila({ estado, children }: { estado: EstadoFilaHistorico; children: React.ReactNode }) {
+  const Icono = ICONO_FILA[estado];
+  return (
+    <Badge variant={VARIANTE_FILA[estado]}>
+      <Icono />
+      {children}
+    </Badge>
+  );
+}
+
+type TonoAviso = 'warning' | 'destructive' | 'success' | 'info';
+
+const FONDO_AVISO: Record<TonoAviso, string> = {
+  warning: 'bg-warning-soft',
+  destructive: 'bg-destructive-soft',
+  success: 'bg-success-soft',
+  info: 'bg-info-soft',
+};
+
+const ICONO_AVISO: Record<TonoAviso, string> = {
+  warning: 'text-warning',
+  destructive: 'text-destructive',
+  success: 'text-success',
+  info: 'text-info',
+};
+
+/** Recuadro suave del diseño: fondo del tono, texto normal y solo el ícono con color. */
+export function Aviso({
+  tono,
+  icono: Icono,
+  children,
+  className,
+}: {
+  tono: TonoAviso;
+  icono: LucideIcon;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn('flex gap-2 rounded-lg p-3 text-sm text-foreground', FONDO_AVISO[tono], className)}>
+      <Icono className={cn('mt-0.5 h-4 w-4 shrink-0', ICONO_AVISO[tono])} strokeWidth={2} />
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
+/** Clases de las tablas del cargue, iguales a las del diseño. */
+export const THEAD = 'bg-muted/60 text-xs font-semibold text-muted-foreground';
+export const TH = 'whitespace-nowrap px-4 py-2.5 text-left font-semibold';
+export const TD = 'px-4 py-3 align-top';
+
 /** Una regla numerada, con el número alineado como en la plantilla. */
 export function Regla({ n, children }: { n: number; children: React.ReactNode }) {
   return (
@@ -92,6 +162,65 @@ interface PropsSelector {
   onQuitar: () => void;
   inputRef: React.RefObject<HTMLInputElement>;
   accept: string;
+  /** Mientras se sube no se puede cambiar ni quitar el archivo. */
+  bloqueado?: boolean;
+}
+
+/** Tamaño del archivo como lo muestra el diseño: B, KB o MB. */
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** El archivo ya elegido: ícono, nombre, formato y las acciones Cambiar y Quitar. */
+function ArchivoElegido({
+  archivo,
+  detalle,
+  analisis,
+  bloqueado = false,
+  onCambiar,
+  onQuitar,
+}: {
+  archivo: File;
+  detalle?: React.ReactNode;
+  analisis?: ArchivoHistorico;
+  bloqueado?: boolean;
+  onCambiar: () => void;
+  onQuitar: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-4 rounded-lg bg-muted/60 p-4">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+        <FileSpreadsheet className="h-5 w-5" strokeWidth={2} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="min-w-0 max-w-full break-all font-semibold text-foreground">{archivo.name}</p>
+          <ChipFormato archivo={analisis} />
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {formatBytes(archivo.size)}
+          {detalle && <> · {detalle}</>}
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        <Button variant="outline" size="sm" onClick={onCambiar} disabled={bloqueado}>
+          Cambiar
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Quitar archivo"
+          onClick={onQuitar}
+          disabled={bloqueado}
+          className="text-muted-foreground hover:text-destructive"
+        >
+          <X strokeWidth={2} />
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 /** El selector de archivo, con el nombre y el formato una vez elegido. */
@@ -103,6 +232,7 @@ export function SelectorArchivo({
   onQuitar,
   inputRef,
   accept,
+  bloqueado = false,
 }: PropsSelector) {
   return (
     <>
@@ -112,32 +242,20 @@ export function SelectorArchivo({
         <Button
           variant="outline"
           onClick={() => inputRef.current?.click()}
-          className="h-12 w-full gap-2 border-dashed"
+          className="h-12 w-full border-dashed"
         >
-          <Upload className="h-4 w-4" />
+          <Upload strokeWidth={2} />
           Seleccionar archivo
         </Button>
       ) : (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <FileSpreadsheet className="h-5 w-5 shrink-0 text-primary" />
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="truncate text-sm font-medium">{archivo.name}</p>
-                <ChipFormato archivo={analisis} />
-              </div>
-              {detalle && <p className="text-xs text-muted-foreground">{detalle}</p>}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
-              Cambiar
-            </Button>
-            <Button variant="ghost" size="sm" onClick={onQuitar} className="px-2">
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+        <ArchivoElegido
+          archivo={archivo}
+          detalle={detalle}
+          analisis={analisis}
+          bloqueado={bloqueado}
+          onCambiar={() => inputRef.current?.click()}
+          onQuitar={onQuitar}
+        />
       )}
     </>
   );
@@ -153,6 +271,7 @@ export function PasoCard({
   titulo,
   subtitulo,
   accion,
+  contenidoClassName = 'space-y-4',
   children,
 }: {
   n: number;
@@ -160,25 +279,25 @@ export function PasoCard({
   subtitulo?: string;
   /** Botón del encabezado, alineado a la derecha (ej. "Descargar plantilla"). */
   accion?: React.ReactNode;
+  /** Separación del contenido. El diseño usa space-y-2 en el paso 1 y space-y-6 en el 3. */
+  contenidoClassName?: string;
   children: React.ReactNode;
 }) {
   return (
-    <Card className="border-border">
-      <CardHeader className="border-b">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
-              {n}
-            </span>
-            <div>
-              <p className="font-semibold text-foreground">{titulo}</p>
-              {subtitulo && <p className="text-sm text-muted-foreground">{subtitulo}</p>}
-            </div>
+    <Card className="gap-4">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-bold text-primary">
+            {n}
+          </span>
+          <div className="space-y-1">
+            <h3>{titulo}</h3>
+            {subtitulo && <p className="text-sm text-muted-foreground">{subtitulo}</p>}
           </div>
-          {accion}
         </div>
+        {accion && <div className="sm:shrink-0">{accion}</div>}
       </CardHeader>
-      <CardContent className="space-y-4 p-6">{children}</CardContent>
+      <CardContent className={contenidoClassName}>{children}</CardContent>
     </Card>
   );
 }
@@ -186,9 +305,9 @@ export function PasoCard({
 /** Los formatos que acepta el cargue, como chip bajo la zona de arrastre. */
 export function ChipExtensiones({ accept }: { accept: string }) {
   return (
-    <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
+    <Badge variant="secondary">
       {accept.split(',').map((e) => e.trim()).join(' · ')}
-    </span>
+    </Badge>
   );
 }
 
@@ -202,6 +321,8 @@ interface PropsZona {
   onQuitar: () => void;
   inputRef: React.RefObject<HTMLInputElement>;
   accept: string;
+  /** Mientras se sube no se puede cambiar ni quitar el archivo. */
+  bloqueado?: boolean;
 }
 
 /**
@@ -217,6 +338,7 @@ export function ZonaArchivo({
   onQuitar,
   inputRef,
   accept,
+  bloqueado = false,
 }: PropsZona) {
   const [encima, setEncima] = useState(false);
 
@@ -254,40 +376,38 @@ export function ZonaArchivo({
           onDragOver={(e) => { e.preventDefault(); setEncima(true); }}
           onDragLeave={() => setEncima(false)}
           onDrop={soltar}
-          className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-12 text-center transition-colors ${
-            encima ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50 hover:bg-muted/30'
-          }`}
+          className={cn(
+            'flex cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-10 text-center transition-colors',
+            encima ? 'border-primary bg-primary-soft' : 'border-border hover:border-primary/50 hover:bg-muted/40'
+          )}
         >
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-            <Upload className="h-6 w-6 text-muted-foreground" />
-          </div>
+          <span
+            className={cn(
+              'flex h-12 w-12 items-center justify-center rounded-full',
+              encima ? 'bg-card text-primary' : 'bg-primary-soft text-primary'
+            )}
+          >
+            <Upload className="h-5 w-5" strokeWidth={2} />
+          </span>
           <div>
-            <p className="font-semibold text-foreground">Arrastra tu archivo aquí</p>
-            <p className="text-sm font-medium text-primary">o haz clic para seleccionar</p>
+            <p className="font-semibold text-foreground">
+              {encima ? 'Suelta el archivo aquí' : 'Arrastra tu archivo aquí'}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              o <span className="font-semibold text-primary">haz clic para seleccionarlo</span>
+            </p>
           </div>
           <ChipExtensiones accept={accept} />
         </div>
       ) : (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <FileSpreadsheet className="h-5 w-5 shrink-0 text-primary" />
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="truncate text-sm font-medium">{archivo.name}</p>
-                <ChipFormato archivo={analisis} />
-              </div>
-              {detalle && <p className="text-xs text-muted-foreground">{detalle}</p>}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
-              Cambiar
-            </Button>
-            <Button variant="ghost" size="sm" onClick={onQuitar} className="px-2">
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+        <ArchivoElegido
+          archivo={archivo}
+          detalle={detalle}
+          analisis={analisis}
+          bloqueado={bloqueado}
+          onCambiar={() => inputRef.current?.click()}
+          onQuitar={onQuitar}
+        />
       )}
     </>
   );
@@ -310,17 +430,16 @@ export function BotonesPlantilla({
   onDescargar: (formato: 'xlsx' | 'csv') => void;
 }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <Button
         variant="outline"
         onClick={() => onDescargar('xlsx')}
         disabled={descargando !== null}
-        className="gap-2"
       >
         {descargando === 'xlsx' ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <Loader2 className="animate-spin" strokeWidth={2} />
         ) : (
-          <Download className="h-4 w-4" />
+          <Download strokeWidth={2} />
         )}
         Descargar plantilla
       </Button>
@@ -329,7 +448,7 @@ export function BotonesPlantilla({
         size="sm"
         onClick={() => onDescargar('csv')}
         disabled={descargando !== null}
-        className="gap-1.5 text-muted-foreground"
+        className="text-muted-foreground"
       >
         {descargando === 'csv' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
         CSV
@@ -357,20 +476,23 @@ export interface ColumnaPlantilla {
 export function VistaPreviaPlantilla({
   columnas,
   filas,
+  formatos,
 }: {
   columnas: ColumnaPlantilla[];
   filas: string[][];
+  /** Línea del diseño bajo la tabla, ej. ".xlsx, .xls y .csv". Opcional. */
+  formatos?: string;
 }) {
   return (
     <div className="space-y-2">
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <div className="overflow-auto rounded-lg border border-border">
         <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-muted/40">
+          <thead className="bg-muted/60 text-xs font-semibold text-muted-foreground">
+            <tr>
               {columnas.map((c) => (
                 <th
                   key={c.nombre}
-                  className="whitespace-nowrap px-4 py-2.5 text-left font-semibold text-foreground"
+                  className="whitespace-nowrap px-4 py-2.5 text-left font-semibold"
                 >
                   {c.nombre}
                   {c.requerida && <span className="ml-1 text-destructive">*</span>}
@@ -378,17 +500,12 @@ export function VistaPreviaPlantilla({
               ))}
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-border">
             {filas.map((fila, i) => (
-              <tr key={i} className="border-b border-border last:border-0">
+              <tr key={i}>
                 {fila.map((celda, j) => (
-                  <td
-                    key={j}
-                    className={`whitespace-nowrap px-4 py-2.5 ${
-                      celda ? 'text-muted-foreground' : 'text-muted-foreground/40'
-                    }`}
-                  >
-                    {celda || '(vacío)'}
+                  <td key={j} className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">
+                    {celda}
                   </td>
                 ))}
               </tr>
@@ -396,6 +513,9 @@ export function VistaPreviaPlantilla({
           </tbody>
         </table>
       </div>
+      {formatos && (
+        <p className="text-xs text-muted-foreground">Formatos aceptados: {formatos}</p>
+      )}
       <p className="text-xs text-muted-foreground">
         <span className="text-destructive">*</span> La celda no puede ir vacía. En las demás
         columnas la cabecera debe existir igual, y si la celda va vacía el sistema pone el
@@ -423,12 +543,148 @@ export function EstadoValidacion({
         </p>
       )}
       {error && (
-        <p className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <Aviso tono="destructive" icono={AlertCircle}>
           {error}
-        </p>
+        </Aviso>
       )}
     </>
+  );
+}
+
+const plural = (n: number, singular: string, varios: string) => (n === 1 ? singular : varios);
+
+/** Badge del encabezado del paso 3, como en el diseño. */
+export function BadgeDetectados({ total }: { total: number }) {
+  return (
+    <Badge variant="default" className="sm:mt-1">
+      {total} {plural(total, 'registro detectado', 'registros detectados')}
+    </Badge>
+  );
+}
+
+/** Casilla para reemplazar lo que ya estaba cargado. */
+export function CasillaSobrescribir({
+  checked,
+  onChange,
+  titulo,
+  children,
+}: {
+  checked: boolean;
+  onChange: (valor: boolean) => void;
+  titulo: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3 rounded-lg bg-muted/60 p-3">
+      <Checkbox
+        checked={checked}
+        onCheckedChange={(v) => onChange(v === true)}
+        className="mt-0.5"
+      />
+      <span className="text-sm text-foreground">
+        <span className="font-medium">{titulo}</span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">{children}</span>
+      </span>
+    </label>
+  );
+}
+
+/**
+ * Barra final del paso 3: el resumen a la izquierda y Cancelar y Subir a la
+ * derecha. Con filas en error el resumen no promete una subida que no va a pasar.
+ */
+export function BarraSubida({
+  total,
+  modulo,
+  bloqueado,
+  cargando,
+  deshabilitado,
+  onCancelar,
+  onSubir,
+}: {
+  total: number;
+  /** Cierra la frase "al módulo de ...". */
+  modulo: string;
+  bloqueado: boolean;
+  cargando: boolean;
+  deshabilitado: boolean;
+  onCancelar: () => void;
+  onSubir: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm text-muted-foreground">
+        {bloqueado ? (
+          'Corrige las filas con error para poder subir el histórico.'
+        ) : (
+          <>
+            Se subirán{' '}
+            <span className="font-semibold text-foreground">
+              {total} {plural(total, 'registro', 'registros')}
+            </span>{' '}
+            al módulo de {modulo}.
+          </>
+        )}
+      </p>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button variant="outline" onClick={onCancelar} disabled={cargando}>
+          Cancelar
+        </Button>
+        <Button onClick={onSubir} disabled={deshabilitado}>
+          {cargando ? <Loader2 className="animate-spin" strokeWidth={2} /> : <Upload strokeWidth={2} />}
+          {cargando ? 'Subiendo…' : 'Subir histórico'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Una cifra del resumen de éxito, como en el diseño. */
+function CifraExito({ valor, etiqueta }: { valor: React.ReactNode; etiqueta: string }) {
+  return (
+    <div className="rounded-lg bg-muted/60 px-3 py-3">
+      <dd className="text-2xl font-bold text-foreground">{valor}</dd>
+      <dt className="mt-1 text-xs text-muted-foreground">{etiqueta}</dt>
+    </div>
+  );
+}
+
+/**
+ * Estado de éxito del diseño, al pie del paso 3 para no perder la tabla.
+ * El cargue es todo o nada: si llegó aquí, no quedó ninguna fila con error.
+ */
+export function ExitoCargue({
+  total,
+  modulo,
+  children,
+}: {
+  total: number;
+  modulo: string;
+  /** Los botones: primero el outline, después el principal. */
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-6 py-6 text-center">
+      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-success-soft text-success">
+        <CheckCircle2 className="h-6 w-6" strokeWidth={2} />
+      </span>
+      <div className="space-y-1 px-6">
+        <h3>Histórico cargado</h3>
+        <p className="text-sm text-muted-foreground">
+          Se subieron{' '}
+          <span className="font-semibold text-foreground">
+            {total} {plural(total, 'registro', 'registros')}
+          </span>{' '}
+          al módulo de {modulo}.
+        </p>
+      </div>
+      <dl className="grid w-full max-w-sm grid-cols-3 gap-3 px-6">
+        <CifraExito valor={total} etiqueta="Registros subidos" />
+        <CifraExito valor={0} etiqueta="Con errores" />
+        <CifraExito valor="100 %" etiqueta="Completado" />
+      </dl>
+      <div className="flex flex-col-reverse gap-2 px-6 sm:flex-row">{children}</div>
+    </div>
   );
 }
 
@@ -437,8 +693,35 @@ export function CabecerasIgnoradas({ cabeceras }: { cabeceras: string[] }) {
   if (cabeceras.length === 0) return null;
   return (
     <p className="flex items-start gap-2 text-xs text-muted-foreground">
-      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
       Se ignoraron estas columnas porque el sistema no las usa: {cabeceras.join(', ')}.
+    </p>
+  );
+}
+
+/**
+ * La observación de la fila.
+ *
+ * Es una columna de la plantilla en los cuatro cargues y queda guardada con el
+ * registro; en liquidación final incluso se imprime en el comprobante. Si no se
+ * muestra aquí, el usuario no tiene dónde ver qué texto quedó pegado a cada
+ * fila antes de subir el archivo.
+ */
+export function CeldaObservacion({ texto }: { texto: string | null | undefined }) {
+  if (!texto) return <span className="text-muted-foreground">—</span>;
+  return (
+    <p className="max-w-[14rem] whitespace-normal break-words text-xs text-muted-foreground">
+      {texto}
+    </p>
+  );
+}
+
+/** Días de mora de un pago, cuando el backend los contó. */
+export function LineaMora({ dias }: { dias: number | null | undefined }) {
+  if (!dias || dias <= 0) return null;
+  return (
+    <p className="text-xs text-warning">
+      {dias} {dias === 1 ? 'día' : 'días'} de mora
     </p>
   );
 }
@@ -463,18 +746,18 @@ export function IncidenciasFila({
       {errores.map((x, i) => (
         <p
           key={`e-${x.code}-${i}`}
-          className="mt-1 flex items-start gap-1.5 text-xs text-destructive"
+          className="mt-1 flex items-start gap-1.5 text-xs text-foreground"
         >
-          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0 text-destructive" strokeWidth={2} />
           {x.mensaje || etiquetasError[x.code] || x.code}
         </p>
       ))}
       {advertencias.map((x, i) => (
         <p
           key={`a-${x.code}-${i}`}
-          className="mt-1 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400"
+          className="mt-1 flex items-start gap-1.5 text-xs text-foreground"
         >
-          <Info className="mt-0.5 h-3 w-3 shrink-0" />
+          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-warning" strokeWidth={2} />
           {x.mensaje || etiquetasAdvertencia[x.code] || x.code}
         </p>
       ))}
@@ -506,7 +789,7 @@ export function CeldaColaborador({
         <p className="text-sm text-muted-foreground">
           {delArchivo || 'Sin colaborador'}
         </p>
-        <p className="truncate text-xs text-muted-foreground">
+        <p className="break-words text-xs text-muted-foreground">
           {documentoArchivo ? `en el archivo: ${documentoArchivo}` : 'sin cédula'}
         </p>
       </div>
@@ -514,12 +797,12 @@ export function CeldaColaborador({
   }
   return (
     <div className="min-w-0">
-      <p className="truncate text-sm font-medium">{nombre}</p>
-      <p className="truncate text-xs text-muted-foreground">CC {documento}</p>
+      <p className="break-words text-sm font-medium">{nombre}</p>
+      <p className="break-words text-xs text-muted-foreground">CC {documento}</p>
       {/* El nombre del archivo solo se muestra cuando no es el de la ficha: la
           advertencia dice que algo pasa, esto dice qué decía el archivo. */}
       {delArchivo && !mismoNombre(delArchivo, nombre) && (
-        <p className="truncate text-xs text-amber-700 dark:text-amber-500">
+        <p className="break-words text-xs text-warning">
           en el archivo: {delArchivo}
         </p>
       )}

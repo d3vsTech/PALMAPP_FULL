@@ -1,23 +1,16 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
-
-import { formatFecha } from '../../utils/fecha';
+import { useNavigate, useParams, Link } from 'react-router';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent } from '../../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
-import {
-  ArrowLeft,
-  Star,
-  Store,
-  MapPin,
-  Package,
-  TrendingUp,
-  Award,
-  ShoppingCart,
-  Clock,
-  Shield,
-} from 'lucide-react';
+import { Star, MapPin, Package, ShoppingBag, Truck } from 'lucide-react';
+import PageHeader from '../../components/common/PageHeader';
+import StatStrip from '../../components/common/StatStrip';
+import { ProductoCard, Calificacion } from '../../components/market/piezas';
+import { num } from '../../lib/formato';
+import { cn } from '../../components/lib/utils';
+import { fechaLocal } from '../../lib/fechas';
 
 interface Producto {
   id: string;
@@ -149,288 +142,143 @@ const proveedorData: Proveedor = {
   ],
 };
 
+function Estrellas({ valor }: { valor: number }) {
+  return (
+    <span className="inline-flex items-center gap-0.5" aria-label={`${valor} de 5`}>
+      {[...Array(5)].map((_, i) => (
+        <Star
+          key={i}
+          className={cn('h-3.5 w-3.5', i < valor ? 'fill-warning text-warning' : 'text-muted-foreground/40')}
+          strokeWidth={2}
+        />
+      ))}
+    </span>
+  );
+}
+
 export default function ProveedorDetalle() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [tabActual, setTabActual] = useState('productos');
+  const p = proveedorData;
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate('/market/proveedores')}
-          className="mb-4 gap-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Volver a proveedores
-        </Button>
-      </div>
+    <div className="space-y-6" data-proveedor={id}>
+      <PageHeader
+        backTo="/market/proveedores"
+        eyebrow={<Link to="/market/proveedores" className="hover:text-foreground">Proveedores</Link>}
+        title={p.nombre}
+        description={
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span>{p.descripcion}</span>
+            <Calificacion valor={p.rating} detalle={`· ${num(p.totalReviews)} reseñas`} />
+          </span>
+        }
+      />
 
-      {/* Información del proveedor */}
-      <Card className="border-border">
-        <CardContent className="p-8">
-          <div className="flex flex-col lg:flex-row gap-8">
-            {/* Logo y certificaciones */}
-            <div className="flex flex-col items-center lg:items-start gap-4">
-              <div className="h-32 w-32 rounded-2xl bg-primary/10 flex items-center justify-center">
-                <Store className="h-16 w-16 text-primary" />
-              </div>
-              <div className="flex flex-wrap gap-2 justify-center lg:justify-start">
-                {proveedorData.certificaciones.map((cert) => (
-                  <Badge
-                    key={cert}
-                    className="bg-success/10 text-success border-success/20"
-                  >
-                    <Award className="h-3 w-3 mr-1" />
-                    {cert}
-                  </Badge>
-                ))}
-              </div>
-            </div>
+      <StatStrip
+        items={[
+          { label: 'Ubicación', value: <span className="text-lg">{p.ubicacion}</span>, icon: MapPin, tone: 'blue' },
+          { label: 'Productos activos', value: num(p.productosActivos), icon: Package, tone: 'lime' },
+          { label: 'Ventas', value: num(p.totalVentas), note: 'completadas', icon: ShoppingBag, tone: 'green' },
+          { label: 'Entrega', value: <span className="text-lg">{p.tiempoEntrega}</span>, note: 'desde la confirmación', icon: Truck, tone: 'blue' },
+        ]}
+      />
 
-            {/* Información principal */}
-            <div className="flex-1 space-y-4">
-              <div>
-                <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-2">
-                  {proveedorData.nombre}
-                </h1>
-                <p className="text-lg text-muted-foreground">{proveedorData.descripcion}</p>
-              </div>
-
-              <div className="flex items-center gap-1">
-                {[...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    className={`h-5 w-5 ${
-                      i < Math.floor(proveedorData.rating)
-                        ? 'fill-amber-400 text-amber-400'
-                        : 'text-muted'
-                    }`}
-                  />
-                ))}
-                <span className="text-lg font-semibold ml-2">{proveedorData.rating}</span>
-                <span className="text-muted-foreground ml-1">
-                  ({proveedorData.totalReviews} reseñas)
-                </span>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 pt-4">
-                <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
-                  <MapPin className="h-5 w-5 text-primary flex-shrink-0" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Ubicación</p>
-                    <p className="text-sm font-medium">{proveedorData.ubicacion}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
-                  <Package className="h-5 w-5 text-primary flex-shrink-0" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Productos</p>
-                    <p className="text-sm font-medium">{proveedorData.productosActivos}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
-                  <TrendingUp className="h-5 w-5 text-primary flex-shrink-0" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Ventas</p>
-                    <p className="text-sm font-medium">{proveedorData.totalVentas}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
-                  <Clock className="h-5 w-5 text-primary flex-shrink-0" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Entrega</p>
-                    <p className="text-sm font-medium">{proveedorData.tiempoEntrega}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Tabs */}
-      <Tabs value={tabActual} onValueChange={setTabActual}>
-        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-          <TabsTrigger value="productos">
-            Productos ({proveedorData.productos.length})
-          </TabsTrigger>
+      <Tabs value={tabActual} onValueChange={setTabActual} className="gap-4">
+        <TabsList className="w-full sm:w-auto">
+          <TabsTrigger value="productos">Productos ({p.productos.length})</TabsTrigger>
           <TabsTrigger value="acerca">Acerca de</TabsTrigger>
-          <TabsTrigger value="reviews">
-            Reseñas ({proveedorData.reviews.length})
-          </TabsTrigger>
+          <TabsTrigger value="reviews">Reseñas ({p.reviews.length})</TabsTrigger>
         </TabsList>
 
-        {/* Tab Productos */}
-        <TabsContent value="productos" className="mt-6">
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {proveedorData.productos.map((producto) => (
-              <Card
+        <TabsContent value="productos">
+          <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+            {p.productos.map(producto => (
+              <ProductoCard
                 key={producto.id}
-                className="border-border hover:shadow-lg transition cursor-pointer"
-                onClick={() => navigate(`/market/producto/${producto.id}`)}
-              >
-                <CardContent className="p-6 space-y-4">
-                  <div className="aspect-square bg-gradient-to-br from-primary/10 to-primary/5 rounded-lg flex items-center justify-center">
-                    <Package className="h-16 w-16 text-primary/30" />
-                  </div>
-
-                  <div>
-                    <Badge variant="outline" className="mb-2">
-                      {producto.categoria}
-                    </Badge>
-                    <h3 className="font-semibold text-foreground mb-1">{producto.nombre}</h3>
-                    <div className="flex items-center gap-1 mb-2">
-                      {[...Array(5)].map((_, i) => (
-                        <Star
-                          key={i}
-                          className={`h-3 w-3 ${
-                            i < Math.floor(producto.rating)
-                              ? 'fill-amber-400 text-amber-400'
-                              : 'text-muted'
-                          }`}
-                        />
-                      ))}
-                      <span className="text-xs text-muted-foreground ml-1">
-                        ({producto.rating})
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-baseline justify-between gap-4">
-                    <div>
-                      <p className="text-2xl font-bold text-success">
-                        ${producto.precio.toLocaleString()}
-                      </p>
-                      <p className="text-xs text-muted-foreground">por {producto.unidad}</p>
-                    </div>
-                    <Badge className="bg-muted text-foreground">
-                      Stock: {producto.stock}
-                    </Badge>
-                  </div>
-
-                  <Button className="w-full gap-2">
-                    <ShoppingCart className="h-4 w-4" />
-                    Ver producto
+                onAbrir={() => navigate(`/market/productos/${producto.id}`)}
+                nombre={producto.nombre}
+                categoria={producto.categoria}
+                precio={producto.precio}
+                unidad={producto.unidad}
+                rating={producto.rating}
+                subtitulo={`${num(producto.stock)} disponibles`}
+                accion={
+                  <Button variant="outline" size="sm" onClick={() => navigate(`/market/productos/${producto.id}`)}>
+                    Ver
                   </Button>
-                </CardContent>
-              </Card>
+                }
+              />
             ))}
           </div>
         </TabsContent>
 
-        {/* Tab Acerca de */}
-        <TabsContent value="acerca" className="mt-6">
-          <Card className="border-border">
-            <CardContent className="p-8 space-y-6">
-              <div>
-                <h2 className="text-2xl font-bold text-foreground mb-4">
-                  Sobre {proveedorData.nombre}
-                </h2>
-                <p className="text-muted-foreground leading-relaxed">
-                  {proveedorData.descripcionDetallada}
-                </p>
-              </div>
-
-              <div className="h-px bg-border" />
-
-              <div className="grid gap-6 sm:grid-cols-2">
-                <div className="space-y-3">
-                  <h3 className="font-semibold text-foreground">Información General</h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Año de fundación:</span>
-                      <span className="text-sm font-medium">{proveedorData.añoFundacion}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Categoría:</span>
-                      <span className="text-sm font-medium">{proveedorData.categoria}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Productos activos:</span>
-                      <span className="text-sm font-medium">
-                        {proveedorData.productosActivos}
-                      </span>
-                    </div>
-                  </div>
+        <TabsContent value="acerca">
+          <div className="grid gap-6 lg:grid-cols-3">
+            <Card className="gap-4 lg:col-span-2">
+              <CardHeader>
+                <CardTitle>Sobre {p.nombre}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm leading-relaxed text-muted-foreground">{p.descripcionDetallada}</p>
+              </CardContent>
+            </Card>
+            <Card className="gap-0">
+              <CardHeader className="border-b border-border">
+                <CardTitle>Información general</CardTitle>
+              </CardHeader>
+              <dl className="divide-y divide-border text-sm">
+                <div className="flex justify-between gap-4 px-6 py-3">
+                  <dt className="text-muted-foreground">Año de fundación</dt>
+                  <dd className="font-medium">{p.añoFundacion}</dd>
                 </div>
-
-                <div className="space-y-3">
-                  <h3 className="font-semibold text-foreground">Certificaciones</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {proveedorData.certificaciones.map((cert) => (
-                      <Badge
-                        key={cert}
-                        className="bg-success/10 text-success border-success/20"
-                      >
-                        <Shield className="h-3 w-3 mr-1" />
-                        {cert}
-                      </Badge>
+                <div className="flex justify-between gap-4 px-6 py-3">
+                  <dt className="text-muted-foreground">Categoría</dt>
+                  <dd className="text-right font-medium">{p.categoria}</dd>
+                </div>
+                <div className="flex justify-between gap-4 px-6 py-3">
+                  <dt className="text-muted-foreground">Productos activos</dt>
+                  <dd className="font-medium">{num(p.productosActivos)}</dd>
+                </div>
+                <div className="flex justify-between gap-4 px-6 py-3">
+                  <dt className="text-muted-foreground">Tiempo de entrega</dt>
+                  <dd className="text-right font-medium">{p.tiempoEntrega}</dd>
+                </div>
+                <div className="space-y-2 px-6 py-3">
+                  <dt className="text-muted-foreground">Certificaciones</dt>
+                  <dd className="flex flex-wrap gap-1.5">
+                    {p.certificaciones.map(cert => (
+                      <Badge key={cert} variant="secondary">{cert}</Badge>
                     ))}
-                  </div>
+                  </dd>
                 </div>
-              </div>
-
-              <div className="h-px bg-border" />
-
-              <div className="bg-primary/5 border border-primary/20 rounded-lg p-6">
-                <div className="flex items-start gap-3">
-                  <Clock className="h-6 w-6 text-primary flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h3 className="font-semibold text-foreground mb-1">
-                      Tiempo de entrega estimado
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      {proveedorData.tiempoEntrega} a partir de la confirmación del pedido
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </dl>
+            </Card>
+          </div>
         </TabsContent>
 
-        {/* Tab Reviews */}
-        <TabsContent value="reviews" className="mt-6">
-          <div className="space-y-4">
-            {proveedorData.reviews.map((review) => (
-              <Card key={review.id} className="border-border">
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between mb-3">
+        <TabsContent value="reviews">
+          <Card className="gap-0 overflow-hidden">
+            <ul className="divide-y divide-border">
+              {p.reviews.map(review => (
+                <li key={review.id} className="space-y-2 px-6 py-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <p className="font-semibold text-foreground">{review.usuario}</p>
                       <p className="text-xs text-muted-foreground">
-                        {formatFecha(review.fecha, { year: 'numeric', month: 'long', day: 'numeric' })}
+                        {fechaLocal(review.fecha).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' })}
+                        {' · '}
+                        {review.producto}
                       </p>
                     </div>
-                    <div className="flex items-center gap-1">
-                      {[...Array(5)].map((_, i) => (
-                        <Star
-                          key={i}
-                          className={`h-4 w-4 ${
-                            i < review.rating
-                              ? 'fill-amber-400 text-amber-400'
-                              : 'text-muted'
-                          }`}
-                        />
-                      ))}
-                    </div>
+                    <Estrellas valor={review.rating} />
                   </div>
-                  <p className="text-muted-foreground mb-2">{review.comentario}</p>
-                  <Badge variant="outline" className="text-xs">
-                    <Package className="h-3 w-3 mr-1" />
-                    {review.producto}
-                  </Badge>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  <p className="text-sm text-muted-foreground">{review.comentario}</p>
+                </li>
+              ))}
+            </ul>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import PageHeader from '../../components/common/PageHeader';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Badge } from '../../components/ui/badge';
@@ -14,9 +14,11 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 import {
-  ArrowLeft, ArrowRight, Check, Truck, Leaf, Plus, Trash2, AlertTriangle,
+  ArrowLeft, ArrowRight, Check, Plus, Trash2, AlertTriangle,
+  Pencil, RotateCcw, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import type { ApiError } from '../../../api/client';
 import {
   viajesApi, strField, ViajesErrorCodes as ErrorCodes,
   type Viaje, type ViajeDetalle, type OperacionDisponible, type CosechaLibre,
@@ -48,6 +50,14 @@ interface CosechaConteo {
   pesoKg: number;
   cuadrillaCount: number;
   aprobado: boolean;
+  /** §5.5.1 — Admite lápiz y papelera. Sin el campo, se deduce del aprobado. */
+  editable: boolean;
+  /** Gajos de esa cosecha que ya van en otros camiones. */
+  gajosEnOtrosViajes: number;
+  /** Techo del input. `null` = sin techo: la cosecha va completa aquí. */
+  maximoGajos: number | null;
+  /** §5.6.1 — Aprobado y todavía se puede devolver a pendiente. */
+  desaprobable: boolean;
 }
 
 /** Cosecha en edición */
@@ -101,6 +111,20 @@ export default function ConteoCosecha() {
 
   // Cosecha en edición
   const [cosechaEnEdicion, setCosechaEnEdicion] = useState<CosechaEnEdicion | null>(null);
+
+  /**
+   * Corrección de los gajos de una cosecha ya enlazada, sobre la misma
+   * tarjeta. No reusa el formulario de agregar: ahí se elige planilla y
+   * cuadrilla, y acá eso ya está decidido. Lo único que cambia es el número.
+   */
+  const [editandoGajos, setEditandoGajos] = useState<{ detalleId: number; valor: string } | null>(null);
+
+  /**
+   * Gajos que el viaje declara sin tener cosechas enlazadas. Es el caso del
+   * cargue de histórico "solo cabecera" (§15 de API_VIAJES): el camión llegó
+   * con su total y las cosechas se le montan después, aquí.
+   */
+  const gajosDeclarados = viaje?.cantidad_gajos_total ?? 0;
 
   // Auto-scroll al form al abrirlo
   const formCosechaRef = useRef<HTMLDivElement>(null);
@@ -292,6 +316,12 @@ export default function ConteoCosecha() {
       pesoKg: d.cosecha?.peso_confirmado ? parseFloat(String(d.cosecha.peso_confirmado)) : 0,
       cuadrillaCount: Math.max(countBackend, countLocal),
       aprobado: d.reconteo_aprobado,
+      // Un backend anterior a 2026-11-21 no manda estas cuatro llaves. Sin
+      // ellas se cae a lo de siempre: editable mientras no esté aprobado.
+      editable: d.reconteo_editable ?? !d.reconteo_aprobado,
+      gajosEnOtrosViajes: d.gajos_en_otros_viajes ?? 0,
+      maximoGajos: d.maximo_gajos_permitido ?? null,
+      desaprobable: d.reconteo_desaprobable ?? false,
     };
   };
 
@@ -614,6 +644,69 @@ export default function ConteoCosecha() {
     }
   };
 
+  /** Guarda el número corregido. §5.5: el backend arbitra el techo. */
+  const guardarGajosDetalle = async (c: CosechaConteo) => {
+    if (!viaje || !c.detalleId || !editandoGajos) return;
+    const valor = Number(editandoGajos.valor);
+    if (!Number.isInteger(valor) || valor < 0) {
+      toast.error('Escribe un número entero de gajos');
+      return;
+    }
+    if (valor === c.gajosEnViaje) {
+      setEditandoGajos(null);
+      return;
+    }
+    setProcesando(true);
+    try {
+      const res = await viajesApi.hidratarReconteo(viaje.id, c.detalleId, {
+        gajos_en_viaje: valor,
+      });
+      if (res.advertencia) {
+        toast.warning(res.advertencia, { duration: 6000 });
+      } else {
+        toast.success('Gajos actualizados');
+      }
+      setEditandoGajos(null);
+      await cargar();
+    } catch (err) {
+      // El 422 de gajos trae el máximo y los otros camiones en el mensaje:
+      // se reenvía tal cual y la tarjeta se queda abierta para corregir.
+      const e = err as ApiError;
+      if (e?.code === ErrorCodes.GAJOS_INSUFICIENTES) {
+        toast.error(e?.message ?? 'Los gajos superan lo que queda de esa cosecha', { duration: 8000 });
+      } else if (e?.code === ErrorCodes.DETALLE_APROBADO || e?.code === ErrorCodes.VIAJE_NO_EDITABLE
+        || e?.code === ErrorCodes.DETALLE_NOT_FOUND) {
+        toast.error(e?.message ?? 'La cosecha ya no se puede editar');
+        setEditandoGajos(null);
+        await cargar();
+      } else {
+        toast.error(e?.message ?? 'Error al guardar los gajos');
+      }
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  /** §5.6.1 — Devuelve a pendiente un detalle aprobado por error. */
+  const desaprobarDetalle = async (c: CosechaConteo) => {
+    if (!viaje || !c.detalleId) return;
+    setProcesando(true);
+    try {
+      await viajesApi.desaprobarReconteo(viaje.id, c.detalleId);
+      toast.success('Reconteo devuelto a pendiente');
+      await cargar();
+    } catch (err) {
+      const e = err as ApiError;
+      toast.error(e?.message ?? 'No se pudo devolver el reconteo a pendiente');
+      if (e?.code === ErrorCodes.DETALLE_NO_APROBADO
+        || e?.code === ErrorCodes.VIAJE_ESTADO_INVALIDO) {
+        await cargar();
+      }
+    } finally {
+      setProcesando(false);
+    }
+  };
+
   const eliminarCosecha = (c: CosechaConteo) => {
     if (!viaje || !c.detalleId) return;
     // No bloqueamos por `c.aprobado` aca: si el viaje se revirtio a CREADO
@@ -730,84 +823,75 @@ export default function ConteoCosecha() {
     <div className="space-y-6">
       <PageHeader
         backTo="/viajes"
-        eyebrow="Viajes"
+        eyebrow={placa ? `Viaje · ${placa}` : 'Viajes'}
         title="Conteo de cosecha"
-        description="Registra las cosechas que llevó el viaje."
+        description="Registra las cosechas que van en este viaje."
       />
 
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Columna izquierda: Wizard (2/3) */}
-        <div className="min-w-0 space-y-8 lg:col-span-2">
+        <div className="min-w-0 space-y-6 lg:col-span-2">
           {/* Stepper horizontal */}
-          <Card className="border-border">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                {ETAPAS.map((etapa, index) => {
-                  const estaCompleta = etapaActual > etapa.numero;
-                  const estaActiva = etapaActual === etapa.numero;
-                  return (
-                    <React.Fragment key={etapa.numero}>
-                      <button aria-label="Confirmar"
-                        onClick={() => irAEtapa(etapa.numero)}
-                        className={`flex shrink-0 flex-col items-center gap-2 ${estaActiva || estaCompleta ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
-                        disabled={!estaActiva && !estaCompleta}
-                      >
-                        <div className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition md:h-12 md:w-12 ${
-                          estaCompleta ? 'bg-primary border-primary text-white'
-                          : estaActiva ? 'bg-primary/10 border-primary text-primary'
-                          : 'bg-muted border-border text-muted-foreground'
-                        }`}>
-                          {estaCompleta ? <Check className="h-5 w-5" /> : <span className="font-bold">{etapa.numero}</span>}
-                        </div>
-                        <div className="hidden text-center md:block">
-                          <div className={`text-sm font-semibold whitespace-nowrap ${
-                            estaActiva || estaCompleta ? 'text-foreground' : 'text-muted-foreground'
-                          }`}>
-                            {etapa.nombre}
-                          </div>
-                        </div>
-                      </button>
-                      {index < ETAPAS.length - 1 && (
-                        <div className="relative mx-2 h-0.5 flex-1 bg-border sm:mx-4">
-                          <div className={`absolute inset-0 bg-primary transition-[width] ${estaCompleta ? 'w-full' : 'w-0'}`} />
-                        </div>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </div>
-              {/* Reemplaza a los rotulos, escondidos en celular. */}
-              <p className="mt-3 text-center text-[13px] font-semibold text-foreground md:hidden">
-                Paso {etapaActual} de {ETAPAS.length}: {ETAPAS.find((x) => x.numero === etapaActual)?.nombre}
-              </p>
-            </CardContent>
+          <Card className="gap-0 px-5 py-4">
+            <ol className="flex items-center">
+              {ETAPAS.map((etapa, index) => {
+                const estaCompleta = etapaActual > etapa.numero;
+                const estaActiva = etapaActual === etapa.numero;
+                return (
+                  <li
+                    key={etapa.numero}
+                    className={`flex items-center ${index < ETAPAS.length - 1 ? 'flex-1' : ''}`}
+                  >
+                    <button
+                      type="button"
+                      aria-label={`Ir al paso ${etapa.numero}: ${etapa.nombre}`}
+                      aria-current={estaActiva ? 'step' : undefined}
+                      onClick={() => irAEtapa(etapa.numero)}
+                      className="flex items-center gap-2.5 disabled:cursor-not-allowed"
+                      disabled={!estaActiva && !estaCompleta}
+                    >
+                      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-semibold transition-colors ${
+                        estaCompleta ? 'border-primary bg-primary text-primary-foreground'
+                        : estaActiva ? 'border-primary bg-primary-soft text-primary'
+                        : 'border-border bg-muted text-muted-foreground'
+                      }`}>
+                        {estaCompleta ? <Check className="h-4 w-4" strokeWidth={2.5} /> : etapa.numero}
+                      </span>
+                      <span className={`whitespace-nowrap text-sm font-semibold ${
+                        estaActiva || estaCompleta ? 'text-foreground' : 'text-muted-foreground'
+                      }`}>
+                        {etapa.nombre}
+                      </span>
+                    </button>
+                    {index < ETAPAS.length - 1 && (
+                      <div className="mx-4 h-px min-w-[20px] flex-1 bg-border">
+                        <div className={`h-px bg-primary transition-all ${estaCompleta ? 'w-full' : 'w-0'}`} />
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
           </Card>
 
           {/* Contenido de las etapas */}
           <div className="space-y-6">
             {/* ETAPA 1: INFORMACIÓN DEL VIAJE */}
             {etapaActual === 1 && (
-              <Card className="border-border">
+              <Card>
                 <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <Truck className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle>Información del Viaje</CardTitle>
-                      <p className="text-sm text-muted-foreground">Datos del viaje registrado</p>
-                    </div>
-                  </div>
+                  <CardTitle>Información del viaje</CardTitle>
+                  <CardDescription>Datos con los que se registró el viaje.</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent>
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="conteocose-fecha-del-viaje">Fecha del Viaje</Label>
+                      <Label htmlFor="conteocose-fecha-del-viaje">Fecha del viaje</Label>
                       <Input id="conteocose-fecha-del-viaje" value={fechaFmt} disabled />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="conteocose-placa-del-vehiculo">Placa del Vehículo</Label>
+                      <Label htmlFor="conteocose-placa-del-vehiculo">Placa del vehículo</Label>
                       <Input id="conteocose-placa-del-vehiculo" value={placa} disabled />
                     </div>
                     <div className="space-y-2">
@@ -819,11 +903,11 @@ export default function ConteoCosecha() {
                       <Input id="conteocose-transportador" value={transporte} disabled />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="conteocose-extractora-destino">Extractora Destino</Label>
+                      <Label htmlFor="conteocose-extractora-destino">Extractora de destino</Label>
                       <Input id="conteocose-extractora-destino" value={extractora} disabled />
                     </div>
                     <div className="space-y-2">
-                      <Label>Hora de Salida</Label>
+                      <Label>Hora de salida</Label>
                       {/* Opcional desde el 2026-09-28: sin hora se muestra "—"
                           en vez de un campo vacío que parece un dato perdido. */}
                       <Input value={horaSalida || '—'} disabled />
@@ -840,22 +924,9 @@ export default function ConteoCosecha() {
                     donde el usuario decide si arrastra pendientes viejos o
                     los resuelve como clavija. */}
                 {ajustesPendientes > 0 && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '12px',
-                      borderRadius: '8px',
-                      border: '1px solid #fde68a',
-                      backgroundColor: '#fffbeb',
-                      padding: '10px 16px',
-                      fontSize: '14px',
-                      color: '#92400e',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <AlertTriangle style={{ width: '16px', height: '16px', flexShrink: 0, color: '#f59e0b' }} />
+                  <div className="flex flex-col gap-2 rounded-lg border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
                       <span>
                         {ajustesPendientes}{' '}
                         {ajustesPendientes === 1
@@ -865,45 +936,33 @@ export default function ConteoCosecha() {
                       </span>
                     </div>
                     <button
+                      type="button"
                       onClick={() => navigate('/viajes/ajustes-cosecha')}
-                      style={{
-                        flexShrink: 0,
-                        fontWeight: 500,
-                        color: '#b45309',
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                      }}
+                      className="flex shrink-0 items-center gap-1 self-start pl-6 font-semibold text-warning hover:underline sm:self-auto sm:pl-0"
                     >
-                      Revisar →
+                      Revisar
+                      <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
                     </button>
                   </div>
                 )}
 
-                <div className="flex justify-end">
-                  <Button onClick={agregarCosecha} className="gap-2" disabled={!!cosechaEnEdicion}>
-                    <Plus className="h-4 w-4" />
-                    Agregar Cosecha
+                <div className="flex items-center justify-between gap-3">
+                  <h2>Cosechas del viaje</h2>
+                  <Button onClick={agregarCosecha} disabled={!!cosechaEnEdicion}>
+                    <Plus className="h-4 w-4" strokeWidth={2} />
+                    Agregar cosecha
                   </Button>
                 </div>
 
                 {/* Formulario de edición */}
                 {cosechaEnEdicion && (
                   <div ref={formCosechaRef} className="scroll-mt-24">
-                  <Card className="border-primary/50 shadow-lg">
+                  <Card>
                     <CardHeader>
-                      <div className="flex items-center gap-3">
-                        <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                          <Leaf className="h-6 w-6 text-primary" />
-                        </div>
-                        <div>
-                          <CardTitle>Cosecha</CardTitle>
-                          <p className="text-sm text-muted-foreground">Registra las cosechas del viaje</p>
-                        </div>
-                      </div>
+                      <CardTitle>Nueva cosecha</CardTitle>
+                      <CardDescription>Elige la planilla y la cuadrilla; el resto se llena solo.</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
+                    <CardContent className="space-y-6">
                       <div className="grid gap-4 md:grid-cols-2">
                         {/* Planilla / Cosecha */}
                         <div className="space-y-2 md:col-span-2">
@@ -935,7 +994,7 @@ export default function ConteoCosecha() {
 
                         {/* Cuadrilla Reconteo (= cosecha del backend) */}
                         <div className="space-y-2 md:col-span-2">
-                          <Label htmlFor="conteocose-cuadrilla-reconteo">Cuadrilla Reconteo</Label>
+                          <Label htmlFor="conteocose-cuadrilla-reconteo">Cuadrilla de reconteo</Label>
                           <Select
                             value={cosechaEnEdicion.cuadrillaReconteo}
                             onValueChange={handleCuadrillaChange}
@@ -1021,7 +1080,7 @@ export default function ConteoCosecha() {
                                     ? (col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${empId}`)
                                     : `Colaborador ${empId}`;
                                   return (
-                                    <Badge key={empId} variant="outline" className="text-xs">
+                                    <Badge key={empId} variant="secondary">
                                       {label}
                                     </Badge>
                                   );
@@ -1032,10 +1091,7 @@ export default function ConteoCosecha() {
                                   if (mm.tipo === 'OP') {
                                     const sufijo = mm.terceroNombre ? ` · ${mm.terceroNombre}` : '';
                                     return (
-                                      <Badge
-                                        key={`OP-${mm.id}`}
-                                        className="text-xs bg-amber-500/10 text-amber-700 border-amber-300"
-                                      >
+                                      <Badge key={`OP-${mm.id}`} variant="warning">
                                         {mm.nombre}{sufijo}
                                       </Badge>
                                     );
@@ -1048,7 +1104,7 @@ export default function ConteoCosecha() {
                                         : `Colaborador ${mm.id}`;
                                     })();
                                   return (
-                                    <Badge key={`EMP-${mm.id}`} variant="outline" className="text-xs">
+                                    <Badge key={`EMP-${mm.id}`} variant="secondary">
                                       {nombre}
                                     </Badge>
                                   );
@@ -1056,7 +1112,7 @@ export default function ConteoCosecha() {
                               }
                               if (cosechaEnEdicion.cuadrillaCount > 0) {
                                 return (
-                                  <Badge variant="outline" className="text-xs">
+                                  <Badge variant="secondary">
                                     {cosechaEnEdicion.cuadrillaCount} colaborador{cosechaEnEdicion.cuadrillaCount !== 1 ? 'es' : ''}
                                   </Badge>
                                 );
@@ -1088,7 +1144,7 @@ export default function ConteoCosecha() {
 
                         {/* Gajos Reportados */}
                         <div className="space-y-2">
-                          <Label htmlFor="conteocose-gajos-reportados">Gajos Reportados</Label>
+                          <Label htmlFor="conteocose-gajos-reportados">Gajos reportados</Label>
                           <Input id="conteocose-gajos-reportados" type="number" step="0.001" value={cosechaEnEdicion.gajos || ''} disabled />
                         </div>
 
@@ -1099,7 +1155,7 @@ export default function ConteoCosecha() {
                             eso pasa el response incluye una `advertencia` pero
                             no bloquea la operación). */}
                         <div className="space-y-2">
-                          <Label htmlFor="conteocose-gajos-en-viaje">Gajos en Viaje</Label>
+                          <Label htmlFor="conteocose-gajos-en-viaje">Gajos en el viaje</Label>
                           <Input id="conteocose-gajos-en-viaje"
                             type="number" step="0.001"
                             placeholder="0"
@@ -1128,7 +1184,7 @@ export default function ConteoCosecha() {
                             no sobre `gajos_reportados`, para reflejar los
                             splits ya asignados a otros viajes. */}
                         <div className="space-y-2">
-                          <Label htmlFor="conteocose-gajos-pendientes-por-enviar">Gajos Pendientes por Enviar</Label>
+                          <Label htmlFor="conteocose-gajos-pendientes-por-enviar">Gajos pendientes por enviar</Label>
                           <Input id="conteocose-gajos-pendientes-por-enviar"
                             type="number" step="0.001"
                             value={Math.max(cosechaEnEdicion.gajosDisponibles - cosechaEnEdicion.gajosEnViaje, 0)}
@@ -1153,17 +1209,16 @@ export default function ConteoCosecha() {
                           />
                         </div>
                       </div>
-                      <div className="flex justify-end gap-2 pt-4">
+                      <div className="flex justify-end gap-2">
                         <Button variant="outline" onClick={cancelarCosecha} disabled={procesando}>
                           Cancelar
                         </Button>
                         <Button
                           onClick={guardarCosecha}
                           disabled={procesando || !cosechaEnEdicion.gajosEnViaje || cosechaEnEdicion.gajosEnViaje <= 0}
-                          className="gap-2"
                         >
-                          <Check className="h-4 w-4" />
-                          {procesando ? 'Guardando...' : 'Guardar'}
+                          <Check className="h-4 w-4" strokeWidth={2} />
+                          {procesando ? 'Guardando…' : 'Guardar cosecha'}
                         </Button>
                       </div>
                     </CardContent>
@@ -1171,7 +1226,24 @@ export default function ConteoCosecha() {
                   </div>
                 )}
 
-                {/* Lista de cosechas guardadas */}
+                {/* Lista de cosechas guardadas. Tabla y no tarjetas:
+                    cada cifra tiene su columna y los numeros quedan
+                    alineados a la derecha, que es como se comparan. */}
+                {cosechas.length > 0 && (
+                <Card className="gap-0 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/60 text-[13px] font-medium text-muted-foreground">
+                        <tr>
+                          <th className="px-5 py-2.5 text-left font-semibold">Cosecha</th>
+                          <th className="px-4 py-2.5 text-left font-semibold">Lote</th>
+                          <th className="px-4 py-2.5 text-right font-semibold">Reportados</th>
+                          <th className="px-4 py-2.5 text-right font-semibold">En viaje</th>
+                          <th className="px-4 py-2.5 text-right font-semibold">Peso</th>
+                          <th className="w-32 px-2 py-2.5" />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
                 {cosechas.map((cosecha) => {
                   // Resolvemos el count leyendo del map global — asegura que
                   // cualquier update posterior a cargar() (por ejemplo tras
@@ -1204,216 +1276,279 @@ export default function ConteoCosecha() {
                   const tituloCosecha = fechaCosecha
                     ? `Cosecha del ${formatearFechaViaje(fechaCosecha)}`
                     : cosecha.loteName;
+                  const enEdicionGajos = editandoGajos?.detalleId === cosecha.detalleId;
                   return (
-                  <Card key={cosecha.id} className="border-border hover:border-primary/30 transition-colors">
-                    <CardContent className="p-4">
-                      {/* La fila envuelve: con cinco bloques `shrink-0` en
-                          línea, en cuanto la ventana se angosta (o se abre el
-                          panel lateral del viaje) las cifras de la derecha se
-                          salían de la tarjeta y quedaban cortadas. Ahora el
-                          encabezado se encoge y, si aun así no caben, las
-                          cifras bajan en bloque a la segunda línea. */}
-                      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-                        {/* Icono + lote y cuadrilla. Es lo único que cede
-                            ancho; `min-w-0` es lo que habilita el truncate. */}
-                        <div className="flex min-w-0 flex-1 items-center gap-3">
-                          <div className="h-10 w-10 rounded-lg bg-success/10 flex items-center justify-center shrink-0">
-                            <Leaf className="h-5 w-5 text-success" />
-                          </div>
-                          <div className="min-w-0">
-                            <h4 className="truncate font-semibold text-sm">{tituloCosecha}</h4>
-                            {nombresCuadrilla.length > 0 ? (
-                              <p
-                                className="truncate text-xs text-muted-foreground"
-                                title={nombresCuadrilla.join(', ')}
-                              >
-                                {nombresCuadrilla.join(', ')}
-                              </p>
-                            ) : (
-                              <p className="text-xs text-muted-foreground">
-                                {countDinamico > 0
-                                  ? `${countDinamico} colaborador${countDinamico !== 1 ? 'es' : ''}`
-                                  : 'Sin cuadrilla'}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Las cifras y el botón van juntos: separarlos dejaría
-                            "En Viaje" solo en una línea sin su contexto. */}
-                        <div className="flex shrink-0 flex-wrap items-center gap-4">
-                        {/* Lote/Sublote */}
-                        <div className="text-center shrink-0">
-                          <p className="text-xs text-muted-foreground">Lote</p>
-                          <p className="font-semibold text-sm">{cosecha.loteName || 'N/A'}</p>
-                          <p className="text-xs text-muted-foreground">{cosecha.subloteName || 'N/A'}</p>
-                        </div>
-
-                        {/* Gajos */}
-                        <div className="text-center shrink-0">
-                          <p className="text-xs text-muted-foreground">Gajos</p>
-                          <p className="font-bold text-lg">{cosecha.gajos}</p>
-                        </div>
-
-                        {/* Gajos en Viaje */}
-                        <div className="text-center shrink-0">
-                          <p className="text-xs text-muted-foreground">En Viaje</p>
-                          <p className="font-bold text-lg text-primary">{cosecha.gajosEnViaje}</p>
-                        </div>
-
-                        {/* Peso */}
-                        {cosecha.pesoKg > 0 && (
-                          <div className="text-center shrink-0">
-                            <p className="text-xs text-muted-foreground">Peso</p>
-                            <p className="font-semibold text-sm">{cosecha.pesoKg} kg</p>
-                          </div>
-                        )}
-
-                        {/* Botón eliminar */}
-                        <Button
-                          variant="ghost" size="sm"
-                          onClick={() => eliminarCosecha(cosecha)}
-                          disabled={procesando}
-                          className="text-destructive hover:text-destructive shrink-0"
-                          title="Eliminar"
+                  <tr key={cosecha.id} className="transition-colors hover:bg-muted/40">
+                    {/* Fecha del corte y los nombres de la cuadrilla. Es la
+                        unica celda que cede ancho; `max-w-0` con `w-full` es
+                        lo que habilita el truncate dentro de una tabla. */}
+                    <td className="w-full max-w-0 px-5 py-3">
+                      <p className="truncate font-semibold text-foreground">{tituloCosecha}</p>
+                      {nombresCuadrilla.length > 0 ? (
+                        <p
+                          className="truncate text-xs text-muted-foreground"
+                          title={nombresCuadrilla.join(', ')}
                         >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                          {nombresCuadrilla.join(', ')}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          {countDinamico > 0
+                            ? `${countDinamico} colaborador${countDinamico !== 1 ? 'es' : ''}`
+                            : 'Sin cuadrilla'}
+                        </p>
+                      )}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <p className="whitespace-nowrap text-foreground">{cosecha.loteName || 'Sin lote'}</p>
+                      <p className="text-xs text-muted-foreground">{cosecha.subloteName || 'Sin sublote'}</p>
+                    </td>
+
+                    <td className="px-4 py-3 text-right tabular-nums">{cosecha.gajos.toLocaleString('es-CO')}</td>
+
+                        {/* Gajos en viaje. Con el lápiz se corrige aquí
+                            mismo: antes tocaba borrar la cosecha y volverla
+                            a agregar para cambiar un número. */}
+                        <td className="px-4 py-3 text-right">
+                          {enEdicionGajos ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <Input
+                                type="number" min={0}
+                                max={cosecha.maximoGajos ?? undefined}
+                                autoFocus
+                                className="h-8 w-24 text-center font-bold"
+                                value={editandoGajos?.valor ?? ''}
+                                onChange={(e) => setEditandoGajos({
+                                  detalleId: cosecha.detalleId!, valor: e.target.value,
+                                })}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') void guardarGajosDetalle(cosecha);
+                                  if (e.key === 'Escape') setEditandoGajos(null);
+                                }}
+                              />
+                              <Button
+                                variant="ghost" size="icon" className="h-8 w-8 text-success"
+                                disabled={procesando}
+                                onClick={() => void guardarGajosDetalle(cosecha)}
+                                title="Guardar"
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost" size="icon" className="h-8 w-8"
+                                onClick={() => setEditandoGajos(null)}
+                                title="Cancelar"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <p className="font-semibold tabular-nums text-foreground">
+                              {cosecha.gajosEnViaje.toLocaleString('es-CO')}
+                            </p>
+                          )}
+                          {cosecha.gajosEnOtrosViajes > 0 && !enEdicionGajos && (
+                            <p className="text-xs text-muted-foreground">
+                              {cosecha.gajosEnOtrosViajes} en otros camiones
+                            </p>
+                          )}
+                        </td>
+
+                        <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-muted-foreground">
+                          {cosecha.pesoKg > 0 ? `${cosecha.pesoKg.toLocaleString('es-CO')} kg` : 'Sin dato'}
+                        </td>
+
+                        {/* Editar los gajos, quitar la cosecha, o devolver
+                            el reconteo a pendiente si se aprobó por error. */}
+                        <td className="px-2 py-3">
+                        <div className="flex items-center justify-end gap-0.5">
+                        {cosecha.editable && !enEdicionGajos && (
+                          <Button
+                            variant="ghost" size="icon"
+                            onClick={() => setEditandoGajos({
+                              detalleId: cosecha.detalleId!,
+                              valor: String(cosecha.gajosEnViaje),
+                            })}
+                            disabled={procesando}
+                            className="text-muted-foreground hover:text-foreground"
+                            aria-label="Editar los gajos de esta cosecha"
+                            title="Editar los gajos de esta cosecha"
+                          >
+                            <Pencil className="h-4 w-4" strokeWidth={2} />
+                          </Button>
+                        )}
+                        {cosecha.desaprobable && (
+                          <Button
+                            variant="ghost" size="icon"
+                            onClick={() => void desaprobarDetalle(cosecha)}
+                            disabled={procesando}
+                            className="text-muted-foreground hover:text-foreground"
+                            aria-label="Devolver el reconteo a pendiente"
+                            title="El reconteo está aprobado: devuélvelo a pendiente para corregirlo"
+                          >
+                            <RotateCcw className="h-4 w-4" strokeWidth={2} />
+                          </Button>
+                        )}
+                        {cosecha.editable && (
+                          <Button
+                            variant="ghost" size="icon"
+                            onClick={() => eliminarCosecha(cosecha)}
+                            disabled={procesando}
+                            className="text-muted-foreground hover:bg-destructive-soft hover:text-destructive"
+                            aria-label="Quitar la cosecha del viaje"
+                            title="Quitar la cosecha del viaje"
+                          >
+                            <Trash2 className="h-4 w-4" strokeWidth={2} />
+                          </Button>
+                        )}
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                        </td>
+                  </tr>
                   );
                 })}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+                )}
 
                 {cosechas.length === 0 && !cosechaEnEdicion && (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <Leaf className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                    <p>No hay cosechas registradas</p>
-                    <p className="text-sm">Haz clic en "Agregar Cosecha" para crear una</p>
-                  </div>
+                  <Card className="items-center py-12 text-center">
+                    <div className="max-w-md space-y-1 px-6">
+                      {gajosDeclarados > 0 ? (
+                        <>
+                          <h3 className="text-base font-semibold text-foreground">
+                            Este viaje trae {gajosDeclarados.toLocaleString('es-CO')} gajos y ninguna cosecha
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            Entró por el cargue de histórico solo con la cabecera: la fecha, el
+                            camión y la planta. Agrégale las cosechas que llevó y el total se
+                            recalcula con ellas.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <h3 className="text-base font-semibold text-foreground">Todavía no hay cosechas</h3>
+                          <p className="text-sm text-muted-foreground">
+                            Agrega las cosechas que se cargaron en este viaje.
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </Card>
                 )}
               </div>
             )}
 
             {/* Botones de navegación */}
-            <div className="flex items-center justify-between pt-4">
-              <Button variant="outline" onClick={etapaAnterior} disabled={etapaActual === 1} className="gap-2">
-                <ArrowLeft className="h-4 w-4" />
+            <div className="barra-acciones flex items-center justify-between gap-2">
+              <Button variant="outline" onClick={etapaAnterior} disabled={etapaActual === 1}>
+                <ArrowLeft className="h-4 w-4" strokeWidth={2} />
                 Anterior
               </Button>
-              <div className="flex gap-2">
-                {etapaActual < ETAPAS.length ? (
-                  <Button onClick={siguienteEtapa} className="gap-2">
-                    Siguiente
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={finalizarConteo}
-                    disabled={procesando || cosechas.length === 0}
-                    className="gap-2"
-                  >
-                    <Check className="h-4 w-4" />
-                    {procesando ? 'Procesando...' : 'Finalizar Conteo'}
-                  </Button>
-                )}
-              </div>
+              {etapaActual < ETAPAS.length ? (
+                <Button onClick={siguienteEtapa}>
+                  Siguiente
+                  <ArrowRight className="h-4 w-4" strokeWidth={2} />
+                </Button>
+              ) : (
+                <Button
+                  onClick={finalizarConteo}
+                  disabled={procesando || cosechas.length === 0}
+                >
+                  <Check className="h-4 w-4" strokeWidth={2} />
+                  {procesando ? 'Procesando…' : 'Finalizar conteo'}
+                </Button>
+              )}
             </div>
           </div>
         </div>
 
         {/* Columna derecha: Panel Resumen sticky (1/3) */}
         <div className="lg:col-span-1">
-          <div className="sticky top-8">
-            <Card className="border-border">
+          <Card className="gap-0 lg:sticky lg:top-6">
               <CardHeader className="border-b border-border">
-                <CardTitle className="flex items-center gap-2">
-                  <Truck className="h-5 w-5 text-primary" />
-                  Resumen
-                </CardTitle>
+                <CardTitle>Resumen</CardTitle>
               </CardHeader>
-              <CardContent className="p-6 space-y-6">
+              <CardContent className="space-y-5 pt-5">
                 {/* Progreso */}
-                <div className="space-y-3">
+                <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Progreso</span>
-                    <span className="font-semibold">{etapaActual} de {ETAPAS.length}</span>
+                    <span className="font-semibold">Paso {etapaActual} de {ETAPAS.length}</span>
                   </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                     <div
-                      className="h-full bg-primary transition duration-300"
+                      className="h-full rounded-full bg-primary transition-all"
                       style={{ width: `${(etapaActual / ETAPAS.length) * 100}%` }}
                     />
                   </div>
                 </div>
 
-                <div className="h-px bg-border" />
-
-                {/* Información del Viaje */}
-                <div className="space-y-2">
-                  <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-                    Información del Viaje
-                  </h4>
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Placa</span>
-                      <span className="font-semibold text-sm">{placa || '—'}</span>
+                {/* Información del viaje */}
+                <div className="space-y-2 border-t border-border pt-5">
+                  <p className="text-[13px] font-medium text-muted-foreground">Viaje</p>
+                  <dl className="space-y-1.5 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">Placa</dt>
+                      <dd className="font-semibold">{placa || '—'}</dd>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Conductor</span>
-                      <span className="font-semibold text-sm truncate ml-2 max-w-[140px]" title={conductor}>
-                        {conductor || '—'}
-                      </span>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">Conductor</dt>
+                      <dd className="truncate font-semibold" title={conductor}>{conductor || '—'}</dd>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Extractora</span>
-                      <span className="font-semibold text-sm truncate ml-2 max-w-[140px]" title={extractora}>
-                        {extractora}
-                      </span>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">Extractora</dt>
+                      <dd className="truncate font-semibold" title={extractora}>{extractora}</dd>
                     </div>
-                  </div>
+                  </dl>
                 </div>
-
-                <div className="h-px bg-border" />
 
                 {/* Resumen de Cosechas */}
-                <div className="space-y-2">
-                  <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-                    Cosechas
-                  </h4>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Registradas</span>
-                    <span className="font-semibold text-sm">{cosechas.length}</span>
-                  </div>
-                  {cosechas.length > 0 && (
-                    <>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm">Total Gajos</span>
-                        <span className="font-semibold text-sm text-primary">
-                          {cosechas.reduce((sum, c) => sum + c.gajos, 0).toLocaleString('es-CO')}
-                        </span>
+                <div className="space-y-2 border-t border-border pt-5">
+                  <p className="text-[13px] font-medium text-muted-foreground">Cosechas</p>
+                  <dl className="space-y-1.5 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">Registradas</dt>
+                      <dd className="font-semibold tabular-nums">{cosechas.length}</dd>
+                    </div>
+                    {cosechas.length === 0 && gajosDeclarados > 0 && (
+                      <div className="flex items-center justify-between gap-3">
+                        <dt className="text-muted-foreground">Gajos declarados</dt>
+                        <dd className="font-semibold tabular-nums">
+                          {gajosDeclarados.toLocaleString('es-CO')}
+                        </dd>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm">Total en Viaje</span>
-                        <span className="font-semibold text-sm text-primary">
-                          {cosechas.reduce((sum, c) => sum + c.gajosEnViaje, 0).toLocaleString('es-CO')}
-                        </span>
-                      </div>
-                      {cosechas.some(c => c.pesoKg > 0) && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm">Total Peso (kg)</span>
-                          <span className="font-semibold text-sm text-success">
-                            {cosechas.reduce((sum, c) => sum + c.pesoKg, 0).toLocaleString('es-CO')}
-                          </span>
+                    )}
+                    {cosechas.length > 0 && (
+                      <>
+                        <div className="flex items-center justify-between gap-3">
+                          <dt className="text-muted-foreground">Total de gajos</dt>
+                          <dd className="font-semibold tabular-nums">
+                            {cosechas.reduce((sum, c) => sum + c.gajos, 0).toLocaleString('es-CO')}
+                          </dd>
                         </div>
-                      )}
-                    </>
-                  )}
+                        <div className="flex items-center justify-between gap-3">
+                          <dt className="text-muted-foreground">Total en el viaje</dt>
+                          <dd className="font-semibold tabular-nums">
+                            {cosechas.reduce((sum, c) => sum + c.gajosEnViaje, 0).toLocaleString('es-CO')}
+                          </dd>
+                        </div>
+                        {cosechas.some(c => c.pesoKg > 0) && (
+                          <div className="flex items-center justify-between gap-3">
+                            <dt className="text-muted-foreground">Peso total</dt>
+                            <dd className="font-semibold tabular-nums">
+                              {cosechas.reduce((sum, c) => sum + c.pesoKg, 0).toLocaleString('es-CO')} kg
+                            </dd>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </dl>
                 </div>
               </CardContent>
-            </Card>
-          </div>
+          </Card>
         </div>
       </div>
 
@@ -1421,7 +1556,7 @@ export default function ConteoCosecha() {
       <AlertDialog open={!!cosechaToDelete} onOpenChange={open => !open && setCosechaToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogTitle>¿Quitar la cosecha del viaje?</AlertDialogTitle>
             <AlertDialogDescription>
               Esto eliminará permanentemente esta cosecha del viaje. Esta acción no se puede deshacer.
             </AlertDialogDescription>

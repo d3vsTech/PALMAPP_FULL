@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
+import { ConfigSection } from './ConfigSection';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../ui/table';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Plus, Trash2, Loader2, ChevronUp, ChevronDown, Save } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '../ui/accordion';
 import { useConfirmDelete } from '../../hooks/useConfirmDelete';
 import {
   configuracionApi,
@@ -33,10 +35,10 @@ type LoteOption = { id: number; nombre: string };
 type SubloteOption = { id: number; nombre: string; lote_id: number };
 
 const PALMA_LABEL: Record<PalmaKey, string> = {
-  PLATEO: 'Precio Plateo',
-  PODA: 'Precio Poda',
-  SANIDAD: 'Precio Sanidad',
-  OTROS: 'Precio Otros',
+  PLATEO: 'Plateo',
+  PODA: 'Poda',
+  SANIDAD: 'Sanidad',
+  OTROS: 'Otros',
 };
 
 /** Subtítulo y unidad se derivan del `tipo_pago` real del backend §4b
@@ -51,22 +53,8 @@ function palmaUnidad(p: Labor): string {
 }
 
 function palmaLabelInput(p: Labor): string {
-  return p.tipo_pago === 'JORNAL_FIJO' ? 'Valor por Jornal' : 'Valor por Palma';
+  return p.tipo_pago === 'JORNAL_FIJO' ? 'Valor por jornal' : 'Valor por palma';
 }
-
-const PALMA_GRADIENT: Record<PalmaKey, string> = {
-  PLATEO: 'from-amber-50/50 to-amber-50/10 dark:from-amber-950/20 dark:to-amber-950/5',
-  PODA: 'from-purple-50/50 to-purple-50/10 dark:from-purple-950/20 dark:to-purple-950/5',
-  SANIDAD: 'from-red-50/50 to-red-50/10 dark:from-red-950/20 dark:to-red-950/5',
-  OTROS: 'from-slate-50/50 to-slate-50/10 dark:from-slate-950/20 dark:to-slate-950/5',
-};
-
-const PALMA_VALUE: Record<PalmaKey, string> = {
-  PLATEO: 'plateo',
-  PODA: 'poda',
-  SANIDAD: 'sanidad',
-  OTROS: 'otros',
-};
 
 
 // Cache simple en sessionStorage por tenant (TTL 60s). Hace que volver a esta
@@ -130,7 +118,14 @@ function writeCache(payload: Omit<CacheShape, 'ts' | 'tenant'>) {
  * largas y el botón queda al pie: sin esto uno guarda y se queda mirando el
  * final de la lista, sin ver de qué sección era el guardado.
  */
-function BotonGuardarSeccion({ onGuardar }: { onGuardar: () => Promise<void> | void }) {
+function BotonGuardarSeccion({
+  onGuardar,
+  alRas = false,
+}: {
+  onGuardar: () => Promise<void> | void;
+  /** La sección va al ras: el botón pone su propio borde y relleno. */
+  alRas?: boolean;
+}) {
   const ref = useRef<HTMLButtonElement>(null);
 
   const click = async () => {
@@ -144,9 +139,11 @@ function BotonGuardarSeccion({ onGuardar }: { onGuardar: () => Promise<void> | v
   };
 
   return (
-    <div className="flex justify-end pt-2">
-      <Button ref={ref} onClick={click} className="gap-2">
-        <Save className="h-4 w-4" />
+    <div
+      className={alRas ? 'flex justify-end border-t border-border px-5 py-4' : 'flex justify-end pt-2'}
+    >
+      <Button ref={ref} onClick={click}>
+        <Save strokeWidth={2} />
         Guardar
       </Button>
     </div>
@@ -748,26 +745,25 @@ export function PreciosLaboresTab() {
       );
     }
     return (
-      <div className="rounded-lg border border-border overflow-x-auto">
-        <table className="w-full min-w-[720px] table-fixed">
-          <thead className="bg-muted/50">
-            <tr>
-              <th className="text-left p-3 font-semibold text-sm w-2/3">Trabajo</th>
-              <th className="text-right p-3 font-semibold text-sm">Precio</th>
-            </tr>
-          </thead>
-          <tbody>
+      <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Trabajo</TableHead>
+              <TableHead className="text-right">Precio</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {[...acts]
               .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' }))
               .map((act) => (
-                <tr key={act.id} className="border-t border-border">
-                  <td className="p-3 text-sm font-medium">
+                <TableRow key={act.id}>
+                  <TableCell className="text-sm font-medium">
                     {act.nombre}
                     {!act.estado && (
                       <span className="ml-2 text-xs text-muted-foreground italic">(inactivo)</span>
                     )}
-                  </td>
-                  <td className="p-3">
+                  </TableCell>
+                  <TableCell>
                     <div className="flex items-center justify-end gap-2">
                       <span className="text-muted-foreground text-sm">$</span>
                       <Input
@@ -780,29 +776,21 @@ export function PreciosLaboresTab() {
                           }))
                         }
                         placeholder="Hereda de la labor"
-                        className="w-44 text-right"
+                        className="h-8 w-28 text-right tabular-nums sm:w-36"
                       />
                       <span className="text-muted-foreground text-sm">{unidad}</span>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
     );
   };
 
   return (
     <div className="space-y-6">
       {ConfirmDeleteDialog}
-
-      <div className="space-y-4">
-        <h2>Precios de Labores</h2>
-        <p className="text-muted-foreground">
-          Configura los precios de cada labor con sus diferentes criterios de pago
-        </p>
-      </div>
 
       {/* Mientras la primera carga está en vuelo (y no hay cache), mostramos
           SOLO el spinner. La UI completa aparece cuando todos los fetches
@@ -818,399 +806,377 @@ export function PreciosLaboresTab() {
 
       {/* LABORES PALMA */}
       <div className="space-y-4" hidden={loading}>
-        <div className="border-l-4 border-primary pl-4 py-2">
-          <h3 className="text-xl font-bold">Labores Palma</h3>
-          <p className="text-sm text-muted-foreground">Labores estándar de palma</p>
+        <div className="space-y-1">
+          <p className="text-[13px] font-medium text-muted-foreground">Labores de palma</p>
+          <p className="text-sm text-muted-foreground">Labores estándar con su criterio de pago.</p>
         </div>
 
         {/* Por default todos los acordeones cerrados; el usuario los abre cuando quiera. */}
-        <Accordion type="multiple" defaultValue={[]} className="space-y-4">
+        <div className="space-y-6">
           {/* "Precios de Cosecha" siempre visible: la tabla por lote+año vive
               independiente del tipo_pago de la labor. Si la labor está en
               JORNAL_FIJO se SUMA un acordeón aparte (más abajo). */}
-          <AccordionItem value="cosecha" className="border-0">
-            <Card className="border-border">
-              <CardHeader className="border-b bg-gradient-to-r from-green-50/50 to-green-50/10 dark:from-green-950/20 dark:to-green-950/5">
-                <AccordionTrigger className="hover:no-underline py-0">
-                  <div className="text-left">
-                    <CardTitle>Precios de Cosecha</CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Precio por kg de fruto cosechado por lote y sublote
-                    </p>
-                  </div>
-                </AccordionTrigger>
-              </CardHeader>
-              <AccordionContent>
-                <CardContent className="p-6">
-                  {/* Tabla inline: una fila por SUBLOTE del tenant.
-                      Como el precio_cosecha del backend es por (lote_id, anio),
-                      varios sublotes del mismo lote leen del mismo input — al
-                      editar cualquiera se sincronizan. El año actual se usa
-                      implícito (no hay columna). */}
-                  <div className="rounded-lg border border-border overflow-x-auto">
-                    <table className="w-full min-w-[720px] table-fixed">
-                      <thead className="bg-muted/50">
-                        <tr>
-                          <th className="text-left p-4 font-semibold w-2/5">Lote</th>
-                          <th className="text-left p-4 font-semibold w-1/4">Sublote</th>
-                          <th className="text-right p-4 font-semibold">Precio por Kg</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sublotes.length === 0 ? (
-                          <tr>
-                            <td colSpan={3} className="p-6 text-center text-sm text-muted-foreground">
-                              No hay sublotes creados. Crea predios, lotes y sublotes en "Mi Plantación".
-                            </td>
-                          </tr>
-                        ) : (
-                          [...sublotes].sort((a, b) => {
-                            // Ordenar por nombre de lote y luego por sublote.
-                            const loteA = lotes.find((l) => l.id === a.lote_id)?.nombre ?? '';
-                            const loteB = lotes.find((l) => l.id === b.lote_id)?.nombre ?? '';
-                            const cmp = loteA.localeCompare(loteB, 'es', { sensitivity: 'base' });
-                            return cmp !== 0 ? cmp : (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' });
-                          }).map((sub) => {
-                            const lote = lotes.find((l) => l.id === sub.lote_id);
-                            return (
-                              <tr key={sub.id} className="border-t border-border">
-                                <td className="p-4 font-medium">{lote?.nombre ?? `Lote ${sub.lote_id}`}</td>
-                                <td className="p-4 text-sm text-muted-foreground">{sub.nombre}</td>
-                                <td className="p-4">
-                                  <div className="flex items-center justify-end gap-2">
-                                    <span className="text-muted-foreground text-sm">$</span>
-                                    <Input
-                                      
-                                      value={cosechaInputs[String(sub.lote_id)] ?? ''}
-                                      onChange={(e) =>
-                                        setCosechaInputs((prev) => ({
-                                          ...prev,
-                                          [String(sub.lote_id)]: formatDecimalLive(e.target.value),
-                                        }))
-                                      }
-                                      placeholder="0"
-                                      className="w-32 text-right"
-                                    />
-                                    <span className="text-muted-foreground text-sm">/kg</span>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                <BotonGuardarSeccion onGuardar={guardarCosecha} />
-                </CardContent>
-              </AccordionContent>
-            </Card>
-          </AccordionItem>
+          <ConfigSection
+            title="Precios de cosecha"
+            description="Precio por kg de fruto cosechado, por lote y sublote."
+            flush
+          >
+            {/* Una fila por SUBLOTE del tenant. Como el precio_cosecha del
+                backend es por (lote_id, anio), varios sublotes del mismo lote
+                leen del mismo input: al editar cualquiera se sincronizan. El
+                año actual se usa implícito, no hay columna. */}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="pl-5">Lote</TableHead>
+                  <TableHead className="hidden sm:table-cell">Sublote</TableHead>
+                  <TableHead className="pr-5 text-right">Precio por kg</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sublotes.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} className="py-10 text-center text-sm text-muted-foreground">
+                      No hay sublotes creados. Crea predios, lotes y sublotes en Mi plantación.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  [...sublotes].sort((a, b) => {
+                    // Ordenar por nombre de lote y luego por sublote.
+                    const loteA = lotes.find((l) => l.id === a.lote_id)?.nombre ?? '';
+                    const loteB = lotes.find((l) => l.id === b.lote_id)?.nombre ?? '';
+                    const cmp = loteA.localeCompare(loteB, 'es', { sensitivity: 'base' });
+                    return cmp !== 0 ? cmp : (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' });
+                  }).map((sub) => {
+                    const lote = lotes.find((l) => l.id === sub.lote_id);
+                    return (
+                      <TableRow key={sub.id}>
+                        <TableCell className="pl-5">
+                          <p className="font-semibold text-foreground">
+                            {lote?.nombre ?? `Lote ${sub.lote_id}`}
+                          </p>
+                          <p className="text-xs text-muted-foreground sm:hidden">{sub.nombre}</p>
+                        </TableCell>
+                        <TableCell className="hidden text-muted-foreground sm:table-cell">
+                          {sub.nombre}
+                        </TableCell>
+                        <TableCell className="pr-5">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <span className="text-sm text-muted-foreground">$</span>
+                            <Input
+                              aria-label={`Precio por kg de ${sub.nombre}`}
+                              value={cosechaInputs[String(sub.lote_id)] ?? ''}
+                              onChange={(e) =>
+                                setCosechaInputs((prev) => ({
+                                  ...prev,
+                                  [String(sub.lote_id)]: formatDecimalLive(e.target.value),
+                                }))
+                              }
+                              placeholder="0"
+                              className="h-8 w-24 text-right tabular-nums"
+                            />
+                            <span className="text-xs text-muted-foreground">/kg</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          <BotonGuardarSeccion onGuardar={guardarCosecha} alRas />
+
+          </ConfigSection>
 
           {/* "Escala de Abonada" siempre visible (mismo criterio que Cosecha). */}
-          <AccordionItem value="abonada" className="border-0">
-            <Card className="border-border">
-              <CardHeader className="border-b bg-gradient-to-r from-emerald-50/50 to-emerald-50/10 dark:from-emerald-950/20 dark:to-emerald-950/5">
-                <AccordionTrigger className="hover:no-underline py-0">
-                  <div className="text-left">
-                    <CardTitle>Escala de Abonada</CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Rangos de gramos y precios por palma
-                    </p>
-                  </div>
-                </AccordionTrigger>
-              </CardHeader>
-              <AccordionContent>
-                <CardContent className="p-6 space-y-6">
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold">Rangos de Abonada</h3>
-                      <Button onClick={agregarNuevoRango} size="sm" variant="outline" className="gap-2">
-                        <Plus className="h-4 w-4" />
-                        Agregar Rango
-                      </Button>
-                    </div>
+          <ConfigSection
+            flush
+            title="Escala de abonada"
+            description="Rangos de gramos aplicados y precio por palma."
+            actions={
+              <Button onClick={agregarNuevoRango} variant="outline" size="sm">
+                <Plus strokeWidth={2} />
+                Agregar rango
+              </Button>
+            }
+          >
+            {/* Tabla inline. Filas guardadas → PUT al guardar. Filas nuevas
+                (tempId) → POST cuando los 3 campos están llenos. */}
+            <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-5">Gramos mínimo</TableHead>
+                      <TableHead>Gramos máximo</TableHead>
+                      <TableHead className="text-right">Precio por palma</TableHead>
+                      <TableHead className="w-12 pr-5"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rangosAbono.length === 0 && nuevosRangos.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center text-sm text-muted-foreground py-10">
+                          No hay rangos de abonada. Agrega el primero con el botón de arriba.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      <>
+                        {rangosAbono.map((rango) => {
+                          const edit = abonoInputs[rango.id] ?? {
+                            gramos_min: formatThousands(rango.gramos_min),
+                            gramos_max: formatThousands(rango.gramos_max),
+                            precio_palma: formatThousands(rango.precio_palma),
+                          };
+                          return (
+                            <TableRow key={rango.id}>
+                              <TableCell className="pl-5">
+                                <div className="relative group">
+                                  <Input
 
-                    {/* Tabla inline. Filas guardadas → PUT al guardar. Filas nuevas
-                        (tempId) → POST cuando los 3 campos están llenos. */}
-                    <div className="rounded-lg border border-border overflow-x-auto">
-                      <table className="w-full min-w-[720px] table-fixed">
-                        <thead className="bg-muted/50">
-                          <tr>
-                            <th className="text-left p-4 font-semibold w-1/4">Gramos Mínimo</th>
-                            <th className="text-left p-4 font-semibold w-1/4">Gramos Máximo</th>
-                            <th className="text-left p-4 font-semibold w-2/5">Precio por Palma</th>
-                            <th className="text-center p-4 font-semibold w-16"></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rangosAbono.length === 0 && nuevosRangos.length === 0 ? (
-                            <tr>
-                              <td colSpan={4} className="p-6 text-center text-sm text-muted-foreground">
-                                No hay rangos de abonada. Haz clic en "Agregar Rango" para crear el primero.
-                              </td>
-                            </tr>
-                          ) : (
-                            <>
-                              {rangosAbono.map((rango) => {
-                                const edit = abonoInputs[rango.id] ?? {
-                                  gramos_min: formatThousands(rango.gramos_min),
-                                  gramos_max: formatThousands(rango.gramos_max),
-                                  precio_palma: formatThousands(rango.precio_palma),
-                                };
-                                return (
-                                  <tr key={rango.id} className="border-t border-border">
-                                    <td className="p-4">
-                                      <div className="relative group">
-                                        <Input
-                                          
-                                          value={edit.gramos_min}
-                                          onChange={(e) =>
-                                            setAbonoInputs((prev) => ({
-                                              ...prev,
-                                              [rango.id]: { ...edit, gramos_min: formatDecimalLive(e.target.value) },
-                                            }))
-                                          }
-                                          className="w-full pr-7"
-                                        />
-                                        {/* Spinners. `onMouseDown preventDefault` evita que el input pierda foco. */}
-                                        <div className="absolute right-1 top-1 bottom-1 flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                                          <button aria-label="Contraer" type="button" tabIndex={-1}
-                                            onMouseDown={(e) => e.preventDefault()}
-                                            onClick={() => setAbonoInputs((prev) => ({
-                                              ...prev,
-                                              [rango.id]: { ...edit, gramos_min: adjustGramos(edit.gramos_min, 1) },
-                                            }))}
-                                            className="flex-1 px-1 hover:bg-muted rounded-t text-muted-foreground hover:text-foreground"
-                                          >
-                                            <ChevronUp className="h-3 w-3" />
-                                          </button>
-                                          <button aria-label="Desplegar" type="button" tabIndex={-1}
-                                            onMouseDown={(e) => e.preventDefault()}
-                                            onClick={() => setAbonoInputs((prev) => ({
-                                              ...prev,
-                                              [rango.id]: { ...edit, gramos_min: adjustGramos(edit.gramos_min, -1) },
-                                            }))}
-                                            className="flex-1 px-1 hover:bg-muted rounded-b text-muted-foreground hover:text-foreground"
-                                          >
-                                            <ChevronDown className="h-3 w-3" />
-                                          </button>
-                                        </div>
-                                      </div>
-                                    </td>
-                                    <td className="p-4">
-                                      <div className="relative group">
-                                        <Input
-                                          
-                                          value={edit.gramos_max}
-                                          onChange={(e) =>
-                                            setAbonoInputs((prev) => ({
-                                              ...prev,
-                                              [rango.id]: { ...edit, gramos_max: formatDecimalLive(e.target.value) },
-                                            }))
-                                          }
-                                          className="w-full pr-7"
-                                        />
-                                        <div className="absolute right-1 top-1 bottom-1 flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                                          <button aria-label="Contraer" type="button" tabIndex={-1}
-                                            onMouseDown={(e) => e.preventDefault()}
-                                            onClick={() => setAbonoInputs((prev) => ({
-                                              ...prev,
-                                              [rango.id]: { ...edit, gramos_max: adjustGramos(edit.gramos_max, 1) },
-                                            }))}
-                                            className="flex-1 px-1 hover:bg-muted rounded-t text-muted-foreground hover:text-foreground"
-                                          >
-                                            <ChevronUp className="h-3 w-3" />
-                                          </button>
-                                          <button aria-label="Desplegar" type="button" tabIndex={-1}
-                                            onMouseDown={(e) => e.preventDefault()}
-                                            onClick={() => setAbonoInputs((prev) => ({
-                                              ...prev,
-                                              [rango.id]: { ...edit, gramos_max: adjustGramos(edit.gramos_max, -1) },
-                                            }))}
-                                            className="flex-1 px-1 hover:bg-muted rounded-b text-muted-foreground hover:text-foreground"
-                                          >
-                                            <ChevronDown className="h-3 w-3" />
-                                          </button>
-                                        </div>
-                                      </div>
-                                    </td>
-                                    <td className="p-4">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-muted-foreground text-sm">$</span>
-                                        <Input
-                                          type="text"
-                                          autoComplete="off"
-                                          value={edit.precio_palma}
-                                          onChange={(e) =>
-                                            setAbonoInputs((prev) => ({
-                                              ...prev,
-                                              [rango.id]: {
-                                                ...edit,
-                                                precio_palma: formatDecimalLive(e.target.value),
-                                              },
-                                            }))
-                                          }
-                                          className="w-32"
-                                        />
-                                        <span className="text-muted-foreground text-sm">/palma</span>
-                                      </div>
-                                    </td>
-                                    <td className="p-4 text-center">
-                                      <Button
-                                        onClick={() => handleDeleteAbonoInline(rango)}
-                                        size="sm"
-                                        variant="ghost"
-                                        className="text-destructive hover:text-destructive hover:bg-destructive/10 mx-auto"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                              {/* Filas nuevas (sin guardar): mismo layout, tempId como key. */}
-                              {nuevosRangos.map((nr) => (
-                                <tr key={nr.tempId} className="border-t border-border bg-primary/5">
-                                  <td className="p-4">
-                                    <div className="relative group">
-                                      <Input
-                                        
-                                        placeholder="0"
-                                        value={nr.gramos_min}
-                                        onChange={(e) =>
-                                          setNuevosRangos((prev) =>
-                                            prev.map((x) =>
-                                              x.tempId === nr.tempId
-                                                ? { ...x, gramos_min: formatDecimalLive(e.target.value) }
-                                                : x,
-                                            ),
-                                          )
-                                        }
-                                        className="w-full pr-7"
-                                      />
-                                      <div className="absolute right-1 top-1 bottom-1 flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                                        <button aria-label="Contraer" type="button" tabIndex={-1}
-                                          onMouseDown={(e) => e.preventDefault()}
-                                          onClick={() => setNuevosRangos((prev) =>
-                                            prev.map((x) =>
-                                              x.tempId === nr.tempId
-                                                ? { ...x, gramos_min: adjustGramos(x.gramos_min, 1) }
-                                                : x,
-                                            ),
-                                          )}
-                                          className="flex-1 px-1 hover:bg-muted rounded-t text-muted-foreground hover:text-foreground"
-                                        >
-                                          <ChevronUp className="h-3 w-3" />
-                                        </button>
-                                        <button aria-label="Desplegar" type="button" tabIndex={-1}
-                                          onMouseDown={(e) => e.preventDefault()}
-                                          onClick={() => setNuevosRangos((prev) =>
-                                            prev.map((x) =>
-                                              x.tempId === nr.tempId
-                                                ? { ...x, gramos_min: adjustGramos(x.gramos_min, -1) }
-                                                : x,
-                                            ),
-                                          )}
-                                          className="flex-1 px-1 hover:bg-muted rounded-b text-muted-foreground hover:text-foreground"
-                                        >
-                                          <ChevronDown className="h-3 w-3" />
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </td>
-                                  <td className="p-4">
-                                    <div className="relative group">
-                                      <Input
-                                        
-                                        placeholder="0"
-                                        value={nr.gramos_max}
-                                        onChange={(e) =>
-                                          setNuevosRangos((prev) =>
-                                            prev.map((x) =>
-                                              x.tempId === nr.tempId
-                                                ? { ...x, gramos_max: formatDecimalLive(e.target.value) }
-                                                : x,
-                                            ),
-                                          )
-                                        }
-                                        className="w-full pr-7"
-                                      />
-                                      <div className="absolute right-1 top-1 bottom-1 flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                                        <button aria-label="Contraer" type="button" tabIndex={-1}
-                                          onMouseDown={(e) => e.preventDefault()}
-                                          onClick={() => setNuevosRangos((prev) =>
-                                            prev.map((x) =>
-                                              x.tempId === nr.tempId
-                                                ? { ...x, gramos_max: adjustGramos(x.gramos_max, 1) }
-                                                : x,
-                                            ),
-                                          )}
-                                          className="flex-1 px-1 hover:bg-muted rounded-t text-muted-foreground hover:text-foreground"
-                                        >
-                                          <ChevronUp className="h-3 w-3" />
-                                        </button>
-                                        <button aria-label="Desplegar" type="button" tabIndex={-1}
-                                          onMouseDown={(e) => e.preventDefault()}
-                                          onClick={() => setNuevosRangos((prev) =>
-                                            prev.map((x) =>
-                                              x.tempId === nr.tempId
-                                                ? { ...x, gramos_max: adjustGramos(x.gramos_max, -1) }
-                                                : x,
-                                            ),
-                                          )}
-                                          className="flex-1 px-1 hover:bg-muted rounded-b text-muted-foreground hover:text-foreground"
-                                        >
-                                          <ChevronDown className="h-3 w-3" />
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </td>
-                                  <td className="p-4">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-muted-foreground text-sm">$</span>
-                                      <Input
-                                        type="text"
-                                        autoComplete="off"
-                                        placeholder="0"
-                                        value={nr.precio_palma}
-                                        onChange={(e) =>
-                                          setNuevosRangos((prev) =>
-                                            prev.map((x) =>
-                                              x.tempId === nr.tempId
-                                                ? { ...x, precio_palma: formatDecimalLive(e.target.value) }
-                                                : x,
-                                            ),
-                                          )
-                                        }
-                                        className="w-32"
-                                      />
-                                      <span className="text-muted-foreground text-sm">/palma</span>
-                                    </div>
-                                  </td>
-                                  <td className="p-4 text-center">
-                                    <Button
-                                      onClick={() => eliminarNuevoRango(nr.tempId)}
-                                      size="sm"
-                                      variant="ghost"
-                                      className="text-destructive hover:text-destructive hover:bg-destructive/10 mx-auto"
+                                    value={edit.gramos_min}
+                                    onChange={(e) =>
+                                      setAbonoInputs((prev) => ({
+                                        ...prev,
+                                        [rango.id]: { ...edit, gramos_min: formatDecimalLive(e.target.value) },
+                                      }))
+                                    }
+                                    className="h-8 w-20 pr-7 tabular-nums sm:w-28"
+                                  />
+                                  {/* Spinners. `onMouseDown preventDefault` evita que el input pierda foco. */}
+                                  <div className="absolute right-1 top-0.5 bottom-0.5 flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                                    <button aria-label="Contraer" type="button" tabIndex={-1}
+                                      onMouseDown={(e) => e.preventDefault()}
+                                      onClick={() => setAbonoInputs((prev) => ({
+                                        ...prev,
+                                        [rango.id]: { ...edit, gramos_min: adjustGramos(edit.gramos_min, 1) },
+                                      }))}
+                                      className="flex-1 px-1 hover:bg-muted rounded-t text-muted-foreground hover:text-foreground"
                                     >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                <BotonGuardarSeccion onGuardar={guardarAbono} />
-                </CardContent>
-              </AccordionContent>
-            </Card>
-          </AccordionItem>
+                                      <ChevronUp className="h-3 w-3" />
+                                    </button>
+                                    <button aria-label="Desplegar" type="button" tabIndex={-1}
+                                      onMouseDown={(e) => e.preventDefault()}
+                                      onClick={() => setAbonoInputs((prev) => ({
+                                        ...prev,
+                                        [rango.id]: { ...edit, gramos_min: adjustGramos(edit.gramos_min, -1) },
+                                      }))}
+                                      className="flex-1 px-1 hover:bg-muted rounded-b text-muted-foreground hover:text-foreground"
+                                    >
+                                      <ChevronDown className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="relative group">
+                                  <Input
+
+                                    value={edit.gramos_max}
+                                    onChange={(e) =>
+                                      setAbonoInputs((prev) => ({
+                                        ...prev,
+                                        [rango.id]: { ...edit, gramos_max: formatDecimalLive(e.target.value) },
+                                      }))
+                                    }
+                                    className="h-8 w-20 pr-7 tabular-nums sm:w-28"
+                                  />
+                                  <div className="absolute right-1 top-0.5 bottom-0.5 flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                                    <button aria-label="Contraer" type="button" tabIndex={-1}
+                                      onMouseDown={(e) => e.preventDefault()}
+                                      onClick={() => setAbonoInputs((prev) => ({
+                                        ...prev,
+                                        [rango.id]: { ...edit, gramos_max: adjustGramos(edit.gramos_max, 1) },
+                                      }))}
+                                      className="flex-1 px-1 hover:bg-muted rounded-t text-muted-foreground hover:text-foreground"
+                                    >
+                                      <ChevronUp className="h-3 w-3" />
+                                    </button>
+                                    <button aria-label="Desplegar" type="button" tabIndex={-1}
+                                      onMouseDown={(e) => e.preventDefault()}
+                                      onClick={() => setAbonoInputs((prev) => ({
+                                        ...prev,
+                                        [rango.id]: { ...edit, gramos_max: adjustGramos(edit.gramos_max, -1) },
+                                      }))}
+                                      className="flex-1 px-1 hover:bg-muted rounded-b text-muted-foreground hover:text-foreground"
+                                    >
+                                      <ChevronDown className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <span className="text-sm text-muted-foreground">$</span>
+                                  <Input
+                                    type="text"
+                                    autoComplete="off"
+                                    value={edit.precio_palma}
+                                    onChange={(e) =>
+                                      setAbonoInputs((prev) => ({
+                                        ...prev,
+                                        [rango.id]: {
+                                          ...edit,
+                                          precio_palma: formatDecimalLive(e.target.value),
+                                        },
+                                      }))
+                                    }
+                                    className="h-8 w-20 text-right tabular-nums sm:w-24"
+                                  />
+                                  <span className="text-xs text-muted-foreground">/palma</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="pr-5 text-right">
+                                <Button
+                                  onClick={() => handleDeleteAbonoInline(rango)}
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label="Eliminar rango"
+                                  className="text-muted-foreground hover:text-destructive"
+                                >
+                                  <Trash2 strokeWidth={2} />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        {/* Filas nuevas (sin guardar): mismo layout, tempId como key. */}
+                        {nuevosRangos.map((nr) => (
+                          <TableRow key={nr.tempId} className="bg-primary-soft">
+                            <TableCell className="pl-5">
+                              <div className="relative group">
+                                <Input
+
+                                  placeholder="0"
+                                  value={nr.gramos_min}
+                                  onChange={(e) =>
+                                    setNuevosRangos((prev) =>
+                                      prev.map((x) =>
+                                        x.tempId === nr.tempId
+                                          ? { ...x, gramos_min: formatDecimalLive(e.target.value) }
+                                          : x,
+                                      ),
+                                    )
+                                  }
+                                  className="h-8 w-20 pr-7 tabular-nums sm:w-28"
+                                />
+                                <div className="absolute right-1 top-0.5 bottom-0.5 flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                                  <button aria-label="Contraer" type="button" tabIndex={-1}
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => setNuevosRangos((prev) =>
+                                      prev.map((x) =>
+                                        x.tempId === nr.tempId
+                                          ? { ...x, gramos_min: adjustGramos(x.gramos_min, 1) }
+                                          : x,
+                                      ),
+                                    )}
+                                    className="flex-1 px-1 hover:bg-muted rounded-t text-muted-foreground hover:text-foreground"
+                                  >
+                                    <ChevronUp className="h-3 w-3" />
+                                  </button>
+                                  <button aria-label="Desplegar" type="button" tabIndex={-1}
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => setNuevosRangos((prev) =>
+                                      prev.map((x) =>
+                                        x.tempId === nr.tempId
+                                          ? { ...x, gramos_min: adjustGramos(x.gramos_min, -1) }
+                                          : x,
+                                      ),
+                                    )}
+                                    className="flex-1 px-1 hover:bg-muted rounded-b text-muted-foreground hover:text-foreground"
+                                  >
+                                    <ChevronDown className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="relative group">
+                                <Input
+
+                                  placeholder="0"
+                                  value={nr.gramos_max}
+                                  onChange={(e) =>
+                                    setNuevosRangos((prev) =>
+                                      prev.map((x) =>
+                                        x.tempId === nr.tempId
+                                          ? { ...x, gramos_max: formatDecimalLive(e.target.value) }
+                                          : x,
+                                      ),
+                                    )
+                                  }
+                                  className="h-8 w-20 pr-7 tabular-nums sm:w-28"
+                                />
+                                <div className="absolute right-1 top-0.5 bottom-0.5 flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                                  <button aria-label="Contraer" type="button" tabIndex={-1}
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => setNuevosRangos((prev) =>
+                                      prev.map((x) =>
+                                        x.tempId === nr.tempId
+                                          ? { ...x, gramos_max: adjustGramos(x.gramos_max, 1) }
+                                          : x,
+                                      ),
+                                    )}
+                                    className="flex-1 px-1 hover:bg-muted rounded-t text-muted-foreground hover:text-foreground"
+                                  >
+                                    <ChevronUp className="h-3 w-3" />
+                                  </button>
+                                  <button aria-label="Desplegar" type="button" tabIndex={-1}
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => setNuevosRangos((prev) =>
+                                      prev.map((x) =>
+                                        x.tempId === nr.tempId
+                                          ? { ...x, gramos_max: adjustGramos(x.gramos_max, -1) }
+                                          : x,
+                                      ),
+                                    )}
+                                    className="flex-1 px-1 hover:bg-muted rounded-b text-muted-foreground hover:text-foreground"
+                                  >
+                                    <ChevronDown className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center justify-end gap-1.5">
+                                <span className="text-sm text-muted-foreground">$</span>
+                                <Input
+                                  type="text"
+                                  autoComplete="off"
+                                  placeholder="0"
+                                  value={nr.precio_palma}
+                                  onChange={(e) =>
+                                    setNuevosRangos((prev) =>
+                                      prev.map((x) =>
+                                        x.tempId === nr.tempId
+                                          ? { ...x, precio_palma: formatDecimalLive(e.target.value) }
+                                          : x,
+                                      ),
+                                    )
+                                  }
+                                  className="h-8 w-20 text-right tabular-nums sm:w-24"
+                                />
+                                <span className="text-xs text-muted-foreground">/palma</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="pr-5 text-right">
+                              <Button
+                                onClick={() => eliminarNuevoRango(nr.tempId)}
+                                variant="ghost"
+                                size="icon"
+                                aria-label="Eliminar rango"
+                                className="text-muted-foreground hover:text-destructive"
+                              >
+                                <Trash2 strokeWidth={2} />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </>
+                    )}
+                  </TableBody>
+                </Table>
+          <BotonGuardarSeccion onGuardar={guardarAbono} alRas />
+
+          </ConfigSection>
 
           {/* COSECHA / FERTILIZACION en JORNAL_FIJO: acordeón EXTRA con input
               plano de precio_palma. Se SUMA a las secciones por lote/escala
@@ -1219,42 +1185,30 @@ export function PreciosLaboresTab() {
           {preciosPalma
             .filter((p) => (p.tipo === 'COSECHA' || p.tipo === 'FERTILIZACION') && p.tipo_pago === 'JORNAL_FIJO')
             .map((labor) => (
-            <AccordionItem key={`jornal-${labor.id}`} value={`palma-jornal-${labor.id}`} className="border-0">
-              <Card className="border-border">
-                <CardHeader className={`border-b bg-gradient-to-r ${labor.tipo === 'COSECHA'
-                  ? 'from-green-50/50 to-green-50/10 dark:from-green-950/20 dark:to-green-950/5'
-                  : 'from-emerald-50/50 to-emerald-50/10 dark:from-emerald-950/20 dark:to-emerald-950/5'}`}>
-                  <AccordionTrigger className="hover:no-underline py-0">
-                    <div className="text-left">
-                      <CardTitle>{labor.tipo === 'COSECHA' ? 'Precio Cosecha' : 'Precio Fertilización'}</CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1">Precio por jornal fijo</p>
-                    </div>
-                  </AccordionTrigger>
-                </CardHeader>
-                <AccordionContent>
-                  <CardContent className="p-6">
-                    <div className="max-w-md space-y-3">
-                      <Label htmlFor={`precio-jornal-${labor.id}`}>Valor por Jornal</Label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">$</span>
-                        <Input
-                          id={`precio-jornal-${labor.id}`}
-                          
-                          value={palmaInputs[labor.id] ?? ''}
-                          onChange={(e) =>
-                            setPalmaInputs((prev) => ({ ...prev, [labor.id]: formatDecimalLive(e.target.value) }))
-                          }
-                          className="text-lg font-semibold"
-                          placeholder="0"
-                        />
-                        <span className="text-muted-foreground">/jornal</span>
-                      </div>
-                    </div>
-                  <BotonGuardarSeccion onGuardar={() => handleSavePalma(labor)} />
-                  </CardContent>
-                </AccordionContent>
-              </Card>
-            </AccordionItem>
+            <ConfigSection
+              key={`jornal-${labor.id}`}
+              title={labor.tipo === 'COSECHA' ? 'Precio cosecha' : 'Precio fertilización'}
+              description="Precio por jornal fijo."
+            >
+              <div className="max-w-md space-y-3">
+                <Label htmlFor={`precio-jornal-${labor.id}`}>Valor por jornal</Label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                  <Input
+                    id={`precio-jornal-${labor.id}`}
+                    value={palmaInputs[labor.id] ?? ''}
+                    onChange={(e) =>
+                      setPalmaInputs((prev) => ({ ...prev, [labor.id]: formatDecimalLive(e.target.value) }))
+                    }
+                    placeholder="0"
+                    className="pl-7 pr-16 text-right tabular-nums"
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">/jornal</span>
+                </div>
+              </div>
+            <BotonGuardarSeccion onGuardar={() => handleSavePalma(labor)} />
+
+            </ConfigSection>
           ))}
 
           {/* Secciones: Plateo, Poda, Sanidad y Otros — labores fijas de palma
@@ -1273,145 +1227,126 @@ export function PreciosLaboresTab() {
               return (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' });
             })
             .map((palma) => (
-            <AccordionItem key={`fija-${palma.id}`} value={PALMA_VALUE[palma.tipo]} className="border-0">
-              <Card className="border-border">
-                <CardHeader className={`border-b bg-gradient-to-r ${PALMA_GRADIENT[palma.tipo]}`}>
-                  <AccordionTrigger className="hover:no-underline py-0">
-                    <div className="text-left">
-                      <CardTitle>{PALMA_LABEL[palma.tipo]}</CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1">{palmaSubLabel(palma)}</p>
-                    </div>
-                  </AccordionTrigger>
-                </CardHeader>
-                <AccordionContent>
-                  <CardContent className="p-6 space-y-6">
-                    {/* Precio de la labor padre — aplica siempre. En Sanidad
-                        y Otros funciona como valor por defecto que los
-                        trabajos (sublabores) heredan si no tienen precio
-                        propio. */}
-                    <div className="max-w-md space-y-3">
-                      <Label htmlFor={`precio-${palma.id}`}>{palmaLabelInput(palma)}</Label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">$</span>
-                        <Input
-                          id={`precio-${palma.id}`}
-                          
-                          value={palmaInputs[palma.id] ?? ''}
-                          onChange={(e) =>
-                            setPalmaInputs((prev) => ({ ...prev, [palma.id]: formatDecimalLive(e.target.value) }))
-                          }
-                          className="text-lg font-semibold"
-                          placeholder="0"
-                        />
-                        <span className="text-muted-foreground">{palmaUnidad(palma)}</span>
-                      </div>
-                    </div>
+            <ConfigSection
+              key={`fija-${palma.id}`}
+              title={PALMA_LABEL[palma.tipo]}
+              description={palmaSubLabel(palma)}
+              contentClassName="space-y-6"
+            >
+              {/* Precio de la labor padre — aplica siempre. En Sanidad
+                  y Otros funciona como valor por defecto que los
+                  trabajos (sublabores) heredan si no tienen precio
+                  propio. */}
+              <div className="max-w-md space-y-3">
+                <Label htmlFor={`precio-${palma.id}`}>{palmaLabelInput(palma)}</Label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                  <Input
+                    id={`precio-${palma.id}`}
+                    value={palmaInputs[palma.id] ?? ''}
+                    onChange={(e) =>
+                      setPalmaInputs((prev) => ({ ...prev, [palma.id]: formatDecimalLive(e.target.value) }))
+                    }
+                    placeholder="0"
+                    className="pl-7 pr-16 text-right tabular-nums"
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">{palmaUnidad(palma)}</span>
+                </div>
+              </div>
 
-                    {/* Trabajos (sublabores) — solo Sanidad y Otros los admiten. */}
-                    {(palma.tipo === 'SANIDAD' || palma.tipo === 'OTROS') && (
-                      <div className="space-y-3">
-                        <div>
-                          <h4 className="font-semibold text-sm">Precios por trabajo</h4>
-                          <p className="text-xs text-muted-foreground">
-                            Cada trabajo puede tener un precio propio. Si lo dejas vacío, hereda el precio de la labor.
-                          </p>
-                        </div>
-                        {renderSublaboresPanel(palma.id, palmaUnidad(palma))}
-                      </div>
-                    )}
-                  <BotonGuardarSeccion onGuardar={() => handleSavePalma(palma)} />
-                  </CardContent>
-                </AccordionContent>
-              </Card>
-            </AccordionItem>
+              {/* Trabajos (sublabores) — solo Sanidad y Otros los admiten. */}
+              {(palma.tipo === 'SANIDAD' || palma.tipo === 'OTROS') && (
+                <div className="space-y-3">
+                  <div>
+                    <h4 className="font-semibold text-sm">Precios por trabajo</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Cada trabajo puede tener un precio propio. Si lo dejas vacío, hereda el precio de la labor.
+                    </p>
+                  </div>
+                  {renderSublaboresPanel(palma.id, palmaUnidad(palma))}
+                </div>
+              )}
+            <BotonGuardarSeccion onGuardar={() => handleSavePalma(palma)} />
+
+            </ConfigSection>
           ))}
 
           {/* Custom Palma — mismo formato visual que las fijas. Las trae el fetch
               `categoria=PALMA, es_sistema=false`. Título = nombre que el admin
               escribió en "Operaciones → Trabajos / Labores". */}
           {[...laboresPalmaCustom].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((labor) => (
-            <AccordionItem key={`custom-${labor.id}`} value={`palma-custom-${labor.id}`} className="border-0">
-              <Card className="border-border">
-                <CardHeader className="border-b bg-gradient-to-r from-amber-50/50 to-amber-50/10 dark:from-amber-950/20 dark:to-amber-950/5">
-                  <AccordionTrigger className="hover:no-underline py-0">
-                    <div className="text-left">
-                      <CardTitle>{labor.nombre}</CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1">{palmaSubLabel(labor)}</p>
-                    </div>
-                  </AccordionTrigger>
-                </CardHeader>
-                <AccordionContent>
-                  <CardContent className="p-6 space-y-6">
-                    {/* Precio de la labor padre — valor por defecto que
-                        heredan los trabajos sin precio propio. */}
-                    <div className="max-w-md space-y-3">
-                      <Label htmlFor={`precio-custom-${labor.id}`}>{palmaLabelInput(labor)}</Label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">$</span>
-                        <Input
-                          id={`precio-custom-${labor.id}`}
-                          
-                          value={palmaCustomInputs[labor.id] ?? ''}
-                          onChange={(e) =>
-                            setPalmaCustomInputs((prev) => ({
-                              ...prev,
-                              [labor.id]: formatDecimalLive(e.target.value),
-                            }))
-                          }
-                          className="text-lg font-semibold"
-                          placeholder="0"
-                        />
-                        <span className="text-muted-foreground">{palmaUnidad(labor)}</span>
-                      </div>
-                    </div>
+            <ConfigSection
+              key={`custom-${labor.id}`}
+              title={labor.nombre}
+              description={palmaSubLabel(labor)}
+              contentClassName="space-y-6"
+            >
+              {/* Precio de la labor padre — valor por defecto que
+                  heredan los trabajos sin precio propio. */}
+              <div className="max-w-md space-y-3">
+                <Label htmlFor={`precio-custom-${labor.id}`}>{palmaLabelInput(labor)}</Label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                  <Input
+                    id={`precio-custom-${labor.id}`}
+                    value={palmaCustomInputs[labor.id] ?? ''}
+                    onChange={(e) =>
+                      setPalmaCustomInputs((prev) => ({
+                        ...prev,
+                        [labor.id]: formatDecimalLive(e.target.value),
+                      }))
+                    }
+                    placeholder="0"
+                    className="pl-7 pr-16 text-right tabular-nums"
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">{palmaUnidad(labor)}</span>
+                </div>
+              </div>
 
-                    <div className="space-y-3">
-                      <div>
-                        <h4 className="font-semibold text-sm">Precios por trabajo</h4>
-                        <p className="text-xs text-muted-foreground">
-                          Cada trabajo puede tener un precio propio. Si lo dejas vacío, hereda el precio de la labor.
-                        </p>
-                      </div>
-                      {renderSublaboresPanel(labor.id, palmaUnidad(labor))}
-                    </div>
-                    <BotonGuardarSeccion onGuardar={() => handleSaveLaborPalmaCustom(labor)} />
-                  </CardContent>
-                </AccordionContent>
-              </Card>
-            </AccordionItem>
+              <div className="space-y-3">
+                <div>
+                  <h4 className="font-semibold text-sm">Precios por trabajo</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Cada trabajo puede tener un precio propio. Si lo dejas vacío, hereda el precio de la labor.
+                  </p>
+                </div>
+                {renderSublaboresPanel(labor.id, palmaUnidad(labor))}
+              </div>
+              <BotonGuardarSeccion onGuardar={() => handleSaveLaborPalmaCustom(labor)} />
+
+            </ConfigSection>
           ))}
-        </Accordion>
+        </div>
       </div>
 
       {/* LABORES FINCA */}
       <div className="space-y-4" hidden={loading}>
-        <div className="border-l-4 border-muted-foreground pl-4 py-2">
-          <h3 className="text-xl font-bold">Labores Finca</h3>
-          <p className="text-sm text-muted-foreground">Precio por jornal de las labores personalizadas</p>
-        </div>
-
         {laboresFinca.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-muted-foreground/50 p-8 text-center">
-            <p className="text-muted-foreground">
-              No hay labores de finca configuradas. Agrega labores personalizadas en la sección "Operaciones &gt; Trabajos / Labores".
+          <ConfigSection
+            title="Labores de finca"
+            description="Labores personalizadas de la finca."
+          >
+            <p className="text-sm text-muted-foreground">
+              Todavía no hay labores de finca configuradas. Agrégalas en Operaciones, Trabajos y labores.
             </p>
-          </div>
+          </ConfigSection>
         ) : (
-          <Card className="border-border">
-            <CardContent className="p-6">
-              <div className="rounded-lg border border-border overflow-x-auto">
-                <table className="w-full min-w-[720px] table-fixed">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="text-left p-4 font-semibold w-1/2">Labor</th>
-                      <th className="text-right p-4 font-semibold">Valor Base</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+          <ConfigSection
+            title="Labores de finca"
+            description="Labores personalizadas de la finca."
+          >
+              <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Labor</TableHead>
+                      <TableHead className="text-right">Valor base</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {[...laboresFinca].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((labor) => (
-                      <tr key={labor.id} className="border-t border-border">
-                        <td className="p-4 font-medium">{labor.nombre}</td>
-                        <td className="p-4">
+                      <TableRow key={labor.id}>
+                        <TableCell className="font-medium">{labor.nombre}</TableCell>
+                        <TableCell>
                           <div className="flex items-center justify-end gap-2">
                             <span className="text-muted-foreground text-sm">$</span>
                             <Input
@@ -1424,19 +1359,17 @@ export function PreciosLaboresTab() {
                                 }))
                               }
                               placeholder="0"
-                              className="w-32 text-right"
+                              className="h-8 w-24 text-right tabular-nums"
                             />
                             <span className="text-muted-foreground text-sm">/jornal</span>
                           </div>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                  </TableBody>
+                </Table>
             <BotonGuardarSeccion onGuardar={guardarFinca} />
-            </CardContent>
-          </Card>
+          </ConfigSection>
         )}
       </div>
 

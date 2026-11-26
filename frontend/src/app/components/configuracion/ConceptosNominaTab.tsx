@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import { ConfigSection, ConfigEmpty, ConfigRowActions } from './ConfigSection';
 import {
   Table,
   TableBody,
@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table';
-import { Plus, Edit, Trash2, FileText } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { useConfirmDelete } from '../../hooks/useConfirmDelete';
 import { toast } from 'sonner';
@@ -25,12 +25,15 @@ import { cached } from '../../../api/cache';
 import { formatCOP } from '../lib/format';
 import { formatFecha } from '../../utils/fecha';
 
-const TIPO_LABEL: Record<TipoConcepto, string> = {
-  APORTE_LEGAL: 'Aporte Legal',
-  DEDUCCION_LEGAL: 'Deducción Legal',
-  DEDUCCION_VOLUNTARIA: 'Deducción Voluntaria',
-  BONIFICACION_FIJA: 'Bonificación Fija',
-  BONIFICACION_VARIABLE: 'Bonificación Variable',
+const TIPO_BADGE: Record<
+  TipoConcepto,
+  { label: string; variant: 'info' | 'destructive' | 'warning' | 'success' | 'default' }
+> = {
+  APORTE_LEGAL: { label: 'Aporte legal', variant: 'info' },
+  DEDUCCION_LEGAL: { label: 'Deducción legal', variant: 'destructive' },
+  DEDUCCION_VOLUNTARIA: { label: 'Deducción voluntaria', variant: 'warning' },
+  BONIFICACION_FIJA: { label: 'Bonificación fija', variant: 'success' },
+  BONIFICACION_VARIABLE: { label: 'Bonificación variable', variant: 'default' },
 };
 
 export function ConceptosNominaTab() {
@@ -74,23 +77,6 @@ export function ConceptosNominaTab() {
     });
   };
 
-  const getTipoColor = (tipo: TipoConcepto): string => {
-    switch (tipo) {
-      case 'APORTE_LEGAL':
-        return 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/30';
-      case 'DEDUCCION_LEGAL':
-        return 'bg-destructive/10 text-destructive border-destructive/30';
-      case 'DEDUCCION_VOLUNTARIA':
-        return 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30';
-      case 'BONIFICACION_FIJA':
-        return 'bg-success/10 text-success border-success/30';
-      case 'BONIFICACION_VARIABLE':
-        return 'bg-primary/10 text-primary border-primary/30';
-      default:
-        return 'bg-muted text-muted-foreground border-border';
-    }
-  };
-
   /** Normaliza un porcentaje que puede venir como string o number desde la API. */
   const pct = (v: number | string | null | undefined): number | null => {
     if (v == null || v === '') return null;
@@ -102,7 +88,7 @@ export function ConceptosNominaTab() {
    * "Valores" — desglose por lado (empleado / empresa) para PORCENTAJE, o el
    * monto en COP para VALOR_FIJO. Soporta:
    *  - PORCENTAJE con `porcentaje_empleado` + `porcentaje_empresa` →
-   *    `Emp: 4% | Empr: 8.5%` (omitiendo el lado en cero).
+   *    `Trabajador 4% · Empresa 8.5%` (omitiendo el lado en cero).
    *  - PORCENTAJE legacy (un solo `porcentaje`) → `4%`.
    *  - VALOR_FIJO → COP formateado.
    */
@@ -112,15 +98,15 @@ export function ConceptosNominaTab() {
       const empresa = pct(concepto.porcentaje_empresa);
       if (emp != null || empresa != null) {
         const parts: string[] = [];
-        if (emp != null && emp > 0) parts.push(`Emp: ${emp}%`);
-        if (empresa != null && empresa > 0) parts.push(`Empr: ${empresa}%`);
-        if (parts.length > 0) return parts.join(' | ');
+        if (emp != null && emp > 0) parts.push(`Trabajador ${emp}%`);
+        if (empresa != null && empresa > 0) parts.push(`Empresa ${empresa}%`);
+        if (parts.length > 0) return parts.join(' · ');
       }
       const legacy = pct(concepto.porcentaje);
       if (legacy != null) return `${legacy}%`;
-      return '-';
+      return '—';
     }
-    return concepto.valor_referencia != null ? formatCOP(concepto.valor_referencia) : '-';
+    return concepto.valor_referencia != null ? formatCOP(concepto.valor_referencia) : '—';
   };
 
   /**
@@ -143,7 +129,7 @@ export function ConceptosNominaTab() {
   };
 
   /**
-   * "Vigencia" — formato `DD/MM/YYYY → DD/MM/YYYY` o `DD/MM/YYYY → Vigente`
+   * "Vigencia" — formato `DD/MM/YYYY a DD/MM/YYYY` o `DD/MM/YYYY a hoy`
    * cuando no hay fecha de cierre. Si no hay `vigente_desde` devolvemos '-'.
    */
   const fmtFecha = (iso?: string | null): string | null => {
@@ -152,123 +138,97 @@ export function ConceptosNominaTab() {
   };
   const vigenciaDisplay = (concepto: NominaConcepto): string => {
     const desde = fmtFecha(concepto.vigente_desde);
-    if (!desde) return '-';
+    if (!desde) return '—';
     const hasta = fmtFecha(concepto.vigente_hasta);
-    return `${desde} → ${hasta ?? 'Vigente'}`;
+    return `${desde} a ${hasta ?? 'hoy'}`;
   };
 
   return (
     <>
       {ConfirmDeleteDialog}
 
-      {/* Contenido principal con header H2 — diseño V.12+1 */}
       <div className="space-y-6">
-        <div className="space-y-2">
-          <h2 className="text-2xl font-bold">Conceptos de Nómina</h2>
-          <p className="text-muted-foreground">
-            Gestiona aportes legales, deducciones y bonificaciones para el cálculo de nómina
-          </p>
-        </div>
-
       <TabLoadingGate loading={loading} message="Cargando conceptos…">
-      <Card className="border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" />
-                Aportes y Deducciones
-              </CardTitle>
-              <CardDescription>
-                Configura todos los conceptos que se aplican en la nómina
-              </CardDescription>
-            </div>
-            <Button onClick={handleNuevo}>
-              <Plus className="mr-2 h-4 w-4" />
-              Nuevo Concepto
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6">
-          {conceptos.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                <FileText className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <h3 className="mb-2 text-lg font-semibold">No hay conceptos registrados</h3>
-              <p className="mb-4 text-sm text-muted-foreground">
-                Agrega aportes, deducciones o bonificaciones para la nómina
-              </p>
+      <ConfigSection
+        title="Aportes y deducciones"
+        description="Aportes legales, deducciones y bonificaciones que entran en el cálculo de la nómina."
+        flush
+        actions={
+          <Button onClick={handleNuevo}>
+            <Plus strokeWidth={2} />
+            Nuevo concepto
+          </Button>
+        }
+      >
+        {conceptos.length === 0 ? (
+          <ConfigEmpty
+            title="Sin conceptos registrados"
+            description="Agrega aportes, deducciones o bonificaciones para la nómina."
+            action={
               <Button onClick={handleNuevo}>
-                <Plus className="mr-2 h-4 w-4" />
-                Agregar Concepto
+                <Plus strokeWidth={2} />
+                Agregar concepto
               </Button>
-            </div>
-          ) : (
-            <div className="rounded-lg border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    <TableHead>Código</TableHead>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Valores</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead>Vigencia</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {[...conceptos].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((concepto) => (
-                    <TableRow key={concepto.id} className="hover:bg-muted/50 transition-colors">
-                      <TableCell className="font-mono text-xs font-semibold uppercase">
-                        {concepto.codigo}
+            }
+          />
+        ) : (
+          <Table className="min-w-[840px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-5">Concepto</TableHead>
+                <TableHead>Tipo</TableHead>
+                <TableHead>Valores</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead>Vigencia</TableHead>
+                <TableHead className="w-24 pr-5" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[...conceptos]
+                .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' }))
+                .map((concepto) => {
+                  const total = totalDisplay(concepto);
+                  const tipo = TIPO_BADGE[concepto.tipo];
+                  return (
+                    <TableRow key={concepto.id}>
+                      <TableCell className="pl-5">
+                        <button
+                          type="button"
+                          onClick={() => handleEditar(concepto)}
+                          className="font-semibold text-foreground hover:text-primary"
+                        >
+                          {concepto.nombre}
+                        </button>
+                        <p className="text-xs text-muted-foreground">{concepto.codigo}</p>
                       </TableCell>
-                      <TableCell className="font-medium">{concepto.nombre}</TableCell>
                       <TableCell>
-                        <Badge className={getTipoColor(concepto.tipo)}>
-                          {TIPO_LABEL[concepto.tipo] ?? concepto.tipo ?? '—'}
+                        <Badge variant={tipo?.variant ?? 'secondary'}>
+                          {tipo?.label ?? concepto.tipo ?? '—'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">{valoresDisplay(concepto)}</TableCell>
-                      <TableCell>
-                        {(() => {
-                          const total = totalDisplay(concepto);
-                          // Verde brillante cuando hay total real; "-" en muted.
-                          return total === '-'
-                            ? <span className="text-muted-foreground">-</span>
-                            : <span className="font-bold text-success">{total}</span>;
-                        })()}
+                      <TableCell className="tabular-nums text-muted-foreground">
+                        {valoresDisplay(concepto)}
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                      <TableCell className="text-right font-semibold tabular-nums">
+                        {total === '-' ? '—' : total}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
                         {vigenciaDisplay(concepto)}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditar(concepto)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(concepto)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
+                      <TableCell className="pr-5 text-right">
+                        <ConfigRowActions
+                          label={concepto.nombre}
+                          onEdit={() => handleEditar(concepto)}
+                          onDelete={() => handleDelete(concepto)}
+                        />
                       </TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  );
+                })}
+            </TableBody>
+          </Table>
+        )}
+      </ConfigSection>
       </TabLoadingGate>
       </div>
     </>

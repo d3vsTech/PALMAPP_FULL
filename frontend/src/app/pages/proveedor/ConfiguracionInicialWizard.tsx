@@ -136,8 +136,8 @@ export default function ConfiguracionInicialWizard() {
         {/* Columna izquierda: Wizard (2/3) */}
         <div className="min-w-0 space-y-8 lg:col-span-2">
           {/* Stepper horizontal */}
-          <Card className="border-border">
-            <CardContent className="p-6">
+          <Card>
+            <CardContent>
               <div className="flex items-center justify-between">
                 {ETAPAS.map((etapa, index) => {
                   const estaCompleta = etapaActual > etapa.numero;
@@ -195,7 +195,7 @@ export default function ConfiguracionInicialWizard() {
           </Card>
 
           {/* Contenido del paso */}
-          <Card className="border-border">
+          <Card>
             <CardContent className="p-8 space-y-8">
               {/* Etapa 1: Información General */}
               {etapaActual === 1 && (
@@ -631,19 +631,19 @@ export default function ConfiguracionInicialWizard() {
                   variant="outline"
                   onClick={pasoAnterior}
                   disabled={etapaActual === 1}
-                  className="gap-2"
+                  
                 >
                   <ArrowLeft className="h-4 w-4" />
                   Anterior
                 </Button>
 
                 {etapaActual < ETAPAS.length ? (
-                  <Button onClick={handleSiguiente} className="gap-2">
+                  <Button onClick={handleSiguiente}>
                     Siguiente
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 ) : (
-                  <Button onClick={finalizarConfiguracion} className="gap-2">
+                  <Button onClick={finalizarConfiguracion}>
                     <Check className="h-4 w-4" />
                     Finalizar Configuración
                   </Button>
@@ -656,8 +656,8 @@ export default function ConfiguracionInicialWizard() {
         {/* Columna derecha: Resumen/Ayuda (1/3) */}
         <div className="space-y-6">
           {/* Progreso */}
-          <Card className="border-border sticky top-6">
-            <CardContent className="p-6">
+          <Card className="sticky top-6">
+            <CardContent>
               <h3 className="font-semibold mb-4">Progreso</h3>
               <div className="space-y-3">
                 <div className="flex justify-between text-sm">
@@ -678,8 +678,8 @@ export default function ConfiguracionInicialWizard() {
           </Card>
 
           {/* Ayuda contextual */}
-          <Card className="border-border">
-            <CardContent className="p-6">
+          <Card>
+            <CardContent>
               <h3 className="font-semibold mb-3">Ayuda</h3>
               {etapaActual === 1 && (
                 <p className="text-sm text-muted-foreground">

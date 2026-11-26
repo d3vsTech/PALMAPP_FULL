@@ -12,11 +12,11 @@
  */
 import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
+import { Card, CardContent, CardHeader } from '../../../components/ui/card';
+import PageHeader from '../../../components/common/PageHeader';
+import StatStrip from '../../../components/common/StatStrip';
 import { Button } from '../../../components/ui/button';
-import { Badge } from '../../../components/ui/badge';
 import { Label } from '../../../components/ui/label';
-import { Checkbox } from '../../../components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -24,15 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../../components/ui/select';
-import {
-  AlertTriangle,
-  ArrowLeft,
-  CheckCircle2,
-  FileSpreadsheet,
-  Info,
-  Loader2,
-  Upload,
-} from 'lucide-react';
+import { AlertCircle, AlertTriangle, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../../contexts/AuthContext';
 import {
@@ -40,7 +32,6 @@ import {
   aniosCargables,
   ACCEPT_ARCHIVO,
   ADVERTENCIA_FILA_LABEL,
-  ESTADO_FILA_BADGE,
   ESTADO_FILA_LABEL,
   ERROR_FILA_LABEL,
   HistoricoArchivoErrorCodes as E,
@@ -50,15 +41,26 @@ import {
 } from '../../../../api/historicoCesantias';
 import { descargarBlob, fmtCOP, fmtFecha } from '../final/comunes';
 import {
+  Aviso,
+  BadgeDetectados,
+  BadgeEstadoFila,
+  BarraSubida,
+  CasillaSobrescribir,
+  ExitoCargue,
   CabecerasIgnoradas,
   CeldaColaborador,
+  CeldaObservacion,
   EstadoValidacion,
   IncidenciasFila,
+  LineaMora,
   BotonesPlantilla,
   PasoCard,
   Regla,
   VistaPreviaPlantilla,
   ZonaArchivo,
+  TD,
+  TH,
+  THEAD,
   esApiError,
   mensajeArchivo,
 } from './comunes';
@@ -209,39 +211,24 @@ export default function CargaHistoricoCesantias() {
   );
   const listoParaCargar =
     Boolean(archivo) && Boolean(analisis) && !hayErrores && !validando && !cargando && !cargado;
+  const aCargar = (resumen?.validas ?? 0) + (resumen?.a_sobrescribir ?? 0);
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate('/liquidaciones?tab=cesantias')}
-          className="gap-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Volver a Liquidaciones
-        </Button>
-
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-            <FileSpreadsheet className="h-6 w-6 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-primary sm:text-3xl">Cargar histórico de cesantías</h1>
-            <p className="mt-0.5 text-muted-foreground">
-              Registre lo que ya consignó y pagó antes de usar el sistema. Un archivo por año.
-            </p>
-          </div>
-        </div>
-      </div>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeader
+        backTo="/liquidaciones?tab=cesantias"
+        eyebrow="Cesantías"
+        title="Cargar histórico de cesantías"
+        description="Registra lo que ya consignaste y pagaste antes de usar el sistema. Un archivo por año."
+      />
 
       {/* Paso 1: plantilla + el año, que en cesantías no va dentro del
           archivo sino que se elige aquí. */}
       <PasoCard
         n={1}
         titulo="Descarga la plantilla"
-        subtitulo="Usa esta plantilla para preparar tus datos correctamente"
+        subtitulo="Prepara tus datos con las columnas que espera el sistema."
+        contenidoClassName="space-y-2"
         accion={
           <BotonesPlantilla
             descargando={descargandoPlantilla}
@@ -249,12 +236,11 @@ export default function CargaHistoricoCesantias() {
           />
         }
       >
-        <VistaPreviaPlantilla columnas={COLUMNAS_PLANTILLA} filas={FILAS_EJEMPLO} />
+        <VistaPreviaPlantilla columnas={COLUMNAS_PLANTILLA} filas={FILAS_EJEMPLO} formatos=".xlsx, .xls y .csv" />
 
         <p className="text-xs text-muted-foreground">
           La plantilla trae estas columnas y la cédula en formato de texto, que es lo que
-          evita que Excel le quite los ceros de la izquierda. Formatos aceptados:{' '}
-          <strong className="text-foreground">.xlsx, .xls, .csv</strong>. Las fechas se leen
+          evita que Excel le quite los ceros de la izquierda. Las fechas se leen
           como día/mes: <strong className="text-foreground">10/02/2024 es el 10 de febrero</strong>.
         </p>
       </PasoCard>
@@ -263,7 +249,7 @@ export default function CargaHistoricoCesantias() {
       <PasoCard
         n={2}
         titulo="Carga tu archivo"
-        subtitulo="Arrastra el archivo o haz clic para seleccionarlo"
+        subtitulo="Arrastra el archivo o haz clic para seleccionarlo."
       >
         {/* El año va aquí y no en el paso 1: el paso 1 solo baja la plantilla,
             y el año es lo que define contra qué se valida este archivo. */}
@@ -293,6 +279,7 @@ export default function CargaHistoricoCesantias() {
           analisis={analisis?.archivo}
           inputRef={inputRef}
           accept={ACCEPT_ARCHIVO}
+          bloqueado={cargando}
           onArchivo={elegirArchivo}
           onQuitar={limpiar}
           detalle={
@@ -314,140 +301,109 @@ export default function CargaHistoricoCesantias() {
         {analisis && <CabecerasIgnoradas cabeceras={analisis.archivo.cabeceras_ignoradas} />}
 
         {analisis?.periodos.cesantias && !cargado && (
-          <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/30 dark:bg-amber-950/30 dark:text-amber-400">
-            <Info className="mt-0.5 h-4 w-4 shrink-0" />
+          <Aviso tono="info" icono={Info}>
             El año {analisis.anio} ya tiene un histórico cargado con{' '}
-            {analisis.periodos.cesantias.total_colaboradores} colaboradores. Lo que suba ahora
+            {analisis.periodos.cesantias.total_colaboradores} colaboradores. Lo que subas ahora
             se agrega a ese mismo período.
-          </p>
+          </Aviso>
         )}
       </PasoCard>
 
       {/* Paso 3: revisión */}
       {analisis && resumen && (
-        <Card>
-          <CardHeader className="border-b">
-            <CardTitle>3. Revise antes de cargar</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 p-6">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-lg border border-border p-3">
-                <p className="text-xs text-muted-foreground">Se cargan</p>
-                <p className="text-2xl font-bold text-success">{resumen.validas}</p>
-              </div>
-              <div className="rounded-lg border border-border p-3">
-                <p className="text-xs text-muted-foreground">Reemplazan</p>
-                <p className="text-2xl font-bold text-amber-600">{resumen.a_sobrescribir}</p>
-              </div>
-              <div className="rounded-lg border border-border p-3">
-                <p className="text-xs text-muted-foreground">Con error</p>
-                <p
-                  className={`text-2xl font-bold ${
-                    hayErrores ? 'text-destructive' : 'text-muted-foreground'
-                  }`}
-                >
-                  {resumen.con_error}
-                </p>
-              </div>
-              <div className="rounded-lg border border-border p-3">
-                <p className="text-xs text-muted-foreground">Total cesantías</p>
-                <p className="text-lg font-bold text-foreground">
-                  {fmtCOP(resumen.total_cesantias)}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  intereses {fmtCOP(resumen.total_intereses)}
-                </p>
-              </div>
-            </div>
+        <PasoCard
+          n={3}
+          titulo="Revisa los datos"
+          subtitulo="Confirma que todo esté bien antes de subirlo."
+          accion={<BadgeDetectados total={analisis.archivo.filas_leidas} />}
+          contenidoClassName="space-y-6"
+        >
+            <StatStrip
+              items={[
+                { label: 'Se cargan', value: resumen.validas },
+                { label: 'Reemplazan', value: resumen.a_sobrescribir },
+                {
+                  label: 'Con error',
+                  value: hayErrores ? <span className="text-destructive">{resumen.con_error}</span> : resumen.con_error,
+                },
+                {
+                  label: 'Total cesantías',
+                  value: fmtCOP(resumen.total_cesantias),
+                  note: `Intereses ${fmtCOP(resumen.total_intereses)}`,
+                },
+              ]}
+            />
 
             {analisis.advertencias.map((a, i) => (
               <p
                 key={`${a.code}-${i}`}
                 className="flex items-start gap-2 text-sm text-muted-foreground"
               >
-                <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                <Info className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
                 {a.mensaje}
               </p>
             ))}
 
             {hayYaCargados && (
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/30 dark:bg-amber-950/30">
-                <Checkbox
-                  checked={sobrescribir}
-                  onCheckedChange={(v) => cambiarSobrescribir(v === true)}
-                  className="mt-0.5"
-                />
-                <div>
-                  <p className="text-sm font-medium">Reemplazar a los que ya estaban cargados</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Hay colaboradores con ese año ya registrado. Sin marcar esta casilla el
-                    archivo no se puede cargar.
-                  </p>
-                </div>
-              </label>
+              <CasillaSobrescribir
+                checked={sobrescribir}
+                onChange={cambiarSobrescribir}
+                titulo="Reemplazar a los que ya estaban cargados"
+              >
+                Hay colaboradores con ese año ya registrado. Sin marcar esta casilla el
+                archivo no se puede subir.
+              </CasillaSobrescribir>
             )}
 
             <TablaFilas filas={analisis.filas} />
 
             {hayErrores && (
-              <p className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <Aviso tono="destructive" icono={AlertCircle}>
                 Hay {resumen.con_error} fila{resumen.con_error === 1 ? '' : 's'} con error. El
-                cargue es todo o nada: corrija el Excel y vuelva a subirlo.
-              </p>
+                cargue es todo o nada: corrige el Excel y vuelve a subirlo.
+              </Aviso>
             )}
 
             {cargado ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-success/30 bg-success/5 p-4">
-                <p className="flex items-center gap-2 text-sm font-medium text-success">
-                  <CheckCircle2 className="h-4 w-4" />
-                  Histórico de {analisis.anio} cargado.
-                </p>
-                <div className="flex gap-2">
-                  {analisis.periodos.cesantias && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        navigate(`/liquidaciones/cesantias/${analisis.periodos.cesantias!.id}`)
-                      }
-                    >
-                      Ver cesantías
-                    </Button>
-                  )}
-                  <Button size="sm" onClick={limpiar}>
-                    Cargar otro año
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex justify-end">
-                <Button
-                  onClick={() => void cargar()}
-                  disabled={!listoParaCargar || !puedeCargar}
-                  className="gap-2"
-                >
-                  {cargando ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Upload className="h-4 w-4" />
-                  )}
-                  Cargar {resumen.validas + resumen.a_sobrescribir} colaborador
-                  {resumen.validas + resumen.a_sobrescribir === 1 ? '' : 'es'}
+              <ExitoCargue total={aCargar} modulo="cesantías">
+                <Button variant="outline" onClick={limpiar}>
+                  Cargar otro archivo
                 </Button>
-              </div>
+                {/* Siempre hay salida: con el período a la vista se entra a él,
+                    y sin él a la pestaña. */}
+                <Button
+                  onClick={() =>
+                    navigate(
+                      analisis.periodos.cesantias
+                        ? `/liquidaciones/cesantias/${analisis.periodos.cesantias.id}`
+                        : '/liquidaciones?tab=cesantias',
+                    )
+                  }
+                >
+                  Ir a cesantías
+                </Button>
+              </ExitoCargue>
+            ) : (
+              <BarraSubida
+                total={aCargar}
+                modulo="cesantías"
+                bloqueado={hayErrores}
+                cargando={cargando}
+                deshabilitado={!listoParaCargar || !puedeCargar}
+                onCancelar={limpiar}
+                onSubir={() => void cargar()}
+              />
             )}
-          </CardContent>
-        </Card>
+        </PasoCard>
       )}
 
       {/* Las mismas reglas que trae la hoja de instrucciones de la plantilla,
           aquí donde se leen antes de subir el archivo. */}
-      <Card className="border-border">
-        <CardHeader className="border-b">
-          <CardTitle className="text-base">Cómo llenar el archivo</CardTitle>
+      <Card className="gap-4">
+        <CardHeader>
+          <h3>Cómo llenar el archivo</h3>
         </CardHeader>
-        <CardContent className="space-y-5 p-6">
+        <CardContent className="space-y-5">
           <div className="space-y-2 text-sm text-muted-foreground">
             <Regla n={1}>
               <strong className="text-foreground">Un archivo por año.</strong> El año se elige
@@ -463,7 +419,7 @@ export default function CargaHistoricoCesantias() {
             </Regla>
             <Regla n={4}>
               <strong className="text-foreground">Fecha de consignación</strong>, opcional.
-              AÑO-MES-DÍA o DÍA/MES/AÑO. Si la deja vacía se usa el 14 de febrero del año
+              AÑO-MES-DÍA o DÍA/MES/AÑO. Si la dejas vacía se usa el 14 de febrero del año
               siguiente, que es la fecha límite legal.
             </Regla>
             <Regla n={5}>
@@ -505,16 +461,15 @@ export default function CargaHistoricoCesantias() {
               así que la de instrucciones de la plantilla se ignora.
             </Regla>
             <Regla n={13}>
-              También se acepta CSV. Si lo guarda desde Excel en español el separador es el punto
-              y coma; el sistema lo detecta solo y le dice arriba cómo lo leyó.
+              También se acepta CSV. Si lo guardas desde Excel en español el separador es el punto
+              y coma; el sistema lo detecta solo y te dice arriba cómo lo leyó.
             </Regla>
           </div>
 
-          <p className="flex items-start gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+          <Aviso tono="warning" icono={AlertTriangle}>
             Las fechas se leen como día/mes. <strong>10/02/2024 es el 10 de febrero</strong>, no el
-            2 de octubre. Revíselas en la tabla antes de cargar.
-          </p>
+            2 de octubre. Revísalas en la tabla antes de subir.
+          </Aviso>
         </CardContent>
       </Card>
     </div>
@@ -525,41 +480,33 @@ export default function CargaHistoricoCesantias() {
 
 function TablaFilas({ filas }: { filas: FilaHistorico[] }) {
   if (filas.length === 0) {
-    return <p className="py-6 text-center text-sm text-muted-foreground">El archivo está vacío.</p>;
+    return <p className="rounded-lg bg-muted/60 py-6 text-center text-sm text-muted-foreground">El archivo está vacío.</p>;
   }
 
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full">
-        <thead>
-          <tr className="border-b border-border bg-muted/30">
-            <th className="p-3 text-left text-xs font-semibold text-muted-foreground">Fila</th>
-            <th className="p-3 text-left text-xs font-semibold text-muted-foreground">
-              Colaborador
-            </th>
-            <th className="hidden p-3 text-left text-xs font-semibold text-muted-foreground md:table-cell">
-              Días
-            </th>
-            <th className="p-3 text-right text-xs font-semibold text-muted-foreground">
-              Cesantías
-            </th>
-            <th className="p-3 text-right text-xs font-semibold text-muted-foreground">
-              Intereses
-            </th>
-            <th className="p-3 text-left text-xs font-semibold text-muted-foreground">Estado</th>
+      <table className="w-full text-sm">
+        <thead className={THEAD}>
+          <tr>
+            <th className={`${TH} w-8`}>#</th>
+            <th className={TH}>Colaborador</th>
+            <th className={`${TH} hidden md:table-cell`}>Días</th>
+            <th className={`${TH} text-right`}>Cesantías</th>
+            <th className={`${TH} hidden lg:table-cell`}>Fondo</th>
+            <th className={`${TH} text-right`}>Intereses</th>
+            <th className={`${TH} hidden xl:table-cell`}>Observación</th>
+            <th className={TH}>Estado</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-border">
           {filas.map((f) => (
             <tr
               key={f.fila}
-              className={`border-b border-border last:border-0 ${
-                f.estado === 'ERROR' ? 'bg-destructive/[0.03]' : ''
-              }`}
+              className={f.estado === 'ERROR' ? 'bg-destructive-soft/40' : undefined}
             >
-              <td className="p-3 align-top text-sm text-muted-foreground">{f.fila}</td>
+              <td className={`${TD} text-xs text-muted-foreground`}>{f.fila}</td>
 
-              <td className="p-3 align-top">
+              <td className={TD}>
                 <CeldaColaborador
                   nombre={f.empleado?.nombre_completo}
                   documento={f.empleado?.documento}
@@ -575,12 +522,12 @@ function TablaFilas({ filas }: { filas: FilaHistorico[] }) {
                 />
               </td>
 
-              <td className="hidden p-3 align-top text-sm text-muted-foreground md:table-cell">
+              <td className={`${TD} hidden text-muted-foreground md:table-cell`}>
                 {f.dias ? `${f.dias.dias_computados}` : '—'}
               </td>
 
-              <td className="p-3 align-top text-right">
-                <p className="text-sm font-medium">
+              <td className={`${TD} text-right`}>
+                <p className="font-medium tabular-nums text-foreground">
                   {f.cesantias?.valor != null ? fmtCOP(f.cesantias.valor) : '—'}
                 </p>
                 {f.cesantias?.fecha_consignacion && (
@@ -589,10 +536,21 @@ function TablaFilas({ filas }: { filas: FilaHistorico[] }) {
                     {f.cesantias.fecha_por_defecto && ' (por defecto)'}
                   </p>
                 )}
+                <LineaMora dias={f.cesantias?.dias_mora} />
               </td>
 
-              <td className="p-3 align-top text-right">
-                <p className="text-sm font-medium">
+              {/* El fondo es columna de la plantilla y, vacía, lo toma de la
+                  ficha: sin verlo aquí nadie sabe a qué fondo quedó. */}
+              <td className={`${TD} hidden text-xs lg:table-cell`}>
+                {f.cesantias?.fondo ? (
+                  <span className="break-words text-foreground">{f.cesantias.fondo}</span>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </td>
+
+              <td className={`${TD} text-right`}>
+                <p className="font-medium tabular-nums text-foreground">
                   {f.intereses?.valor ? fmtCOP(f.intereses.valor) : '—'}
                 </p>
                 {f.intereses?.fecha_pago && (
@@ -601,12 +559,29 @@ function TablaFilas({ filas }: { filas: FilaHistorico[] }) {
                     {f.intereses.fecha_por_defecto && ' (por defecto)'}
                   </p>
                 )}
+                {/* El 12 % legal al lado de lo cargado: la advertencia dice que
+                    difieren, esta línea dice de cuánto es la diferencia. */}
+                {f.intereses?.esperado != null &&
+                  f.intereses.valor != null &&
+                  f.intereses.esperado !== f.intereses.valor && (
+                    <p className="text-xs text-warning">legal: {fmtCOP(f.intereses.esperado)}</p>
+                  )}
+                {f.intereses?.dias_base != null && (
+                  <p className="text-xs text-muted-foreground">
+                    sobre {f.intereses.dias_base} días
+                  </p>
+                )}
+                <LineaMora dias={f.intereses?.dias_mora} />
               </td>
 
-              <td className="p-3 align-top">
-                <Badge variant="outline" className={ESTADO_FILA_BADGE[f.estado]}>
+              <td className={`${TD} hidden xl:table-cell`}>
+                <CeldaObservacion texto={f.observacion} />
+              </td>
+
+              <td className={TD}>
+                <BadgeEstadoFila estado={f.estado}>
                   {ESTADO_FILA_LABEL[f.estado]}
-                </Badge>
+                </BadgeEstadoFila>
               </td>
             </tr>
           ))}

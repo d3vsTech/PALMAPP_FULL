@@ -328,7 +328,7 @@ export default function EditarProducto() {
                     <CardTitle>Precios por Volumen</CardTitle>
                     <p className="text-sm text-muted-foreground mt-1">Opcional: Ofrece descuentos por cantidad</p>
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={agregarPV} className="gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={agregarPV}>
                     <Plus className="h-4 w-4" />
                     Agregar
                   </Button>
@@ -387,7 +387,7 @@ export default function EditarProducto() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Imagen del producto */}
-            <Card>
+            <Card className="overflow-hidden">
               <CardHeader>
                 <CardTitle>Imagen del Producto</CardTitle>
                 <p className="text-sm text-muted-foreground">Opcional</p>
@@ -456,7 +456,7 @@ export default function EditarProducto() {
         {/* Acciones al pie del formulario. Antes vivían en una card lateral,
             a media altura: quien llenaba el formulario hacia abajo terminaba
             con el botón fuera de vista. */}
-        <div className="flex flex-wrap justify-end gap-3">
+        <div className="barra-acciones flex flex-wrap justify-end gap-3">
           <Button
             type="button"
             variant="outline"
@@ -465,7 +465,7 @@ export default function EditarProducto() {
           >
             Cancelar
           </Button>
-          <Button type="submit" className="gap-2" disabled={enviando}>
+          <Button type="submit"  disabled={enviando}>
             {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {enviando ? 'Guardando...' : 'Guardar Cambios'}
           </Button>

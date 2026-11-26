@@ -1,23 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router';
+import { useParams, useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
+import PageHeader from '../../components/common/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '../../components/ui/breadcrumb';
-import {
-  ArrowLeft,
   Download,
-  FileText,
-  TrendingUp,
-  TrendingDown,
-  Calendar as CalendarIcon,
   Loader2,
   MessageCircle,
   Printer,
@@ -28,14 +16,8 @@ import { nominaApi, type DesprendibleData } from '../../../api/nomina';
 import { nombreArchivoDesprendible } from './DesprendiblePago';
 import type { ApiError } from '../../../api/client';
 import { imprimirPdf } from '../../lib/pdf/imprimirPdf';
+import { Eyebrow, FilaMonto } from '../../components/nomina/piezas';
 import { lineasAusenciasRemuneradas, motivosRemunerados } from '../../components/nomina/ausenciasRemuneradas';
-
-function getIniciales(nombre: string): string {
-  const partes = nombre.trim().split(' ').filter(Boolean);
-  if (partes.length === 0) return '?';
-  if (partes.length === 1) return partes[0].substring(0, 2).toUpperCase();
-  return `${partes[0][0]}${partes[1][0]}`.toUpperCase();
-}
 
 function fmt(n: number | null | undefined): string {
   // Guardamos contra null/undefined que llegan del backend cuando la
@@ -46,22 +28,6 @@ function fmt(n: number | null | undefined): string {
   return `$${num.toLocaleString('es-CO')}`;
 }
 
-function Item({
-  label,
-  value,
-  destructivo,
-}: {
-  label: string;
-  value: string;
-  destructivo?: boolean;
-}) {
-  return (
-    <div className="flex justify-between text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={`font-semibold ${destructivo ? 'text-destructive' : ''}`}>{value}</span>
-    </div>
-  );
-}
 
 export default function VerLiquidacion() {
   const { nominaId, colaboradorId } = useParams();
@@ -137,299 +103,193 @@ export default function VerLiquidacion() {
 
   if (cargando) {
     return (
-      <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" />
+      <Card className="flex-row items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
         Cargando liquidación...
-      </div>
+      </Card>
     );
   }
 
   if (!data) {
     return (
-      <div className="text-center py-20 text-muted-foreground">
-        Liquidación no encontrada.
+      <div className="space-y-6">
+        <PageHeader
+          backTo={`/nomina/${nominaId}`}
+          title="No encontrado"
+          description="No se encontró la información de liquidación."
+        />
       </div>
     );
   }
 
   const { empleado, nomina, liquidacion } = data;
+  const detalleHorasExtra = (liquidacion as { detalle_horas_extra?: { tipo_nombre?: string; codigo?: string }[] })
+    .detalle_horas_extra ?? [];
+  const etiquetaHorasExtra = detalleHorasExtra.length > 0
+    ? `Horas extra · ${Array.from(new Set(
+      detalleHorasExtra.map((h) => h.tipo_nombre || h.codigo).filter(Boolean),
+    )).join(', ')}`
+    : 'Horas extra';
+  const ausencias = liquidacion.total_incapacidades > 0
+    ? lineasAusenciasRemuneradas({
+      resumen: liquidacion.ausencias_remuneradas_resumen,
+      etiqueta: liquidacion.etiqueta_ausencias_remuneradas,
+      total: liquidacion.total_incapacidades,
+      motivos: motivosRemunerados(liquidacion.detalle_ausencias),
+    })
+    : [];
+  // Aportes de ley arriba, como Salud y Pensión del diseño; el resto debajo.
+  const legales = liquidacion.deducciones.filter((d) => d.porcentaje != null);
+  const otrasDeducciones = liquidacion.deducciones.filter((d) => d.porcentaje == null);
+  const etiquetaDeduccion = (d: (typeof liquidacion.deducciones)[number]) =>
+    d.nombre
+    + (d.porcentaje != null && d.base != null ? ` (${d.porcentaje} % sobre ${fmt(d.base)})` : '')
+    + (d.observacion ? ` · ${d.observacion}` : '');
 
   return (
     <div className="space-y-6">
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link to="/nomina">Nómina</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link to={`/nomina/${nominaId}`}>{nomina.periodo_label}</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>Liquidación</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
+      <PageHeader
+        backTo={`/nomina/${nominaId}`}
+        eyebrow={`Liquidación · ${nomina.periodo_label}`}
+        title={
+          <span className="flex flex-wrap items-center gap-3">
+            {empleado.nombre_completo}
+            {empleado.salario_tipo && <Badge variant="outline">{empleado.salario_tipo}</Badge>}
+          </span>
+        }
+        description={[
+          `C.C. ${empleado.documento}`,
+          empleado.cargo,
+          `${liquidacion.dias_trabajados} días trabajados`,
+        ].filter(Boolean).join(' · ')}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => void pedirPdf('imprimir')} disabled={descargando}>
+              <Printer strokeWidth={2} />
+              Imprimir
+            </Button>
+            <Button variant="outline" onClick={enviarWhatsapp} disabled={generandoWa}>
+              {generandoWa
+                ? <Loader2 className="animate-spin" strokeWidth={2} />
+                : <MessageCircle strokeWidth={2} />}
+              Enviar por WhatsApp
+            </Button>
+            <Button variant="outline" onClick={() => void pedirPdf('descargar')} disabled={descargando}>
+              {descargando
+                ? <Loader2 className="animate-spin" strokeWidth={2} />
+                : <Download strokeWidth={2} />}
+              Descargar PDF
+            </Button>
+          </>
+        }
+      />
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate(`/nomina/${nominaId}`)}
-            className="mb-4 gap-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Volver
-          </Button>
-          <div className="flex items-center gap-4">
-            <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center border-2 border-primary/20">
-              <span className="text-xl font-bold text-primary">
-                {getIniciales(empleado.nombre_completo)}
-              </span>
-            </div>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-primary">{empleado.nombre_completo}</h1>
-              <div className="flex items-center gap-3 mt-2">
-                <Badge variant="outline">{empleado.salario_tipo}</Badge>
-                <span className="text-muted-foreground">·</span>
-                <span className="text-muted-foreground">{empleado.cargo}</span>
-                <span className="text-muted-foreground">·</span>
-                <span className="text-muted-foreground">{nomina.periodo_label}</span>
+      {/* Liquidación: conceptos a la izquierda, resumen fijo a la derecha. */}
+      <div className="grid gap-6 lg:grid-cols-[1fr_360px] lg:items-start">
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Devengado</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {liquidacion.total_jornales > 0 && (
+                <FilaMonto label="Sueldo base" value={fmt(liquidacion.total_jornales)} />
+              )}
+              {liquidacion.total_cosecha > 0 && (
+                <FilaMonto label="Cosecha" value={fmt(liquidacion.total_cosecha)} />
+              )}
+              {liquidacion.total_horas_extra > 0 && (
+                <FilaMonto label={etiquetaHorasExtra} value={fmt(liquidacion.total_horas_extra)} />
+              )}
+              {liquidacion.total_recargos > 0 && (
+                <FilaMonto label="Recargos" value={fmt(liquidacion.total_recargos)} />
+              )}
+              {ausencias.map((linea) => (
+                <FilaMonto
+                  key={linea.clave}
+                  label={linea.detalle ? `${linea.etiqueta} · ${linea.detalle}` : linea.etiqueta}
+                  value={fmt(linea.valor)}
+                />
+              ))}
+              <FilaMonto
+                label="Total devengado"
+                value={fmt((liquidacion.total_devengado ?? 0) + (liquidacion.total_bonificaciones ?? 0))}
+                strong
+                className="border-t border-border pt-2"
+              />
+              <FilaMonto label="Subsidio de transporte" value={fmt(liquidacion.subsidio_transporte)} className="pt-2" />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Deducciones</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {legales.map((d, i) => (
+                <FilaMonto key={`l-${i}`} label={etiquetaDeduccion(d)} value={fmt(d.valor)} />
+              ))}
+              <div className={`space-y-2 ${legales.length > 0 ? 'border-t border-border pt-3' : ''}`}>
+                <Eyebrow>Adelantos y descuentos</Eyebrow>
+                {otrasDeducciones.length > 0
+                  ? otrasDeducciones.map((d, i) => (
+                    <FilaMonto key={`o-${i}`} label={etiquetaDeduccion(d)} value={fmt(d.valor)} />
+                  ))
+                  : <FilaMonto label="Sin adelantos ni descuentos" value="$0" />}
+                <FilaMonto label="Total deducciones" value={fmt(liquidacion.total_deducciones)} strong />
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Bonificación</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {liquidacion.bonificaciones.length === 0 && <FilaMonto label="Bonificación" value="$0" />}
+              {liquidacion.bonificaciones.map((b, i) => (
+                <FilaMonto
+                  key={i}
+                  label={b.nombre + (b.observacion ? ` (${b.observacion})` : '')}
+                  value={fmt(b.valor)}
+                />
+              ))}
+            </CardContent>
+          </Card>
         </div>
 
+        <Card className="lg:sticky lg:top-6">
+          <CardHeader>
+            <CardTitle>Resumen</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Eyebrow>Ingresos</Eyebrow>
+              <FilaMonto label="Total bruto" value={fmt(liquidacion.total_devengado)} />
+              <FilaMonto label="Subsidio de transporte" value={fmt(liquidacion.subsidio_transporte)} />
+              <FilaMonto label="Bonificaciones" value={fmt(liquidacion.total_bonificaciones)} />
+            </div>
+            <div className="space-y-2">
+              <Eyebrow>Deducciones</Eyebrow>
+              <FilaMonto label="Total deducciones" value={`−${fmt(liquidacion.total_deducciones)}`} />
+            </div>
+            <div className="flex items-baseline justify-between gap-4 border-t border-border pt-4">
+              <span className="font-semibold text-foreground">Total neto</span>
+              <span className="text-2xl font-bold tabular-nums text-foreground">{fmt(liquidacion.total_neto)}</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {[data.finca, liquidacion.liquidado_por && `Liquidado por ${liquidacion.liquidado_por}`, liquidacion.fecha_humana]
+                .filter(Boolean).join(' · ')}
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
-      <Card className="border-border">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <FileText className="h-6 w-6 text-primary" />
-            Información del período
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <p className="text-xs text-muted-foreground">Finca</p>
-              <p className="font-medium">{data.finca}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Documento</p>
-              <p className="font-medium">{empleado.documento}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Período</p>
-              <p className="font-medium">
-                {nomina.fecha_inicio} → {nomina.fecha_fin}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Liquidado por</p>
-              <p className="font-medium">{liquidacion.liquidado_por}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-border">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <TrendingUp className="h-6 w-6 text-success" />
-            Devengado
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2 bg-success/5 p-4 rounded-lg border border-success/20">
-            <Item label="Días trabajados" value={String(liquidacion.dias_trabajados)} />
-            {liquidacion.total_jornales > 0 && (
-              <Item label="Jornales" value={fmt(liquidacion.total_jornales)} />
-            )}
-            {liquidacion.total_cosecha > 0 && (
-              <Item label="Cosecha" value={fmt(liquidacion.total_cosecha)} />
-            )}
-            {liquidacion.total_horas_extra > 0 && (
-              <Item
-                label={
-                  (liquidacion as any).detalle_horas_extra?.length > 0
-                    ? `Horas extra · ${Array.from(new Set(
-                        ((liquidacion as any).detalle_horas_extra as any[])
-                          .map((h) => h.tipo_nombre || h.codigo).filter(Boolean),
-                      )).join(', ')}`
-                    : 'Horas extra'
-                }
-                value={fmt(liquidacion.total_horas_extra)}
-              />
-            )}
-            {liquidacion.total_recargos > 0 && (
-              <Item label="Recargos" value={fmt(liquidacion.total_recargos)} />
-            )}
-            {liquidacion.total_incapacidades > 0 && lineasAusenciasRemuneradas({
-              resumen: liquidacion.ausencias_remuneradas_resumen,
-              etiqueta: liquidacion.etiqueta_ausencias_remuneradas,
-              total: liquidacion.total_incapacidades,
-              motivos: motivosRemunerados(liquidacion.detalle_ausencias),
-            }).map((linea) => (
-              <Item
-                key={linea.clave}
-                label={linea.detalle ? `${linea.etiqueta} · ${linea.detalle}` : linea.etiqueta}
-                value={fmt(linea.valor)}
-              />
-            ))}
-            {liquidacion.bonificaciones.length > 0 && (
-              <>
-                <p className="text-xs font-semibold mt-3 mb-1">Bonificaciones</p>
-                {liquidacion.bonificaciones.map((b, i) => (
-                  <Item
-                    key={i}
-                    label={b.nombre + (b.observacion ? ` (${b.observacion})` : '')}
-                    value={fmt(b.valor)}
-                  />
-                ))}
-              </>
-            )}
-            <div className="flex justify-between pt-2 border-t border-success/30">
-              <span className="font-bold text-success">Total devengado</span>
-              <span className="font-bold text-lg text-success">
-                {fmt((liquidacion.total_devengado ?? 0) + (liquidacion.total_bonificaciones ?? 0))}
-              </span>
-            </div>
-            <Item label="Subsidio transporte" value={fmt(liquidacion.subsidio_transporte)} />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-border">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <TrendingDown className="h-6 w-6 text-destructive" />
-            Deducciones
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2 bg-destructive/5 p-4 rounded-lg border border-destructive/20">
-            {liquidacion.deducciones.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center">No aplica</p>
-            ) : (
-              liquidacion.deducciones.map((d, i) => (
-                <Item
-                  key={i}
-                  label={
-                    d.nombre +
-                    (d.porcentaje != null && d.base != null
-                      ? ` (${d.porcentaje}% sobre ${fmt(d.base)})`
-                      : '') +
-                    (d.observacion ? ` — ${d.observacion}` : '')
-                  }
-                  value={fmt(d.valor)}
-                  destructivo
-                />
-              ))
-            )}
-            <div className="flex justify-between pt-2 border-t border-destructive/30">
-              <span className="font-semibold">Total deducciones</span>
-              <span className="font-semibold text-destructive">
-                {fmt(liquidacion.total_deducciones)}
-              </span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Resumen Final — layout V.15: 2 columnas */}
-      <Card className="border-2 border-primary bg-primary/5">
-        <CardContent className="p-6 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-            <div className="space-y-3">
-              <h4 className="text-sm font-semibold text-success mb-3">+ INGRESOS</h4>
-              <div>
-                <p className="text-sm text-muted-foreground">Devengado</p>
-                <p className="font-bold text-lg text-success">{fmt(liquidacion.total_devengado)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Subsidio Transporte</p>
-                <p className="font-bold text-lg text-success">{fmt(liquidacion.subsidio_transporte)}</p>
-              </div>
-              {liquidacion.total_bonificaciones > 0 && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Bonificaciones</p>
-                  <p className="font-bold text-lg text-success">{fmt(liquidacion.total_bonificaciones)}</p>
-                </div>
-              )}
-            </div>
-            <div className="space-y-3">
-              <h4 className="text-sm font-semibold text-destructive mb-3">- DEDUCCIONES</h4>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Deducciones</p>
-                <p className="font-bold text-lg text-destructive">-{fmt(liquidacion.total_deducciones)}</p>
-              </div>
-            </div>
-          </div>
-          <div className="flex justify-between pt-4 border-t-2 border-primary/30">
-            <div>
-              <span className="font-bold text-2xl">TOTAL NETO</span>
-              <p className="text-xs text-muted-foreground mt-1">{liquidacion.fecha_humana}</p>
-            </div>
-            <span className="font-bold text-2xl sm:text-3xl text-primary">{fmt(liquidacion.total_neto)}</span>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Botones de acción - NO SE IMPRIME */}
-      <div className="print:hidden grid grid-cols-2 lg:grid-cols-5 gap-4 max-w-4xl mx-auto">
-        <Button
-          variant="outline"
-          size="lg"
-          onClick={() => navigate(`/nomina/${nominaId}`)}
-          className="gap-2"
-        >
-          <ArrowLeft className="h-5 w-5" />
-          Volver
-        </Button>
-        <Button
-          size="lg"
-          onClick={() => navigate(`/nomina/${nominaId}`)}
-          className="gap-2 bg-success hover:bg-success/90"
-        >
-          <Check className="h-5 w-5" />
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end print:hidden">
+        <Button variant="outline" onClick={() => navigate(`/nomina/${nominaId}`)}>Volver</Button>
+        <Button onClick={() => navigate(`/nomina/${nominaId}`)}>
+          <Check strokeWidth={2} />
           Aceptar
-        </Button>
-        <Button
-          variant="outline"
-          size="lg"
-          onClick={() => void pedirPdf('imprimir')}
-          disabled={descargando}
-          className="gap-2"
-        >
-          <Printer className="h-5 w-5" />
-          Imprimir
-        </Button>
-        <Button
-          variant="outline"
-          size="lg"
-          onClick={enviarWhatsapp}
-          disabled={generandoWa}
-          className="gap-2 text-primary border-primary hover:bg-primary/5"
-        >
-          {generandoWa ? <Loader2 className="h-5 w-5 animate-spin" /> : <MessageCircle className="h-5 w-5" />}
-          WhatsApp
-        </Button>
-        <Button
-          variant="outline"
-          size="lg"
-          onClick={() => void pedirPdf('descargar')}
-          disabled={descargando}
-          className="gap-2"
-        >
-          {descargando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
-          Descargar PDF
         </Button>
       </div>
     </div>

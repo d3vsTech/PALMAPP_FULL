@@ -190,7 +190,7 @@ export function ModalReintentoEpayco({ open, codigoPedido, onClose }: Props) {
           <Button variant="outline" onClick={onClose} disabled={enviando}>
             Cancelar
           </Button>
-          <Button onClick={iniciar} disabled={enviando} className="gap-2">
+          <Button onClick={iniciar} disabled={enviando}>
             {enviando && <Loader2 className="h-4 w-4 animate-spin" />}
             Pagar con ePayco
           </Button>

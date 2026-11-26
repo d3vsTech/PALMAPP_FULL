@@ -138,7 +138,12 @@ export interface CierreAutomaticoNomina {
   detalle?: {
     nomina_empleado_ids?: number[];
     vacaciones?: Array<Record<string, unknown>>;
-    colaboradores?: ColaboradorConNovedadesPendientes[];
+    colaboradores?: Array<ColaboradorConNovedadesPendientes | ColaboradorConVacacionTrabajada>;
+    /**
+     * PR-V2 — `NOMINA_CON_VACACION_TRABAJADA` se puede saltar desde el cierre
+     * manual con motivo. El cierre automático **nunca** fuerza.
+     */
+    forzable?: boolean;
   } | null;
 }
 
@@ -544,6 +549,19 @@ export interface PrestamoVigentePreview {
   cuotas_pagadas: number;
   num_cuotas: number;
   cuotas_pendientes: number;
+  /**
+   * 2026-11-19 — Cuantas de sus cuotas pendientes son de periodos anteriores
+   * al de la nomina: quedaron sin descontar en liquidaciones pasadas.
+   */
+  cuotas_atrasadas?: number;
+  /**
+   * 2026-11-19 — Esta fila descuenta **todo el saldo** (`saldar`). El prestamo
+   * se lista aunque hoy este PAGADO y `saldo_pendiente` es el valor exacto
+   * que el backend volvera a exigir al re-liquidar.
+   */
+  saldado_en_esta_liquidacion?: boolean;
+  /** 2026-11-19 — Cuotas del prestamo que aplico esta fila. 0 si esta PENDIENTE. */
+  cuotas_aplicadas_en_esta_liquidacion?: number;
   proxima_cuota: {
     prestamo_cuota_id: number;
     numero_cuota: number;
@@ -560,8 +578,29 @@ export interface PrestamoCuotaPendiente {
   concepto: string;
   numero_cuota: number;
   total_cuotas: number;
+  /** Periodo de la cuota. `quincena` es `null` en prestamos MENSUAL. */
+  anio?: number;
+  mes?: number;
+  quincena?: number | null;
   monto: number;
   saldo_restante_prestamo: number;
+  /**
+   * 2026-11-19 — El periodo de la cuota es anterior al de la nomina: quedo
+   * sin descontar. Se propone igual que la del periodo y el liquidador la
+   * quita o la pone una por una.
+   */
+  atrasada?: boolean;
+  /**
+   * 2026-11-19 — Lo que el editor marca al abrir. Fila PENDIENTE: `true` en
+   * toda cuota listada. Fila LIQUIDADO: `true` solo en lo que esa fila
+   * aplico, porque reabrir una liquidacion no agrega descuentos.
+   */
+  aplicar_por_defecto?: boolean;
+  /**
+   * 2026-11-19 — La cuota esta APLICADA por esta misma fila. Solo en filas
+   * LIQUIDADO; se lista aunque sea futura (una que se adelanto).
+   */
+  aplicada_en_esta_liquidacion?: boolean;
 }
 
 /**
@@ -792,6 +831,57 @@ export interface ColaboradorConNovedadesPendientes {
 }
 
 /**
+ * PR-V2 (2026-11-19) — Una vacación del sistema con jornal o cosecha dentro
+ * del disfrute. O el colaborador volvió antes y hay que **interrumpirla**
+ * (CST art. 188), o la planilla está mal.
+ */
+export interface VacacionTrabajadaEnNomina {
+  vacacion_id: number;
+  numero_comprobante: string;
+  origen?: string;
+  estado?: string;
+  modo_pago?: string;
+  /** Rango de la vacación completa. */
+  fecha_inicio: string | null;
+  fecha_fin: string | null;
+  /** El tramo recortado al período de la nómina. */
+  fecha_desde?: string;
+  fecha_hasta?: string;
+  /** Días con trabajo registrado dentro del disfrute. */
+  fechas?: string[];
+  /** La nómina paga el jornal **y** el día de vacaciones (`modo_pago NOMINA`). */
+  doble_pago?: boolean;
+  fechas_doble_pago?: string[];
+  /** Primer día trabajado: la fecha con la que abre el modal de interrupción. */
+  fecha_reintegro_sugerida?: string | null;
+  interrumpible?: boolean;
+  /**
+   * `SIN_DISFRUTE` = trabajó desde el primer día, lo que corresponde es
+   * anular. Los demás solo admiten revisar la planilla.
+   */
+  motivo_no_interrumpible?: 'SIN_DISFRUTE' | 'YA_INTERRUMPIDA' | 'HISTORICO' | 'ESTADO' | null;
+  /** Rutas del backend, relativas: `interrumpir` es el preview de §10.16. */
+  enlaces?: {
+    detalle?: string;
+    interrumpir?: string | null;
+    anular?: string | null;
+  };
+}
+
+/** Una fila de `colaboradores[]` del 409 `NOMINA_CON_VACACION_TRABAJADA`. */
+export interface ColaboradorConVacacionTrabajada {
+  nomina_empleado_id: number;
+  empleado_id: number;
+  nombre_completo: string;
+  documento: string;
+  estado_fila?: string;
+  fechas?: string[];
+  fecha_reintegro_sugerida?: string | null;
+  vacaciones?: VacacionTrabajadaEnNomina[];
+  enlaces?: { reliquidar?: string };
+}
+
+/**
  * Lo que impedirá el POST de liquidar, anticipado por el preview.
  *
  * No es una advertencia: con la lista no vacía, el backend responde 409 y no
@@ -818,7 +908,17 @@ export interface BloqueoCierre {
   code: string;
   message: string;
   mensaje?: string;
-  colaboradores?: ColaboradorConNovedadesPendientes[];
+  /**
+   * PR-V2 — `true` solo en `NOMINA_CON_VACACION_TRABAJADA`: es el único
+   * bloqueo que `POST /cerrar` acepta saltar con `forzar` + `motivo_forzado`,
+   * porque la planilla puede tener razón (un día suelto que sí se trabajó).
+   */
+  forzable?: boolean;
+  /**
+   * La forma depende del `code`: novedades pendientes (PR-N8) o vacaciones
+   * con trabajo registrado (PR-V2).
+   */
+  colaboradores?: Array<ColaboradorConNovedadesPendientes | ColaboradorConVacacionTrabajada>;
 }
 
 export interface PendientesPorAprobar {
@@ -894,6 +994,16 @@ export interface PreviewLiquidacion {
    * cuota. `[]` si no tiene. Solo colaboradores internos.
    */
   prestamos_vigentes?: PrestamoVigentePreview[];
+  /**
+   * 2026-11-19 — Lo que restan del neto las cuotas con `aplicar_por_defecto`
+   * y los saldos con `saldado_en_esta_liquidacion`.
+   */
+  total_prestamos_propuesto?: number;
+  /**
+   * 2026-11-19 — `total_neto_propuesto - total_prestamos_propuesto`: el neto
+   * que el editor muestra **al abrir**. Tras cada clic se recalcula local.
+   */
+  total_neto_propuesto_con_prestamos?: number;
   /**
    * Horas extras APROBADAS del empleado que están siendo incluidas en el
    * cálculo actual (doc §5.1). Permite mostrar el tipo real (HED, HEN, etc.)
@@ -1121,6 +1231,26 @@ export interface PreviewLiquidacion {
     detalle?: unknown;
     /** `FALTAS_NO_REGISTRADAS_EN_PLANILLA` y las de vacaciones traen fechas. */
     fechas?: string[];
+    /** `VACACIONES_CON_TRABAJO_REGISTRADO`: los comprobantes afectados. */
+    comprobantes?: string[];
+    /** PR-L15 — El día cae en un tramo que esta nómina paga. */
+    doble_pago?: boolean;
+    fechas_doble_pago?: string[];
+    /**
+     * PR-V2 (2026-11-19) — Primer día trabajado dentro del disfrute, lo que
+     * `enlaces.interrumpir` ya trae como `fecha_reintegro`.
+     */
+    fecha_reintegro_sugerida?: string | null;
+    interrumpible?: boolean;
+    enlaces?: {
+      detalle?: string;
+      interrumpir?: string | null;
+      anular?: string | null;
+    };
+    /** Una entrada por vacación: un período puede cruzar dos. */
+    vacaciones?: VacacionTrabajadaEnNomina[];
+    /** `true` ⇒ el cierre responderá 409 `NOMINA_CON_VACACION_TRABAJADA`. */
+    bloquea_cierre?: boolean;
   }>;
 
   /**
@@ -1370,6 +1500,14 @@ export interface DesprendibleData {
       valor: number;
       es_manual: boolean;
       observacion?: string;
+      /**
+       * 2026-11-19 (§6.2) — Con que se descontó el prestamo, para reconstruir
+       * la fila al re-liquidar: `prestamo_cuota_id` = una cuota;
+       * `prestamo_id` + `saldar` = todo el saldo. Las demas llegan en `null`.
+       */
+      prestamo_cuota_id?: number | null;
+      prestamo_id?: number | null;
+      saldar?: boolean;
     }[];
     /**
      * Mismo shape que en el preview (§5.1). En el desprendible la fuente es
@@ -2331,7 +2469,15 @@ export const nominaApi = {
    * confirmación explícita ANTES de disparar este POST leyendo
    * `GET /validar-cosecha` — el cierre es irreversible.
    */
-  cerrar: (id: number) =>
+  cerrar: (
+    id: number,
+    /**
+     * PR-V2 — `forzar` salta los bloqueos forzables (hoy solo
+     * `NOMINA_CON_VACACION_TRABAJADA`). `motivo_forzado` es obligatorio con
+     * él (≤ 500) y queda en la auditoría.
+     */
+    payload?: { forzar?: boolean; motivo_forzado?: string },
+  ) =>
     apiClient.post<{
       data: Nomina & {
         /**
@@ -2343,7 +2489,12 @@ export const nominaApi = {
       };
       message: string;
       advertencia?: AdvertenciaGajosSinDespachar;
-    }>(`/v1/tenant/nominas/${id}/cerrar`, undefined, T),
+      /**
+       * PR-V2 — Solo cuando el cierre vino con `forzar` y había algo que
+       * forzar. Discriminar por presencia del campo.
+       */
+      forzado?: { motivo: string; bloqueos: BloqueoCierre[] };
+    }>(`/v1/tenant/nominas/${id}/cerrar`, payload, T),
 
   /**
    * §3.1 — Lista empleados internos y operarios disponibles.
@@ -2731,6 +2882,14 @@ export const NominaErrorCodes = {
   NOMINA_CON_LIQUIDADOS: 'NOMINA_CON_LIQUIDADOS',
   /** Intento de cerrar nómina con empleados aún PENDIENTES. */
   NOMINA_CON_PENDIENTES: 'NOMINA_CON_PENDIENTES',
+  /**
+   * PR-V2 (2026-11-19) — Hay jornal o cosecha en días de una vacación del
+   * sistema dentro del período. Interrumpir la vacación (CST art. 188) o
+   * corregir la planilla; es **forzable** con motivo.
+   */
+  NOMINA_CON_VACACION_TRABAJADA: 'NOMINA_CON_VACACION_TRABAJADA',
+  /** `forzar: true` sin `motivo_forzado` al cerrar. */
+  MOTIVO_FORZADO_REQUERIDO: 'MOTIVO_FORZADO_REQUERIDO',
   /**
    * PR-L15 — Al cerrar: una fila liquidó un tramo de vacaciones que ya no
    * coincide con la vacación viva (se anuló, se pagó a mano, se re-liquidó o

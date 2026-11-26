@@ -15,15 +15,15 @@ const GRAVES = ['PERIODO_CON_PERSONAL_SIN_NOMINA'];
 
 function Aviso({ aviso, grave }: { aviso: IncidenciaFila; grave: boolean }) {
   const Icono = grave ? AlertTriangle : Info;
-  const tono = grave
-    ? 'border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200'
-    : 'border-border bg-muted/30 text-muted-foreground';
+  const tono = grave ? 'bg-warning-soft' : 'bg-info-soft';
 
   return (
-    <p className={`flex items-start gap-2 rounded-lg border p-3 text-sm ${tono}`}>
-      <Icono className="mt-0.5 h-4 w-4 shrink-0" />
-      <span>{aviso.mensaje || ADVERTENCIA_NOMINA_LABEL[aviso.code] || aviso.code}</span>
-    </p>
+    <div className={`flex gap-2 rounded-lg p-3 ${tono}`}>
+      <Icono className={`mt-0.5 h-4 w-4 shrink-0 ${grave ? 'text-warning' : 'text-info'}`} strokeWidth={2} />
+      <p className="text-sm text-foreground">
+        {aviso.mensaje || ADVERTENCIA_NOMINA_LABEL[aviso.code] || aviso.code}
+      </p>
+    </div>
   );
 }
 

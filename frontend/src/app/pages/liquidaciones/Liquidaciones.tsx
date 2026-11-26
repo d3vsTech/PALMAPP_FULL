@@ -1,9 +1,7 @@
 import { useNavigate, useSearchParams } from 'react-router';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
+import * as TabsPrimitive from '@radix-ui/react-tabs';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent } from '../../components/ui/card';
-import { Info, DollarSign, TrendingUp, Calendar, FileText, Briefcase, Upload, History } from 'lucide-react';
-import { InfoTooltip } from '../../components/common/InfoTooltip';
+import { Info, Upload, History } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   Tooltip,
@@ -11,6 +9,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '../../components/ui/tooltip';
+import PageHeader from '../../components/common/PageHeader';
+import { SeccionTabsList, SeccionTabsTrigger } from '../../components/liquidaciones/SeccionTabs';
 
 // Componentes de cada pestaña
 import CesantiasTab from './CesantiasTab';
@@ -35,12 +35,12 @@ import LiquidacionFinalTab from './LiquidacionFinalTab';
  * Liquidación sí lo lleva desde PR-L14 (§15): un archivo por año de retiro.
  */
 const IMPORTAR_POR_TAB: Record<string, { label: string; ruta: string }> = {
-  cesantias:  { label: 'Importar Cesantías',  ruta: '/liquidaciones/cesantias/carga-historico' },
-  prima:      { label: 'Importar Prima',      ruta: '/liquidaciones/prima/carga-historico' },
-  vacaciones: { label: 'Importar Vacaciones', ruta: '/liquidaciones/vacaciones/carga-historico' },
+  cesantias:  { label: 'Importar cesantías',  ruta: '/liquidaciones/cesantias/carga-historico' },
+  prima:      { label: 'Importar prima',      ruta: '/liquidaciones/prima/carga-historico' },
+  vacaciones: { label: 'Importar vacaciones', ruta: '/liquidaciones/vacaciones/carga-historico' },
   // La clave es el `value` del TabsTrigger, no el nombre de la pestaña.
   'liquidacion-final': {
-    label: 'Importar Liquidación Final',
+    label: 'Importar liquidaciones',
     ruta: '/liquidaciones/finales/carga-historico',
   },
 };
@@ -48,6 +48,24 @@ const IMPORTAR_POR_TAB: Record<string, { label: string; ruta: string }> = {
 /** `value` de cada TabsTrigger. Es lo que viaja en `?tab=`. */
 const TABS = ['cesantias', 'intereses', 'prima', 'vacaciones', 'liquidacion-final'] as const;
 const TAB_POR_DEFECTO = 'cesantias';
+
+const ETIQUETAS: Record<typeof TABS[number], string> = {
+  cesantias: 'Cesantías',
+  intereses: 'Intereses',
+  prima: 'Prima',
+  vacaciones: 'Vacaciones',
+  'liquidacion-final': 'Liquidación final',
+};
+
+const MARCO_LEGAL = [
+  'Código Sustantivo del Trabajo (arts. 64, 65, 99, 186, 189, 192, 249, 306)',
+  'Ley 50 de 1990 (cesantías)',
+  'Ley 52 de 1975 (intereses sobre cesantías)',
+  'Ley 2466 de 2025 (contratos a término fijo)',
+  'Decreto 1072 de 2015',
+  'Decreto 1469 de 2025 (SMMLV 2026: $1.750.905)',
+  'Decreto 1470 de 2025 (auxilio de transporte 2026: $249.095)',
+];
 
 function LiquidacionesContent() {
   const navigate = useNavigate();
@@ -72,131 +90,72 @@ function LiquidacionesContent() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-primary sm:text-3xl">Liquidaciones</h1>
+      <PageHeader
+        title="Liquidaciones"
+        description="Cesantías, intereses, prima de servicios, vacaciones y liquidaciones finales."
+        actions={
+          <>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors">
-                    <Info className="h-4 w-4 text-primary" />
-                  </button>
+                  <Button variant="ghost" className="text-muted-foreground">
+                    <Info strokeWidth={2} />
+                    Marco legal
+                  </Button>
                 </TooltipTrigger>
-                <TooltipContent className="max-w-md p-4" side="bottom" align="start">
-                  <p className="text-sm font-semibold mb-2">Marco Legal</p>
-                  <ul className="text-xs space-y-1">
-                    <li>• Código Sustantivo del Trabajo (Arts. 64, 65, 99, 186, 189, 192, 249, 306)</li>
-                    <li>• Ley 50 de 1990 (Cesantías)</li>
-                    <li>• Ley 52 de 1975 (Intereses sobre cesantías)</li>
-                    <li>• Ley 2466 de 2025 (Contratos a término fijo)</li>
-                    <li>• Decreto 1072 de 2015</li>
-                    <li>• Decreto 1469 de 2025 (SMMLV 2026: $1.750.905)</li>
-                    <li>• Decreto 1470 de 2025 (Aux. Transporte 2026: $249.095)</li>
+                <TooltipContent className="max-w-sm p-3" side="bottom" align="end">
+                  <p className="mb-1.5 text-sm font-semibold">Marco legal</p>
+                  <ul className="space-y-1 text-xs">
+                    {MARCO_LEGAL.map(item => (
+                      <li key={item}>{item}</li>
+                    ))}
                   </ul>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-          </div>
-          <p className="text-muted-foreground mt-2">
-            Cesantías, intereses, prima de servicios, vacaciones y liquidaciones finales
-          </p>
-        </div>
+            {/* Solo Vacaciones tiene histórico propio. */}
+            {activeTab === 'vacaciones' && (
+              <Button variant="outline" onClick={() => navigate('/liquidaciones/vacaciones/historico')}>
+                <History strokeWidth={2} />
+                Histórico
+              </Button>
+            )}
+            {/* Intereses no lleva botón: van dentro del archivo de cesantías. */}
+            {importar && (
+              <Button variant="outline" onClick={() => navigate(importar.ruta)}>
+                <Upload strokeWidth={2} />
+                {importar.label}
+              </Button>
+            )}
+          </>
+        }
+      />
 
-        <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0">
-          {/* Solo Vacaciones tiene histórico propio: las demás pestañas lo
-              resuelven desde el detalle de cada liquidación. */}
-          {activeTab === 'vacaciones' && (
-            <Button
-              variant="outline"
-              onClick={() => navigate('/liquidaciones/vacaciones/historico')}
-              className="w-full gap-2 rounded-full sm:w-auto"
-            >
-              <History className="h-4 w-4" />
-              Histórico de vacaciones
-            </Button>
-          )}
-          {/* Sin botón solo en Intereses: sus valores van dentro del archivo de
-              cesantías y no tiene un cargue propio. */}
-          {importar && (
-            <Button
-              variant="outline"
-              onClick={() => navigate(importar.ruta)}
-              className="w-full gap-2 rounded-full sm:w-auto"
-            >
-              <Upload className="h-4 w-4" />
-              {importar.label}
-            </Button>
-          )}
-        </div>
-      </div>
+      <TabsPrimitive.Root value={activeTab} onValueChange={cambiarTab} className="space-y-6">
+        <SeccionTabsList aria-label="Secciones de liquidaciones">
+          {TABS.map(t => (
+            <SeccionTabsTrigger key={t} value={t}>
+              {ETIQUETAS[t]}
+            </SeccionTabsTrigger>
+          ))}
+        </SeccionTabsList>
 
-      {/* Pestañas del módulo */}
-      <Tabs value={activeTab} onValueChange={cambiarTab} className="space-y-6">
-        <Card className="border-border">
-          <CardContent className="p-3">
-            <TabsList className="grid h-auto w-full grid-cols-2 gap-2 bg-transparent p-0 sm:grid-cols-3 lg:grid-cols-5">
-              <TabsTrigger
-                value="cesantias"
-                className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition duration-200 hover:bg-muted"
-              >
-                <DollarSign className="h-4 w-4" />
-                <span>Cesantías</span>
-                <InfoTooltip text="Ahorro obligatorio que la finca debe guardar por cada trabajador, equivalente a un mes de salario por año trabajado" />
-              </TabsTrigger>
-              <TabsTrigger
-                value="intereses"
-                className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition duration-200 hover:bg-muted"
-              >
-                <TrendingUp className="h-4 w-4" />
-                <span>Intereses</span>
-              </TabsTrigger>
-              <TabsTrigger
-                value="prima"
-                className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition duration-200 hover:bg-muted"
-              >
-                <Briefcase className="h-4 w-4" />
-                <span>Prima</span>
-              </TabsTrigger>
-              <TabsTrigger
-                value="vacaciones"
-                className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition duration-200 hover:bg-muted"
-              >
-                <Calendar className="h-4 w-4" />
-                <span>Vacaciones</span>
-              </TabsTrigger>
-              <TabsTrigger
-                value="liquidacion-final"
-                className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition duration-200 hover:bg-muted"
-              >
-                <FileText className="h-4 w-4" />
-                <span>Liquidación</span>
-              </TabsTrigger>
-            </TabsList>
-          </CardContent>
-        </Card>
-
-        <TabsContent value="cesantias" className="mt-0">
+        <TabsPrimitive.Content value="cesantias" className="outline-none">
           <CesantiasTab />
-        </TabsContent>
-
-        <TabsContent value="intereses" className="mt-0">
+        </TabsPrimitive.Content>
+        <TabsPrimitive.Content value="intereses" className="outline-none">
           <InteresesTab />
-        </TabsContent>
-
-        <TabsContent value="prima" className="mt-0">
+        </TabsPrimitive.Content>
+        <TabsPrimitive.Content value="prima" className="outline-none">
           <PrimaTab />
-        </TabsContent>
-
-        <TabsContent value="vacaciones" className="mt-0">
+        </TabsPrimitive.Content>
+        <TabsPrimitive.Content value="vacaciones" className="outline-none">
           <VacacionesTab />
-        </TabsContent>
-
-        <TabsContent value="liquidacion-final" className="mt-0">
+        </TabsPrimitive.Content>
+        <TabsPrimitive.Content value="liquidacion-final" className="outline-none">
           <LiquidacionFinalTab />
-        </TabsContent>
-      </Tabs>
+        </TabsPrimitive.Content>
+      </TabsPrimitive.Root>
     </div>
   );
 }

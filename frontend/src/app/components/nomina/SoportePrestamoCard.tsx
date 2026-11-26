@@ -12,7 +12,7 @@
  */
 import { useRef, useState } from 'react';
 import { Button } from '../ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Card, CardContent, CardDescription, CardHeader } from '../ui/card';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import {
@@ -99,7 +99,7 @@ export function SoportePrestamoCard({ prestamoId, documento, onCambio }: Props) 
     } catch (err) {
       const e = err as ApiError;
       if (e.code === PrestamoErrorCodes.MIME_NOT_PREVIEWABLE) {
-        toast.error('Este archivo no se puede ver en el navegador: descárguelo');
+        toast.error('Este archivo no se puede ver en el navegador. Descárgalo');
       } else if (e.code === PrestamoErrorCodes.PRESTAMO_SIN_DOCUMENTO) {
         toast.error('El archivo ya no está disponible');
         onCambio();
@@ -125,9 +125,10 @@ export function SoportePrestamoCard({ prestamoId, documento, onCambio }: Props) 
   };
 
   return (
-    <Card className="border-border">
+    <Card>
       <CardHeader>
-        <CardTitle>Soporte del préstamo</CardTitle>
+        <h3>Soporte del préstamo</h3>
+        <CardDescription>Pagaré o autorización de descuento firmada</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <input
@@ -144,10 +145,10 @@ export function SoportePrestamoCard({ prestamoId, documento, onCambio }: Props) 
         />
 
         {documento ? (
-          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/20 p-3">
-            <FileText className="h-5 w-5 shrink-0 text-primary" />
+          <div className="flex flex-wrap items-center gap-3 rounded-lg bg-muted/60 p-3">
+            <FileText className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2} />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{documento.nombre_archivo}</p>
+              <p className="break-all text-sm font-medium text-foreground">{documento.nombre_archivo}</p>
               <p className="text-xs text-muted-foreground">
                 {[
                   tamanoLegible(documento.archivo_tamano),
@@ -160,25 +161,25 @@ export function SoportePrestamoCard({ prestamoId, documento, onCambio }: Props) 
             </div>
             <div className="flex flex-wrap gap-2">
               {documento.previsualizable && (
-                <Button size="sm" variant="outline" onClick={() => void bajar(true)} className="gap-2">
-                  <Eye className="h-3.5 w-3.5" />
+                <Button size="sm" variant="outline" onClick={() => void bajar(true)} >
+                  <Eye strokeWidth={2} />
                   Ver
                 </Button>
               )}
-              <Button size="sm" variant="outline" onClick={() => void bajar(false)} className="gap-2">
-                <Download className="h-3.5 w-3.5" />
+              <Button size="sm" variant="outline" onClick={() => void bajar(false)} >
+                <Download strokeWidth={2} />
                 Descargar
               </Button>
             </div>
           </div>
         ) : (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Paperclip className="h-4 w-4" />
-            Sin soporte cargado. Adjunte el pagaré o la autorización de descuento.
+            <Paperclip className="h-4 w-4 shrink-0" strokeWidth={2} />
+            Sin soporte cargado. Adjunta el pagaré o la autorización de descuento.
           </p>
         )}
 
-        <div>
+        <div className="space-y-2">
           <Label htmlFor="soportepre-observacion-del-documento">Observación del documento</Label>
           <Textarea id="soportepre-observacion-del-documento"
             value={nota}
@@ -186,37 +187,35 @@ export function SoportePrestamoCard({ prestamoId, documento, onCambio }: Props) 
             maxLength={500}
             rows={2}
             placeholder="Ej: pagaré firmado el 5 de enero, con dos testigos"
-            className="mt-1.5"
           />
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Es la nota del archivo, distinta de las observaciones del préstamo.
           </p>
         </div>
 
-        <div className="flex flex-wrap justify-end gap-2">
+        <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:flex-wrap sm:justify-end">
           {documento && (
             <Button
-              variant="outline"
+              variant="ghost"
               onClick={() => setConfirmarBorrar(true)}
               disabled={trabajando}
-              className="gap-2 text-destructive hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
+              className="text-muted-foreground hover:text-destructive sm:mr-auto"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 strokeWidth={2} />
               Eliminar
             </Button>
           )}
           {documento && (
-            <Button variant="outline" onClick={guardarNota} disabled={trabajando} className="gap-2">
-              {trabajando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            <Button variant="outline" onClick={guardarNota} disabled={trabajando}>
+              {trabajando ? <Loader2 className="animate-spin" strokeWidth={2} /> : <Save strokeWidth={2} />}
               Guardar observación
             </Button>
           )}
           <Button
             onClick={() => archivoRef.current?.click()}
             disabled={trabajando}
-            className="gap-2"
           >
-            {trabajando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            {trabajando ? <Loader2 className="animate-spin" strokeWidth={2} /> : <Upload strokeWidth={2} />}
             {documento ? 'Reemplazar archivo' : 'Subir soporte'}
           </Button>
         </div>
@@ -233,7 +232,11 @@ export function SoportePrestamoCard({ prestamoId, documento, onCambio }: Props) 
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={trabajando}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={borrar} disabled={trabajando}>
+            <AlertDialogAction
+              onClick={borrar}
+              disabled={trabajando}
+              className="bg-destructive hover:bg-destructive/90"
+            >
               {trabajando ? 'Eliminando...' : 'Eliminar'}
             </AlertDialogAction>
           </AlertDialogFooter>

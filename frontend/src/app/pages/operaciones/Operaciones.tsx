@@ -1,15 +1,15 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router';
+import { Link, useNavigate, useLocation } from 'react-router';
 import { useEstadoPersistido } from '../../hooks/useEstadoPersistido';
 import { useAlCambiar } from '../../hooks/useAlCambiar';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import PageHeader from '../../components/common/PageHeader';
 import StatStrip from '../../components/common/StatStrip';
+import SelectorPeriodo, { type OpcionPeriodo } from '../../components/common/SelectorPeriodo';
 import EmptyState from '../../components/common/EmptyState';
 import TableSkeleton from '../../components/common/TableSkeleton';
 import { Input } from '../../components/ui/input';
-import { Label } from '../../components/ui/label';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
@@ -84,6 +84,15 @@ function paramsDelPeriodo(periodo: PeriodoIndicadores, o: OpcionesPeriodo): Para
   }
   return { periodo };
 }
+
+/** Períodos que acepta el desplegable. */
+const PERIODOS: OpcionPeriodo<PeriodoIndicadores>[] = [
+  { valor: 'semanal', etiqueta: 'Semanal' },
+  { valor: 'quincenal', etiqueta: 'Quincenal' },
+  { valor: 'mensual', etiqueta: 'Mensual' },
+  { valor: 'anual', etiqueta: 'Anual' },
+  { valor: 'personalizado', etiqueta: 'Personalizado' },
+];
 
 export default function Operaciones() {
   const navigate = useNavigate();
@@ -317,7 +326,7 @@ export default function Operaciones() {
     <div className="space-y-6">
       <PageHeader
         title="Operaciones"
-        description="Planillas del día: jornales, cosecha y labores de la finca."
+        description="Labores diarias, planillas de cosecha y jornales."
         actions={
           <>
             {hasPermiso('operaciones.aprobar') && (
@@ -344,19 +353,13 @@ export default function Operaciones() {
       {/* El período manda sobre los indicadores y sobre la lista de abajo:
           las dos leen el mismo rango de fechas. */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <h2>Indicadores del período</h2>
+        <h2>Indicadores</h2>
         <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-          <Label className="text-sm font-medium">Período:</Label>
-          <Select value={periodoKPI} onValueChange={(v) => setPeriodoKPI(v as PeriodoIndicadores)}>
-            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="semanal">Semanal</SelectItem>
-              <SelectItem value="quincenal">Quincenal</SelectItem>
-              <SelectItem value="mensual">Mensual</SelectItem>
-              <SelectItem value="anual">Anual</SelectItem>
-              <SelectItem value="personalizado">Personalizado</SelectItem>
-            </SelectContent>
-          </Select>
+          <SelectorPeriodo
+            valor={periodoKPI}
+            opciones={PERIODOS}
+            onChange={setPeriodoKPI}
+          />
           {(periodoKPI === 'mensual' || periodoKPI === 'quincenal') && (
             <SelectorMes valor={mesKPI} onChange={setMesKPI} />
           )}
@@ -374,12 +377,13 @@ export default function Operaciones() {
             </Select>
           )}
           {periodoKPI === 'personalizado' && (
-            <>
-              <Input type="date" aria-label="Fecha de inicio" className="w-40"
+            <div className="flex items-center gap-1.5">
+              <Input type="date" aria-label="Fecha de inicio" className="w-[138px]"
                 value={fechaInicioKPI} onChange={(e) => setFechaInicioKPI(e.target.value)} />
-              <Input type="date" aria-label="Fecha de fin" className="w-40"
+              <span className="text-xs text-muted-foreground">a</span>
+              <Input type="date" aria-label="Fecha de fin" className="w-[138px]"
                 value={fechaFinKPI} onChange={(e) => setFechaFinKPI(e.target.value)} />
-            </>
+            </div>
           )}
           <Button variant="ghost" size="sm" onClick={reiniciarPeriodo}
             title="Vuelve al mes en curso">
@@ -393,30 +397,28 @@ export default function Operaciones() {
         loading={cargandoIndicadores && !indicadores}
         items={[
           {
-            label: 'Planillas en borrador',
-            value: num(indicadores?.planillas_borrador ?? 0),
-            note: 'sin aprobar',
-          },
-          {
-            label: 'Planillas aprobadas',
-            value: num(indicadores?.planillas_aprobadas ?? 0),
-            note: 'cuentan como día operado',
-          },
-          {
-            label: 'Total de planillas',
+            label: 'Total',
             value: num(indicadores?.total_planillas ?? 0),
-            note: 'en el rango elegido',
+            note: 'planillas en el período',
+          },
+          {
+            label: 'En borrador',
+            value: num(indicadores?.planillas_borrador ?? 0),
+            note: 'planillas pendientes',
+          },
+          {
+            label: 'Aprobadas',
+            value: num(indicadores?.planillas_aprobadas ?? 0),
+            note: 'planillas completadas',
           },
         ]}
       />
 
       <div className="space-y-4">
         <div className="space-y-1">
-          <h2>Planillas del período</h2>
+          <h2>Planillas recientes</h2>
           <p className="text-[15px] text-muted-foreground">
-            {metaLista && desdeLista && hastaLista
-              ? `${num(metaLista.total)} ${metaLista.total === 1 ? 'planilla' : 'planillas'} entre ${formatearFecha(desdeLista)} y ${formatearFecha(hastaLista)}`
-              : 'Registro de operaciones diarias por fecha.'}
+            Registro de operaciones diarias por fecha.
           </p>
         </div>
 
@@ -436,27 +438,37 @@ export default function Operaciones() {
             />
           </Card>
         ) : (
-          <Card className="gap-0">
+          <Card className="gap-0 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted/60 text-[13px] text-muted-foreground">
                   <tr>
                     <th className="px-5 py-2.5 text-left font-semibold">Fecha</th>
                     <th className="px-4 py-2.5 text-left font-semibold">Estado</th>
-                    <th className="px-4 py-2.5 text-right font-semibold">Colaboradores</th>
-                    <th className="px-5 py-2.5 text-right font-semibold">Acciones</th>
+                    <th className="hidden px-4 py-2.5 text-right font-semibold sm:table-cell">Colaboradores</th>
+                    <th className="px-2 py-2.5"><span className="sr-only">Acciones</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {planillas.map((planilla) => (
                     <tr key={planilla.id} className="transition-colors hover:bg-muted/40">
-                      <td className="px-5 py-3 font-semibold text-foreground">
-                        {formatearFecha(planilla.fecha)}
+                      <td className="px-5 py-3">
+                        <Link
+                          to={`/operaciones/planilla/${planilla.id}`}
+                          className="font-semibold text-foreground hover:text-primary"
+                        >
+                          {formatearFecha(planilla.fecha)}
+                        </Link>
+                        {/* En celular no hay columna de colaboradores: la
+                            cuenta baja aquí para no perderla. */}
+                        <span className="block text-xs text-muted-foreground sm:hidden">
+                          {num(planilla.colaboradores_count ?? 0)} colaboradores
+                        </span>
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge status={mapEstadoUI(planilla.estado)} />
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="hidden px-4 py-3 text-right sm:table-cell">
                         {/* Desde el 2026-09-28 `colaboradores_count` ya
                             incluye a los colaboradores con ausencia y
                             deduplica: quien trabajó medio día y además tiene
@@ -469,8 +481,8 @@ export default function Operaciones() {
                           {num(planilla.colaboradores_count ?? 0)}
                         </span>
                       </td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center justify-end gap-1">
+                      <td className="px-2 py-3">
+                        <div className="flex items-center justify-end gap-0.5">
                           <Button
                             variant="ghost"
                             size="icon"

@@ -1,56 +1,53 @@
 /** Indicador de progreso del wizard de registro. */
-import { Check, ClipboardList, FileText, type LucideIcon } from 'lucide-react';
+import { Check } from 'lucide-react';
 
 interface Paso {
   numero: number;
   titulo: string;
-  icono: LucideIcon;
 }
 
-export const PASOS: Paso[] = [
-  { numero: 1, titulo: 'Tipo de novedad', icono: ClipboardList },
-  { numero: 2, titulo: 'Detalles',        icono: FileText      },
-  { numero: 3, titulo: 'Confirmación',    icono: Check         },
+const PASOS: Paso[] = [
+  { numero: 1, titulo: 'Tipo de novedad' },
+  { numero: 2, titulo: 'Detalles' },
+  { numero: 3, titulo: 'Confirmación' },
 ];
 
 export function BarraPasos({ actual }: { actual: number }) {
   return (
-    <div className="flex items-center">
+    <ol className="flex items-center">
       {PASOS.map((paso, idx) => {
         const completado = actual > paso.numero;
         const activo = actual === paso.numero;
-        const Icono = paso.icono;
 
         return (
-          <div key={paso.numero} className="flex flex-1 items-center last:flex-none">
-            <div className="flex min-w-0 flex-col items-center gap-1.5">
-              <div
-                className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors ${
-                  completado ? 'border-primary bg-primary'
-                    : activo ? 'border-primary bg-primary/10'
-                    : 'border-border bg-background'
+          <li key={paso.numero} className="flex flex-1 items-center last:flex-none">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-semibold transition-colors ${
+                  completado
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : activo
+                      ? 'border-primary bg-primary-soft text-primary'
+                      : 'border-border bg-card text-muted-foreground'
                 }`}
               >
-                {completado
-                  ? <Check className="h-5 w-5 text-white" />
-                  : <Icono className={`h-5 w-5 ${activo ? 'text-primary' : 'text-muted-foreground'}`} />}
-              </div>
-              <div className="text-center">
-                <p className={`text-xs font-semibold ${activo || completado ? 'text-primary' : 'text-muted-foreground'}`}>
-                  Paso {paso.numero}
-                </p>
-                {/* El título se oculta en móvil: no cabe bajo un círculo de 40px. */}
-                <p className={`hidden text-xs sm:block ${activo ? 'text-foreground' : 'text-muted-foreground'}`}>
-                  {paso.titulo}
-                </p>
-              </div>
+                {completado ? <Check className="h-4 w-4" strokeWidth={2.5} /> : paso.numero}
+              </span>
+              {/* El título se oculta en móvil: no caben tres junto a sus círculos. */}
+              <span
+                className={`hidden text-sm sm:block ${
+                  activo ? 'font-semibold text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                {paso.titulo}
+              </span>
             </div>
             {idx < PASOS.length - 1 && (
-              <div className={`mx-3 mb-5 h-0.5 flex-1 transition-colors ${completado ? 'bg-primary' : 'bg-border'}`} />
+              <div className={`mx-3 h-px flex-1 transition-colors ${completado ? 'bg-primary' : 'bg-border'}`} />
             )}
-          </div>
+          </li>
         );
       })}
-    </div>
+    </ol>
   );
 }

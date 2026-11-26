@@ -26,54 +26,28 @@ export default function ResumenLiquidacion({
     <div className="space-y-6">
       {children}
 
-      {/* Botones de acción */}
-      <div className="flex justify-between items-center pt-4">
-        <Button
-          onClick={onVolver}
-          variant="outline"
-          size="lg"
-          className="gap-2"
-        >
-          <ArrowLeft className="h-5 w-5" />
-          Volver a Editar
+      {/* Acciones al final, alineadas a la derecha */}
+      <div className="flex flex-col-reverse gap-2 border-t border-border pt-5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+        <Button onClick={onVolver} variant="ghost" className="sm:mr-auto">
+          <ArrowLeft strokeWidth={2} />
+          Volver a editar
         </Button>
-        <div className="flex gap-3">
-          <Button
-            onClick={onAceptar}
-            className="gap-2 bg-green-600 hover:bg-green-700"
-            size="lg"
-          >
-            <Check className="h-5 w-5" />
-            Aceptar
-          </Button>
-          <Button
-            onClick={onImprimir}
-            variant="outline"
-            className="gap-2"
-            size="lg"
-          >
-            <Printer className="h-5 w-5" />
-            Imprimir
-          </Button>
-          <Button
-            onClick={onCompartirWhatsApp}
-            variant="outline"
-            className="gap-2 text-green-600 border-green-600 hover:bg-green-50"
-            size="lg"
-          >
-            <MessageCircle className="h-5 w-5" />
-            WhatsApp
-          </Button>
-          <Button
-            onClick={onDescargarPDF}
-            variant="outline"
-            className="gap-2"
-            size="lg"
-          >
-            <Download className="h-5 w-5" />
-            Descargar PDF
-          </Button>
-        </div>
+        <Button onClick={onImprimir} variant="outline">
+          <Printer strokeWidth={2} />
+          Imprimir
+        </Button>
+        <Button onClick={onCompartirWhatsApp} variant="outline">
+          <MessageCircle strokeWidth={2} />
+          WhatsApp
+        </Button>
+        <Button onClick={onDescargarPDF} variant="outline">
+          <Download strokeWidth={2} />
+          Descargar PDF
+        </Button>
+        <Button onClick={onAceptar}>
+          <Check strokeWidth={2} />
+          Aceptar
+        </Button>
       </div>
     </div>
   );

@@ -10,7 +10,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
-import { AlertTriangle, ArrowLeft, ArrowRight, Check, Loader2 } from 'lucide-react';
+import PageHeader from '../../components/common/PageHeader';
+import { AlertTriangle, ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { BarraPasos } from './componentes/BarraPasos';
 import { PasoTipoNovedad } from './componentes/PasoTipoNovedad';
@@ -168,11 +169,11 @@ export default function NuevaNovedadPage() {
   if (!init) {
     return (
       <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/novedades')} className="gap-2">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/novedades')} >
           <ArrowLeft className="h-4 w-4" />Volver a Novedades
         </Button>
-        <div className="flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <div className="flex items-start gap-3 rounded-lg border border-destructive/15 bg-destructive-soft px-4 py-3 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
           <p>No se pudo cargar el catálogo de novedades. Vuelve a intentarlo.</p>
         </div>
       </div>
@@ -181,19 +182,15 @@ export default function NuevaNovedadPage() {
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" size="sm" onClick={() => navigate('/novedades')} className="gap-2">
-        <ArrowLeft className="h-4 w-4" />Volver a Novedades
-      </Button>
+      <PageHeader
+        backTo="/novedades"
+        eyebrow="Novedades"
+        title="Registrar novedad"
+        description="Reporta permisos, incapacidades, ausencias, vacaciones o terminaciones de contrato."
+      />
 
-      <div>
-        <h1 className="text-2xl font-bold text-primary sm:text-3xl">Registrar Novedad</h1>
-        <p className="mt-1 text-muted-foreground">
-          Reporta permisos, incapacidades, ausencias, vacaciones o terminaciones de contrato
-        </p>
-      </div>
-
-      <Card className="border-border">
-        <CardContent className="p-4 sm:p-6">
+      <Card>
+        <CardContent className="py-4">
           <BarraPasos actual={paso} />
         </CardContent>
       </Card>
@@ -225,20 +222,21 @@ export default function NuevaNovedadPage() {
         />
       )}
 
-      <div className="flex flex-wrap justify-between gap-3">
-        <Button variant="outline" onClick={retroceder} disabled={guardando} className="gap-2">
-          <ArrowLeft className="h-4 w-4" />{paso === 1 ? 'Cancelar' : 'Anterior'}
+      <div className="barra-acciones flex flex-wrap items-center justify-between gap-2">
+        <Button variant="outline" onClick={retroceder} disabled={guardando}>
+          {paso > 1 && <ArrowLeft className="h-4 w-4" strokeWidth={2} />}
+          {paso === 1 ? 'Cancelar' : 'Anterior'}
         </Button>
         {paso < TOTAL_PASOS ? (
-          <Button onClick={avanzar} className="gap-2">
-            Siguiente<ArrowRight className="h-4 w-4" />
+          <Button onClick={avanzar}>
+            Siguiente<ArrowRight className="h-4 w-4" strokeWidth={2} />
           </Button>
         ) : (
-          <Button onClick={confirmar} disabled={guardando} className="gap-2 bg-success hover:bg-success/90">
-            {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-            {esAusencia(borrador) ? 'Registrar Novedad'
-              : esVacaciones(borrador) ? 'Registrar Solicitud'
-              : 'Registrar Terminación'}
+          <Button onClick={confirmar} disabled={guardando}>
+            {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
+            {esAusencia(borrador) ? 'Registrar novedad'
+              : esVacaciones(borrador) ? 'Registrar solicitud'
+              : 'Registrar terminación'}
           </Button>
         )}
       </div>

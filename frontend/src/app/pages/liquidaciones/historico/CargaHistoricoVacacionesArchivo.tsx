@@ -17,11 +17,12 @@
  */
 import { Fragment, useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
+import { Card, CardContent, CardHeader } from '../../../components/ui/card';
+import PageHeader from '../../../components/common/PageHeader';
+import StatStrip from '../../../components/common/StatStrip';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
 import { Label } from '../../../components/ui/label';
-import { Checkbox } from '../../../components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -29,16 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../../components/ui/select';
-import {
-  AlertTriangle,
-  ArrowLeft,
-  ArrowRight,
-  CalendarDays,
-  CheckCircle2,
-  Info,
-  Loader2,
-  Upload,
-} from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowRight, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../../contexts/AuthContext';
 import {
@@ -55,16 +47,25 @@ import {
 } from '../../../../api/historicoVacaciones';
 import {
   ACCEPT_ARCHIVO,
-  ESTADO_FILA_BADGE,
   ESTADO_FILA_LABEL,
   HistoricoArchivoErrorCodes as E,
   MAX_FILAS_ARCHIVO,
 } from '../../../../api/historicoComun';
 import { descargarBlob, fmtCOP, fmtFecha } from '../final/comunes';
 import {
+  Aviso,
+  BadgeDetectados,
+  BadgeEstadoFila,
+  BarraSubida,
+  CasillaSobrescribir,
+  ExitoCargue,
+  TD,
+  TH,
+  THEAD,
   BotonesPlantilla,
   CabecerasIgnoradas,
   CeldaColaborador,
+  CeldaObservacion,
   EstadoValidacion,
   IncidenciasFila,
   PasoCard,
@@ -107,15 +108,13 @@ const FILAS_EJEMPLO = [
   ['52000002', '', '', '2024-09-02', '2024-09-07', '6', '', '$ 260.000', '', 'Semana corta de septiembre'],
 ];
 
-/** Colores del semáforo de vencimiento, para el panel de saldos. */
-const VENCIMIENTO_BADGE: Record<string, string> = {
-  VENCIDA: 'bg-destructive/10 text-destructive border-destructive/30',
-  URGENTE:
-    'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/30',
-  PROXIMA:
-    'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/30',
-  CON_TIEMPO: 'bg-success/10 text-success border-success/30',
-  AL_DIA: 'bg-muted text-muted-foreground border-border',
+/** Variante del semáforo de vencimiento, para el panel de saldos. */
+const VENCIMIENTO_BADGE: Record<string, 'destructive' | 'warning' | 'success' | 'secondary'> = {
+  VENCIDA: 'destructive',
+  URGENTE: 'warning',
+  PROXIMA: 'warning',
+  CON_TIEMPO: 'success',
+  AL_DIA: 'secondary',
 };
 
 const VENCIMIENTO_LABEL: Record<string, string> = {
@@ -245,37 +244,20 @@ export default function CargaHistoricoVacacionesArchivo() {
   const aCargar = (resumen?.validas ?? 0) + (resumen?.a_sobrescribir ?? 0);
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate('/liquidaciones?tab=vacaciones')}
-          className="gap-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Volver a Liquidaciones
-        </Button>
-
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-            <CalendarDays className="h-6 w-6 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-primary sm:text-3xl">Cargar histórico de vacaciones</h1>
-            <p className="mt-0.5 text-muted-foreground">
-              Registre las vacaciones que sus colaboradores ya disfrutaron antes de usar el
-              sistema. Un archivo por año de inicio del disfrute.
-            </p>
-          </div>
-        </div>
-      </div>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeader
+        backTo="/liquidaciones?tab=vacaciones"
+        eyebrow="Vacaciones"
+        title="Cargar histórico de vacaciones"
+        description="Registra las vacaciones que tus colaboradores ya disfrutaron antes de usar el sistema. Un archivo por año de inicio del disfrute."
+      />
 
       {/* Paso 1: plantilla. El año no va dentro del archivo. */}
       <PasoCard
         n={1}
         titulo="Descarga la plantilla"
-        subtitulo="Usa esta plantilla para preparar tus datos correctamente"
+        subtitulo="Prepara tus datos con las columnas que espera el sistema."
+        contenidoClassName="space-y-2"
         accion={
           <BotonesPlantilla
             descargando={descargandoPlantilla}
@@ -283,14 +265,13 @@ export default function CargaHistoricoVacacionesArchivo() {
           />
         }
       >
-        <VistaPreviaPlantilla columnas={COLUMNAS_PLANTILLA} filas={FILAS_EJEMPLO} />
+        <VistaPreviaPlantilla columnas={COLUMNAS_PLANTILLA} filas={FILAS_EJEMPLO} formatos=".xlsx, .xls y .csv" />
 
         <p className="text-xs text-muted-foreground">
           Basta con una de <strong className="text-foreground">fecha_fin</strong> o{' '}
           <strong className="text-foreground">dias_habiles</strong>: la otra la calcula el sistema
-          con el calendario de festivos. Si vienen las dos, manda el archivo. Formatos aceptados:{' '}
-          <strong className="text-foreground">.xlsx, .xls, .csv</strong>. Las fechas se leen como
-          día/mes: <strong className="text-foreground">07/10/2024 es el 7 de octubre</strong>.
+          con el calendario de festivos. Si vienen las dos, manda el archivo. Las fechas se leen
+          como día/mes: <strong className="text-foreground">07/10/2024 es el 7 de octubre</strong>.
         </p>
       </PasoCard>
 
@@ -298,7 +279,7 @@ export default function CargaHistoricoVacacionesArchivo() {
       <PasoCard
         n={2}
         titulo="Carga tu archivo"
-        subtitulo="Arrastra el archivo o haz clic para seleccionarlo"
+        subtitulo="Arrastra el archivo o haz clic para seleccionarlo."
       >
         {/* El año va aquí y no en el paso 1: el paso 1 solo baja la plantilla,
             y el año define contra qué se valida este archivo. */}
@@ -318,6 +299,9 @@ export default function CargaHistoricoVacacionesArchivo() {
               ))}
             </SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground">
+            El de la fecha de inicio del disfrute. El año no va dentro del archivo.
+          </p>
         </div>
 
         <ZonaArchivo
@@ -325,6 +309,7 @@ export default function CargaHistoricoVacacionesArchivo() {
           analisis={analisis?.archivo}
           inputRef={inputRef}
           accept={ACCEPT_ARCHIVO}
+          bloqueado={cargando}
           onArchivo={elegirArchivo}
           onQuitar={limpiar}
           detalle={
@@ -348,83 +333,64 @@ export default function CargaHistoricoVacacionesArchivo() {
         {/* Sin calendario de un año el sistema no puede derivar ni comparar
             días: conviene decirlo antes de que el usuario vea los errores. */}
         {(analisis?.parametros.anios_sin_calendario.length ?? 0) > 0 && (
-          <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/30 dark:bg-amber-950/30 dark:text-amber-400">
-            <Info className="mt-0.5 h-4 w-4 shrink-0" />
+          <Aviso tono="warning" icono={AlertTriangle}>
             No hay calendario de festivos de{' '}
             {analisis!.parametros.anios_sin_calendario.join(', ')}. Las filas que traigan fecha
             fin y días hábiles se cargan igual; las que dejen una de las dos por calcular dan
             error.
-          </p>
+          </Aviso>
         )}
       </PasoCard>
 
       {/* Paso 3: revisión */}
       {analisis && resumen && (
-        <Card>
-          <CardHeader className="border-b">
-            <CardTitle>3. Revise antes de cargar</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 p-6">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-lg border border-border p-3">
-                <p className="text-xs text-muted-foreground">Se cargan</p>
-                <p className="text-2xl font-bold text-success">{resumen.validas}</p>
-                <p className="text-xs text-muted-foreground">
-                  {resumen.colaboradores} colaborador{resumen.colaboradores === 1 ? '' : 'es'}
-                </p>
-              </div>
-              <div className="rounded-lg border border-border p-3">
-                <p className="text-xs text-muted-foreground">Reemplazan</p>
-                <p className="text-2xl font-bold text-amber-600">{resumen.a_sobrescribir}</p>
-              </div>
-              <div className="rounded-lg border border-border p-3">
-                <p className="text-xs text-muted-foreground">Con error</p>
-                <p
-                  className={`text-2xl font-bold ${
-                    hayErrores ? 'text-destructive' : 'text-muted-foreground'
-                  }`}
-                >
-                  {resumen.con_error}
-                </p>
-              </div>
-              <div className="rounded-lg border border-border p-3">
-                <p className="text-xs text-muted-foreground">Días</p>
-                <p className="text-lg font-bold text-foreground">
-                  {fmtDias(resumen.total_dias_habiles)} hábiles
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {fmtDias(resumen.total_dias_dinero)} en dinero ·{' '}
-                  {fmtCOP(resumen.total_valor_pagado)}
-                </p>
-              </div>
-            </div>
+        <PasoCard
+          n={3}
+          titulo="Revisa los datos"
+          subtitulo="Confirma que todo esté bien antes de subirlo."
+          accion={<BadgeDetectados total={analisis.archivo.filas_leidas} />}
+          contenidoClassName="space-y-6"
+        >
+            <StatStrip
+              items={[
+                {
+                  label: 'Se cargan',
+                  value: resumen.validas,
+                  note: `${resumen.colaboradores} colaborador${resumen.colaboradores === 1 ? '' : 'es'}`,
+                },
+                { label: 'Reemplazan', value: resumen.a_sobrescribir },
+                {
+                  label: 'Con error',
+                  value: hayErrores ? <span className="text-destructive">{resumen.con_error}</span> : resumen.con_error,
+                },
+                {
+                  label: 'Días hábiles',
+                  value: fmtDias(resumen.total_dias_habiles),
+                  note: `${fmtDias(resumen.total_dias_dinero)} en dinero · ${fmtCOP(resumen.total_valor_pagado)}`,
+                },
+              ]}
+            />
 
             {analisis.advertencias.map((a, i) => (
               <p
                 key={`${a.code}-${i}`}
                 className="flex items-start gap-2 text-sm text-muted-foreground"
               >
-                <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                <Info className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
                 {a.mensaje}
               </p>
             ))}
 
             {hayYaCargados && (
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/30 dark:bg-amber-950/30">
-                <Checkbox
-                  checked={sobrescribir}
-                  onCheckedChange={(v) => cambiarSobrescribir(v === true)}
-                  className="mt-0.5"
-                />
-                <div>
-                  <p className="text-sm font-medium">Reemplazar las vacaciones ya cargadas</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Hay fechas que cruzan una vacación histórica ya registrada. La anterior se
-                    borra y la nueva queda con otro número. Nunca se toca una vacación liquidada
-                    por el sistema. Sin marcar esta casilla el archivo no se puede cargar.
-                  </p>
-                </div>
-              </label>
+              <CasillaSobrescribir
+                checked={sobrescribir}
+                onChange={cambiarSobrescribir}
+                titulo="Reemplazar las vacaciones ya cargadas"
+              >
+                Hay fechas que cruzan una vacación histórica ya registrada. La anterior se
+                borra y la nueva queda con otro número. Nunca se toca una vacación liquidada
+                por el sistema. Sin marcar esta casilla el archivo no se puede subir.
+              </CasillaSobrescribir>
             )}
 
             <TablaFilasVacaciones filas={analisis.filas} />
@@ -434,59 +400,46 @@ export default function CargaHistoricoVacacionesArchivo() {
             <PanelSaldos colaboradores={analisis.colaboradores} cargado={cargado} />
 
             {hayErrores && (
-              <p className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <Aviso tono="destructive" icono={AlertCircle}>
                 Hay {resumen.con_error} fila{resumen.con_error === 1 ? '' : 's'} con error. El
-                cargue es todo o nada: corrija el archivo y vuelva a subirlo.
-              </p>
+                cargue es todo o nada: corrige el archivo y vuelve a subirlo.
+              </Aviso>
             )}
 
             {cargado ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-success/30 bg-success/5 p-4">
-                <p className="flex items-center gap-2 text-sm font-medium text-success">
-                  <CheckCircle2 className="h-4 w-4" />
-                  Vacaciones de {analisis.anio} cargadas.
-                </p>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => navigate('/liquidaciones?tab=vacaciones')}>
-                    Ver turnos pendientes
-                  </Button>
-                  <Button size="sm" onClick={limpiar}>
-                    Cargar otro año
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex justify-end">
-                <Button
-                  onClick={() => void cargar()}
-                  disabled={!listoParaCargar || !puedeCargar}
-                  className="gap-2"
-                >
-                  {cargando ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Upload className="h-4 w-4" />
-                  )}
-                  Cargar {aCargar} vacación{aCargar === 1 ? '' : 'es'}
+              <ExitoCargue total={aCargar} modulo="vacaciones">
+                <Button variant="outline" onClick={limpiar}>
+                  Cargar otro archivo
                 </Button>
-              </div>
+                <Button onClick={() => navigate('/liquidaciones?tab=vacaciones')}>
+                  Ir a vacaciones
+                </Button>
+              </ExitoCargue>
+            ) : (
+              <BarraSubida
+                total={aCargar}
+                modulo="vacaciones"
+                bloqueado={hayErrores}
+                cargando={cargando}
+                deshabilitado={!listoParaCargar || !puedeCargar}
+                onCancelar={limpiar}
+                onSubir={() => void cargar()}
+              />
             )}
-          </CardContent>
-        </Card>
+        </PasoCard>
       )}
 
       {/* Las mismas reglas que trae la hoja de instrucciones de la plantilla,
           aquí donde se leen antes de subir el archivo. */}
-      <Card className="border-border">
-        <CardHeader className="border-b">
-          <CardTitle className="text-base">Cómo llenar el archivo</CardTitle>
+      <Card className="gap-4">
+        <CardHeader>
+          <h3>Cómo llenar el archivo</h3>
         </CardHeader>
-        <CardContent className="space-y-5 p-6">
+        <CardContent className="space-y-5">
           <div className="space-y-2 text-sm text-muted-foreground">
             <Regla n={1}>
-              <strong className="text-foreground">Cargue el histórico antes</strong> de liquidar
-              vacaciones nuevas en la pestaña. Si liquida primero una de este año, el sistema la
+              <strong className="text-foreground">Carga el histórico antes</strong> de liquidar
+              vacaciones nuevas en la pestaña. Si liquidas primero una de este año, el sistema la
               imputa al período más viejo y los saldos quedan corridos.
             </Regla>
             <Regla n={2}>
@@ -550,16 +503,15 @@ export default function CargaHistoricoVacacionesArchivo() {
               una vacación suelta que aparece después del cargue. */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
             <p className="text-xs text-muted-foreground">
-              ¿Es una sola vacación? Regístrela a mano sin preparar un archivo.
+              ¿Es una sola vacación? Regístrala a mano sin preparar un archivo.
             </p>
             <Button
               variant="outline"
               size="sm"
               onClick={() => navigate('/liquidaciones/vacaciones/carga-historico/manual')}
-              className="gap-2"
             >
               Registrar una vacación
-              <ArrowRight className="h-4 w-4" />
+              <ArrowRight strokeWidth={2} />
             </Button>
           </div>
         </CardContent>
@@ -579,42 +531,35 @@ export default function CargaHistoricoVacacionesArchivo() {
  */
 function TablaFilasVacaciones({ filas }: { filas: FilaHistoricoVacaciones[] }) {
   if (filas.length === 0) {
-    return <p className="py-6 text-center text-sm text-muted-foreground">El archivo está vacío.</p>;
+    return <p className="rounded-lg bg-muted/60 py-6 text-center text-sm text-muted-foreground">El archivo está vacío.</p>;
   }
 
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full">
-        <thead>
-          <tr className="border-b border-border bg-muted/30">
-            <th className="p-3 text-left text-xs font-semibold text-muted-foreground">Fila</th>
-            <th className="p-3 text-left text-xs font-semibold text-muted-foreground">
-              Colaborador
-            </th>
-            <th className="p-3 text-left text-xs font-semibold text-muted-foreground">Disfrute</th>
-            <th className="p-3 text-center text-xs font-semibold text-muted-foreground">Días</th>
-            <th className="hidden p-3 text-left text-xs font-semibold text-muted-foreground md:table-cell">
-              Se imputa a
-            </th>
-            <th className="hidden p-3 text-right text-xs font-semibold text-muted-foreground lg:table-cell">
-              Valor pagado
-            </th>
-            <th className="p-3 text-left text-xs font-semibold text-muted-foreground">Estado</th>
+      <table className="w-full text-sm">
+        <thead className={THEAD}>
+          <tr>
+            <th className={`${TH} w-8`}>#</th>
+            <th className={TH}>Colaborador</th>
+            <th className={TH}>Disfrute</th>
+            <th className={`${TH} text-center`}>Días</th>
+            <th className={`${TH} hidden md:table-cell`}>Se imputa a</th>
+            <th className={`${TH} hidden text-right lg:table-cell`}>Valor pagado</th>
+            <th className={`${TH} hidden xl:table-cell`}>Observación</th>
+            <th className={TH}>Estado</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-border">
           {filas.map((f) => {
             const v = f.vacacion;
             return (
               <tr
                 key={f.fila}
-                className={`border-b border-border last:border-0 ${
-                  f.estado === 'ERROR' ? 'bg-destructive/[0.03]' : ''
-                }`}
+                className={f.estado === 'ERROR' ? 'bg-destructive-soft/40' : undefined}
               >
-                <td className="p-3 align-top text-sm text-muted-foreground">{f.fila}</td>
+                <td className={`${TD} text-xs text-muted-foreground`}>{f.fila}</td>
 
-                <td className="p-3 align-top">
+                <td className={TD}>
                   <CeldaColaborador
                     nombre={f.empleado?.nombre_completo}
                     documento={f.empleado?.documento}
@@ -630,10 +575,10 @@ function TablaFilasVacaciones({ filas }: { filas: FilaHistoricoVacaciones[] }) {
                   />
                 </td>
 
-                <td className="p-3 align-top">
+                <td className={TD}>
                   {v ? (
                     <>
-                      <p className="whitespace-nowrap text-sm">
+                      <p className="whitespace-nowrap text-foreground">
                         {fmtFecha(v.fecha_inicio)}
                         {v.fecha_fin ? ` a ${fmtFecha(v.fecha_fin)}` : ''}
                       </p>
@@ -652,8 +597,8 @@ function TablaFilasVacaciones({ filas }: { filas: FilaHistoricoVacaciones[] }) {
                   )}
                 </td>
 
-                <td className="p-3 align-top text-center">
-                  <p className="text-sm font-medium">{fmtDias(v?.dias_habiles)}</p>
+                <td className={`${TD} text-center`}>
+                  <p className="font-medium tabular-nums text-foreground">{fmtDias(v?.dias_habiles)}</p>
                   <p className="text-xs text-muted-foreground">
                     {v?.dias_habiles_calculados ? 'calculados' : 'hábiles'}
                   </p>
@@ -668,14 +613,14 @@ function TablaFilasVacaciones({ filas }: { filas: FilaHistoricoVacaciones[] }) {
                     FIFO, no el archivo: los períodos son anuales desde el
                     aniversario del contrato, no semestres ni años calendario.
                     Sin esta columna el usuario no tiene cómo saberlo. */}
-                <td className="hidden p-3 align-top md:table-cell">
+                <td className={`${TD} hidden md:table-cell`}>
                   <PeriodosImputados saldo={f.saldo} />
                 </td>
 
-                <td className="hidden p-3 align-top text-right lg:table-cell">
+                <td className={`${TD} hidden text-right lg:table-cell`}>
                   {v?.valor_pagado ? (
                     <>
-                      <p className="text-sm">{fmtCOP(v.valor_pagado)}</p>
+                      <p className="tabular-nums text-foreground">{fmtCOP(v.valor_pagado)}</p>
                       {/* El reparto solo importa cuando hubo días en dinero:
                           ahí una cifra sola se parte en dos conceptos. */}
                       {v.reparto_valor === 'PROPORCIONAL_A_DIAS' && (
@@ -691,14 +636,18 @@ function TablaFilasVacaciones({ filas }: { filas: FilaHistoricoVacaciones[] }) {
                       )}
                     </>
                   ) : (
-                    <span className="text-sm text-muted-foreground">—</span>
+                    <span className="text-muted-foreground">—</span>
                   )}
                 </td>
 
-                <td className="p-3 align-top">
-                  <Badge variant="outline" className={ESTADO_FILA_BADGE[f.estado]}>
+                <td className={`${TD} hidden xl:table-cell`}>
+                  <CeldaObservacion texto={f.observacion} />
+                </td>
+
+                <td className={TD}>
+                  <BadgeEstadoFila estado={f.estado}>
                     {ESTADO_FILA_LABEL[f.estado]}
-                  </Badge>
+                  </BadgeEstadoFila>
                 </td>
               </tr>
             );
@@ -731,7 +680,7 @@ function PeriodosImputados({ saldo }: { saldo: SaldoFila | null }) {
     <div className="space-y-1">
       {saldo.periodos_afectados.map((p) => (
         <div key={p.periodo} className="whitespace-nowrap">
-          <p className="text-sm">
+          <p className="text-foreground">
             Período {p.periodo}
             <span className="text-muted-foreground">
               {' '}
@@ -744,7 +693,7 @@ function PeriodosImputados({ saldo }: { saldo: SaldoFila | null }) {
         </div>
       ))}
       {sinSaldo > 0 && (
-        <p className="text-xs text-amber-600">{fmtDias(sinSaldo)} d sin saldo causado</p>
+        <p className="text-xs text-warning">{fmtDias(sinSaldo)} d sin saldo causado</p>
       )}
     </div>
   );
@@ -770,67 +719,61 @@ function PanelSaldos({
 
   return (
     <div className="space-y-2">
-      <p className="text-sm font-semibold text-foreground">
-        Saldo por colaborador {cargado ? '(ya aplicado)' : '(simulado)'}
-      </p>
+      <h4 className="text-sm font-semibold text-foreground">
+        {cargado ? 'Saldo por colaborador ya aplicado' : 'Saldo simulado por colaborador'}
+      </h4>
       <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-border bg-muted/30">
-              <th className="p-3 text-left text-xs font-semibold text-muted-foreground">
-                Colaborador
-              </th>
-              <th className="hidden p-3 text-left text-xs font-semibold text-muted-foreground sm:table-cell">
-                Filas
-              </th>
-              <th className="p-3 text-right text-xs font-semibold text-muted-foreground">Antes</th>
-              <th className="p-3 text-center text-xs font-semibold text-muted-foreground" />
-              <th className="p-3 text-right text-xs font-semibold text-muted-foreground">
-                Después
-              </th>
+        <table className="w-full text-sm">
+          <thead className={THEAD}>
+            <tr>
+              <th className={TH}>Colaborador</th>
+              <th className={`${TH} hidden sm:table-cell`}>Filas</th>
+              <th className={`${TH} text-right`}>Antes</th>
+              <th className={`${TH} text-center`} />
+              <th className={`${TH} text-right`}>Después</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-border">
             {colaboradores.map((c) => (
               <Fragment key={c.empleado_id}>
-                <tr className="border-b border-border last:border-0">
-                  <td className="p-3 align-top">
-                    <p className="text-sm font-medium">{c.nombre_completo}</p>
+                <tr>
+                  <td className={TD}>
+                    <p className="font-medium text-foreground">{c.nombre_completo}</p>
                     <p className="text-xs text-muted-foreground">CC {c.documento}</p>
                   </td>
 
-                  <td className="hidden p-3 align-top text-xs text-muted-foreground sm:table-cell">
+                  <td className={`${TD} hidden text-xs text-muted-foreground sm:table-cell`}>
                     {c.filas.join(', ')}
                   </td>
 
-                  <td className="p-3 align-top text-right">
+                  <td className={`${TD} text-right`}>
                     <CeldaSaldo saldo={c.saldo_antes} />
                   </td>
 
-                  <td className="p-3 align-top text-center text-muted-foreground">
-                    <ArrowRight className="mx-auto h-4 w-4" />
+                  <td className={`${TD} text-center text-muted-foreground`}>
+                    <ArrowRight className="mx-auto h-4 w-4" strokeWidth={2} />
                   </td>
 
-                  <td className="p-3 align-top text-right">
+                  <td className={`${TD} text-right`}>
                     {c.saldo_despues ? (
                       <CeldaSaldo saldo={c.saldo_despues} />
                     ) : (
                       // Sin filas cargables no hay nada que simular.
-                      <span className="text-sm text-muted-foreground">sin cambios</span>
+                      <span className="text-muted-foreground">sin cambios</span>
                     )}
                   </td>
                 </tr>
 
                 {c.advertencias.length > 0 && (
-                  <tr className="border-b border-border bg-muted/20 last:border-0">
-                    <td colSpan={5} className="px-3 pb-3">
+                  <tr className="bg-muted/30">
+                    <td colSpan={5} className="px-4 py-2.5">
                       <ul className="space-y-1">
                         {c.advertencias.map((a, i) => (
                           <li
                             key={`${a.code}-${i}`}
-                            className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400"
+                            className="flex items-start gap-2 text-xs text-foreground"
                           >
-                            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" strokeWidth={2} />
                             <span>
                               {a.mensaje ?? ADVERTENCIA_COLABORADOR_LABEL[a.code] ?? a.code}
                             </span>
@@ -853,14 +796,11 @@ function CeldaSaldo({ saldo }: { saldo: SaldoColaborador }) {
   const estado = saldo.estado_vencimiento;
   return (
     <>
-      <p className="text-sm font-medium">
+      <p className="font-medium tabular-nums text-foreground">
         {fmtDias(saldo.dias_disponibles_exigibles)} días
       </p>
       {estado && (
-        <Badge
-          variant="outline"
-          className={`mt-1 ${VENCIMIENTO_BADGE[estado] ?? 'border-border text-muted-foreground'}`}
-        >
+        <Badge variant={VENCIMIENTO_BADGE[estado] ?? 'secondary'} className="mt-1">
           {VENCIMIENTO_LABEL[estado] ?? estado}
         </Badge>
       )}

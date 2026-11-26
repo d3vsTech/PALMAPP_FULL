@@ -83,6 +83,7 @@ import {
 import { ColaboradorChip } from './planilla/ColaboradorChip';
 import { EtapaLaboresFinca } from './planilla/EtapaLaboresFinca';
 import { EtapaHorasExtras } from './planilla/EtapaHorasExtras';
+import { fechaLocal } from '../../lib/fechas';
 import { EtapaFinalizacion } from './planilla/EtapaFinalizacion';
 import { EtapaInfoGeneral } from './planilla/EtapaInfoGeneral';
 import { TabCosecha } from './planilla/TabCosecha';
@@ -288,41 +289,6 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   const [palmaTipoToId, setPalmaTipoToId] = useState<Map<string, number>>(new Map());
   /** Snapshot de las labores fijas de PALMA para conocer su `tipo_pago`. */
   const [palmaFijasInfo, setPalmaFijasInfo] = useState<Map<string, { id: number; tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO' }>>(new Map());
-  /**
-   * Overrides activos de precio/modo por tercero+labor (ver §1.1 de
-   * API_OPERACIONES.md). Vienen del bundle. Se usan en
-   * `resolverPrecioPersonaLabor` y `overrideForTerceroLabor` para preview
-   * cuando la persona elegida en un jornal es un operario de tercero.
-   */
-  const [terceroLaborOverrides, setTerceroLaborOverrides] = useState<
-    import('../../../api/operaciones').TerceroLaborOverride[]
-  >([]);
-
-  /**
-   * Lookup `(tercero_id:labor_id) → override`. Sirve para preview en O(1)
-   * en cualquier punto del wizard que quiera mostrar el precio efectivo
-   * antes de enviar al backend (el backend igualmente recalcula).
-   */
-  const overrideForTerceroLabor = useMemo(() => {
-    const map = new Map<string, import('../../../api/operaciones').TerceroLaborOverride>();
-    for (const o of terceroLaborOverrides) {
-      map.set(`${o.tercero_id}:${o.labor_id}`, o);
-    }
-    return map;
-  }, [terceroLaborOverrides]);
-
-  /**
-   * Indica si el id local del wizard corresponde a un operario con override
-   * configurado para la `labor_id` dada. Útil para mostrar un indicador
-   * "precio personalizado" junto al chip del operario en los selects.
-   */
-  const tieneOverrideOperario = (cid: string, laborId: number | undefined): boolean => {
-    if (!laborId || !cid.startsWith('O_')) return false;
-    const op = colaboradores.find((c) => c.id === cid);
-    const terceroId = (op?._raw as { tercero_id?: number } | undefined)?.tercero_id;
-    if (!terceroId) return false;
-    return overrideForTerceroLabor.has(`${terceroId}:${laborId}`);
-  };
   const [motivosMap, setMotivosMap] = useState<Map<string, number>>(new Map());
   const [tiposHoraExtraMap, setTiposHoraExtraMap] = useState<Map<string, number>>(new Map());
   const [insumosLista, setInsumosLista] = useState<string[]>([]);
@@ -458,12 +424,6 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
         // Orden alfabetico por primer nombre para toda la lista mezclada.
         setColaboradores(sortByFirstName([...empleadosLista, ...operariosLista]));
-
-        // Overrides de precio/modo por tercero — los usaremos en
-        // `resolverPrecioPersonaLabor(labor, persona, overrides)` para mostrar
-        // el preview correcto cuando se elige un operario en un jornal.
-        const overrides = (parametricas as any).tercero_labor_overrides ?? [];
-        setTerceroLaborOverrides(overrides);
 
         setLotesData((parametricas.lotes ?? []).map((l: any) => ({ id: String(l.id), nombre: l.nombre })));
 
@@ -2054,15 +2014,22 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   };
 
   const guardarPlateo = () => {
-    if (plateoEnEdicion) {
-      const existe = trabajosPlateo.some(t => t.id === plateoEnEdicion.id);
-      if (existe) {
-        setTrabajosPlateo(trabajosPlateo.map(t => t.id === plateoEnEdicion.id ? plateoEnEdicion : t));
-      } else {
-        setTrabajosPlateo([plateoEnEdicion, ...trabajosPlateo]);
-      }
-      setPlateoEnEdicion(null);
+    if (!plateoEnEdicion) return;
+    // §3.2 — Sin palmas el jornal se envía sin `cantidad_palmas` y el
+    // backend lo rechaza al cerrar la planilla. Se avisa acá, que es donde
+    // el usuario puede corregirlo.
+    if (!plateoEnEdicion.numeroPalmas || plateoEnEdicion.numeroPalmas <= 0) {
+      toast.error('Indica el número de palmas: se paga por palma');
+      return;
     }
+
+    const existe = trabajosPlateo.some(t => t.id === plateoEnEdicion.id);
+    if (existe) {
+      setTrabajosPlateo(trabajosPlateo.map(t => t.id === plateoEnEdicion.id ? plateoEnEdicion : t));
+    } else {
+      setTrabajosPlateo([plateoEnEdicion, ...trabajosPlateo]);
+    }
+    setPlateoEnEdicion(null);
   };
 
   const cancelarPlateo = () => {
@@ -2080,15 +2047,22 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   };
 
   const guardarPoda = () => {
-    if (podaEnEdicion) {
-      const existe = trabajosPoda.some(t => t.id === podaEnEdicion.id);
-      if (existe) {
-        setTrabajosPoda(trabajosPoda.map(t => t.id === podaEnEdicion.id ? podaEnEdicion : t));
-      } else {
-        setTrabajosPoda([podaEnEdicion, ...trabajosPoda]);
-      }
-      setPodaEnEdicion(null);
+    if (!podaEnEdicion) return;
+    // §3.2 — Sin palmas el jornal se envía sin `cantidad_palmas` y el
+    // backend lo rechaza al cerrar la planilla. Se avisa acá, que es donde
+    // el usuario puede corregirlo.
+    if (!podaEnEdicion.numeroPalmas || podaEnEdicion.numeroPalmas <= 0) {
+      toast.error('Indica el número de palmas: se paga por palma');
+      return;
     }
+
+    const existe = trabajosPoda.some(t => t.id === podaEnEdicion.id);
+    if (existe) {
+      setTrabajosPoda(trabajosPoda.map(t => t.id === podaEnEdicion.id ? podaEnEdicion : t));
+    } else {
+      setTrabajosPoda([podaEnEdicion, ...trabajosPoda]);
+    }
+    setPodaEnEdicion(null);
   };
 
   const cancelarPoda = () => {
@@ -2109,15 +2083,19 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   };
 
   const guardarFertilizacion = () => {
-    if (fertilizacionEnEdicion) {
-      const existe = trabajosFertilizacion.some(t => t.id === fertilizacionEnEdicion.id);
-      if (existe) {
-        setTrabajosFertilizacion(trabajosFertilizacion.map(t => t.id === fertilizacionEnEdicion.id ? fertilizacionEnEdicion : t));
-      } else {
-        setTrabajosFertilizacion([fertilizacionEnEdicion, ...trabajosFertilizacion]);
-      }
-      setFertilizacionEnEdicion(null);
+    if (!fertilizacionEnEdicion) return;
+    // Mismo caso que plateo y poda: sin palmas el backend rechaza el jornal.
+    if (!fertilizacionEnEdicion.palmas || fertilizacionEnEdicion.palmas <= 0) {
+      toast.error('Indica el número de palmas: se paga por palma');
+      return;
     }
+    const existe = trabajosFertilizacion.some(t => t.id === fertilizacionEnEdicion.id);
+    if (existe) {
+      setTrabajosFertilizacion(trabajosFertilizacion.map(t => t.id === fertilizacionEnEdicion.id ? fertilizacionEnEdicion : t));
+    } else {
+      setTrabajosFertilizacion([fertilizacionEnEdicion, ...trabajosFertilizacion]);
+    }
+    setFertilizacionEnEdicion(null);
   };
 
   const cancelarFertilizacion = () => {
@@ -2677,7 +2655,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       {/* Overlay de carga durante el guardado */}
       {guardando && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card p-8 shadow-xl">
+          <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card p-8 shadow-md">
             <Loader2 className="h-10 w-10 animate-spin text-primary" />
             <p className="font-semibold text-foreground">Guardando planilla...</p>
           </div>
@@ -2721,7 +2699,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
           {/* Stepper horizontal */}
           <Card className="gap-0">
-            <CardContent className="px-4 py-4 sm:px-6 md:p-6">
+            <CardContent className="px-4 py-4 sm:px-6">
               <div className="flex items-center justify-between">
                 {ETAPAS.map((etapa, index) => {
                   const estaCompleta = etapaActual > etapa.numero;
@@ -2740,7 +2718,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         disabled={!navegable}
                       >
                         <div
-                          className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition md:h-10 md:w-10 ${
+                          className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-sm transition-colors ${
                             estaCompleta
                               ? 'border-primary bg-primary text-primary-foreground'
                               : estaActiva
@@ -2749,14 +2727,14 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                           }`}
                         >
                           {estaCompleta ? (
-                            <Check className="h-4 w-4" strokeWidth={2} />
+                            <Check className="h-4 w-4" strokeWidth={2.5} />
                           ) : (
-                            <span className="font-bold">{etapa.numero}</span>
+                            <span className="font-semibold">{etapa.numero}</span>
                           )}
                         </div>
-                        <div className="hidden text-center md:block">
+                        <div className={`text-center ${estaActiva ? '' : 'hidden sm:block'}`}>
                           <div
-                            className={`text-sm font-semibold whitespace-nowrap ${
+                            className={`text-[13px] font-semibold whitespace-nowrap ${
                               estaActiva || estaCompleta ? 'text-foreground' : 'text-muted-foreground'
                             }`}
                           >
@@ -2767,7 +2745,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
                       {/* Línea conectora */}
                       {index < ETAPAS.length - 1 && (
-                        <div className="relative mx-2 h-0.5 min-w-[12px] flex-1 bg-border sm:mx-3 md:-mt-6">
+                        <div className="relative mx-2 h-0.5 min-w-[12px] flex-1 bg-border sm:mx-3 sm:-mt-6">
                           <div
                             className={`absolute inset-0 bg-primary transition ${
                               estaCompleta ? 'w-full' : 'w-0'
@@ -2779,11 +2757,6 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   );
                 })}
               </div>
-              {/* Reemplaza a los rotulos escondidos: sin esto el circulo
-                  activo no dice de que paso se trata. */}
-              <p className="mt-3 text-center text-[13px] font-semibold text-foreground md:hidden">
-                Paso {etapaActual} de {ETAPAS.length}: {ETAPAS.find((e) => e.numero === etapaActual)?.nombre}
-              </p>
             </CardContent>
           </Card>
 
@@ -2891,8 +2864,6 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         guardarPlateo={guardarPlateo}
                         editarPlateo={editarPlateo}
                         eliminarPlateo={eliminarPlateo}
-                        tieneOverrideOperario={tieneOverrideOperario}
-                        palmaTipoToId={palmaTipoToId}
                         setFormRef={setFormRef}
                       />
                     </TabsContent>
@@ -3052,12 +3023,12 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           </fieldset>
 
           {/* Botones de navegación */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-4">
+          <div className="barra-acciones flex items-center justify-between gap-2 pt-4">
             <Button
               variant="outline"
               onClick={etapaAnterior}
               disabled={etapaActual === 1}
-              className="gap-2"
+              
             >
               <ArrowLeft className="h-4 w-4" />
               Anterior
@@ -3071,7 +3042,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   variant="outline"
                   onClick={() => guardarTodo()}
                   disabled={guardando}
-                  className="gap-2 border-success text-success hover:bg-success/10"
+                  className="border-success text-success hover:bg-success/10"
                   title="Guardar cambios y volver al listado"
                 >
                   {guardando ? (
@@ -3091,7 +3062,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 <Button
                   onClick={siguienteEtapa}
                   disabled={etapaActual === 1 && !puedeAvanzarEtapa1 && !modoLectura}
-                  className="gap-2"
+                  
                 >
                   Siguiente
                   <ArrowRight className="h-4 w-4" />
@@ -3102,14 +3073,14 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 // superior o "Anterior", lo cual no es evidente.
                 <Button
                   onClick={() => navigate('/operaciones')}
-                  className="gap-2"
+                  
                 >
                   <Check className="h-4 w-4" />
                   Finalizar
                 </Button>
               ) : (
                 <Button
-                  onClick={() => guardarTodo()} disabled={guardando} className="gap-2"
+                  onClick={() => guardarTodo()} disabled={guardando} 
                 >
                   {guardando ? (
                     <>
@@ -3119,7 +3090,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   ) : (
                     <>
                       <Save className="h-4 w-4" />
-                      Guardar Planilla
+                      Guardar planilla
                     </>
                   )}
                 </Button>
@@ -3172,7 +3143,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   </div>
                   <div className="h-2 bg-muted rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-primary transition duration-300"
+                      className="h-full rounded-full bg-primary transition-[width]"
                       style={{ width: `${(etapaActual / ETAPAS.length) * 100}%` }}
                     />
                   </div>
@@ -3197,20 +3168,14 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         <div className="flex items-center justify-between">
                           <span className="text-sm">Fecha</span>
                           <span className="font-semibold text-sm">
-                            {(() => {
-                              // Parseo manual para EVITAR el desfase por zona
-                              // horaria de `new Date("YYYY-MM-DD")` (que
-                              // interpreta como UTC y en GMT-5 resta un día).
-                              const m = fecha.match(/^(\d{4})-(\d{2})-(\d{2})/);
-                              return m ? `${m[3]}/${m[2]}/${m[1]}` : fecha;
-                            })()}
+                            {fechaLocal(fecha).toLocaleDateString('es-CO')}
                           </span>
                         </div>
                       )}
                       {elaboradoPor && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm">Elaborado por</span>
-                          <span className="font-semibold text-sm truncate ml-2 max-w-[150px]" title={elaboradoPor}>
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="shrink-0 text-sm">Elaborado por</span>
+                          <span className="min-w-0 break-words text-right text-sm font-semibold" title={elaboradoPor}>
                             {elaboradoPor}
                           </span>
                         </div>
@@ -3267,7 +3232,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                 <span className="text-muted-foreground">
                                   {lote?.nombre} - {sublote?.nombre}
                                 </span>
-                                <span className="font-medium">{trabajo.gajosRecogidos} gajos</span>
+                                <span className="font-medium tabular-nums">{trabajo.gajosRecogidos} gajos</span>
                               </div>
                               {nombresColabs.length > 0 && (
                                 <div className="text-muted-foreground">
@@ -3279,8 +3244,8 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         })}
                         <div className="pt-1 border-t border-border/50">
                           <div className="flex items-center justify-between font-medium">
-                            <span className="text-xs">Total Cosecha</span>
-                            <span className="text-xs text-success">
+                            <span className="text-xs">Total cosecha</span>
+                            <span className="text-xs tabular-nums text-success">
                               {trabajosCosecha.reduce((sum, t) => sum + (t.gajosRecogidos ?? 0), 0).toLocaleString('es-CO')} gajos
                             </span>
                           </div>
@@ -3315,7 +3280,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                 <span className="text-muted-foreground">
                                   {lote?.nombre} - {sublote?.nombre}
                                 </span>
-                                <span className="font-medium">{trabajo.numeroPalmas} palmas</span>
+                                <span className="font-medium tabular-nums">{trabajo.numeroPalmas} palmas</span>
                               </div>
                               {nombresColabs.length > 0 && (
                                 <div className="text-muted-foreground">
@@ -3327,7 +3292,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         })}
                         <div className="pt-1 border-t border-border/50">
                           <div className="flex items-center justify-between font-medium">
-                            <span className="text-xs">Total Plateo</span>
+                            <span className="text-xs">Total plateo</span>
                             <span className="text-xs text-primary">
                               {trabajosPlateo.reduce((sum, t) => sum + t.numeroPalmas, 0).toLocaleString('es-CO')} palmas
                             </span>
@@ -3363,7 +3328,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                 <span className="text-muted-foreground">
                                   {lote?.nombre} - {sublote?.nombre}
                                 </span>
-                                <span className="font-medium">{trabajo.numeroPalmas} palmas</span>
+                                <span className="font-medium tabular-nums">{trabajo.numeroPalmas} palmas</span>
                               </div>
                               {nombresColabs.length > 0 && (
                                 <div className="text-muted-foreground">
@@ -3375,8 +3340,8 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         })}
                         <div className="pt-1 border-t border-border/50">
                           <div className="flex items-center justify-between font-medium">
-                            <span className="text-xs">Total Poda</span>
-                            <span className="text-xs text-warning">
+                            <span className="text-xs">Total poda</span>
+                            <span className="text-xs tabular-nums text-warning">
                               {trabajosPoda.reduce((sum, t) => sum + t.numeroPalmas, 0).toLocaleString('es-CO')} palmas
                             </span>
                           </div>
@@ -3536,7 +3501,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                   {lote?.nombre}{sublote?.nombre ? ` - ${sublote.nombre}` : ''}
                                 </span>
                                 {trabajo.laborOtrosTipoPago === 'POR_PALMA' && trabajo.numeroPalmas != null && (
-                                  <span className="font-medium">{trabajo.numeroPalmas} palmas</span>
+                                  <span className="font-medium tabular-nums">{trabajo.numeroPalmas} palmas</span>
                                 )}
                               </div>
                               {labelLabor && (
@@ -3590,7 +3555,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                 <span className="text-xs font-medium">
                                   {col ? `${col.nombres} ${col.apellidos}` : '-'}
                                 </span>
-                                <span className="text-xs font-bold text-warning">{he.numeroHoras}h</span>
+                                <span className="text-xs font-bold tabular-nums text-warning">{he.numeroHoras}h</span>
                               </div>
                               <div className="text-xs text-muted-foreground mt-0.5">
                                 {he.tipoHora}
@@ -3600,8 +3565,8 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         })}
                         <div className="pt-1 border-t border-border">
                           <div className="flex items-center justify-between font-medium">
-                            <span className="text-xs">Total Horas</span>
-                            <span className="text-xs text-warning">
+                            <span className="text-xs">Total horas</span>
+                            <span className="text-xs tabular-nums text-warning">
                               {horasExtras.reduce((sum, he) => sum + he.numeroHoras, 0)} horas
                             </span>
                           </div>
@@ -3647,7 +3612,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                               {/* PR-N3 — un rango o un horario cambian lo que
                                   nómina va a descontar: va a la vista. */}
                               {ausente.horaInicio && ausente.horaFin ? (
-                                <div className="text-xs text-sky-700 mt-0.5 dark:text-sky-400">
+                                <div className="text-xs text-info mt-0.5">
                                   {ausente.horaInicio} a {ausente.horaFin} · parcial
                                 </div>
                               ) : ausente.fechaFin && ausente.fechaFin !== fecha ? (

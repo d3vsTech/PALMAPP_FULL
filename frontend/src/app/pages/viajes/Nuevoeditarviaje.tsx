@@ -10,9 +10,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
 import PageHeader from '../../components/common/PageHeader';
-import {
-  Truck, User, MapPin, Calendar, Save, X, Hash, FileText,
-} from 'lucide-react';
+import { Save } from 'lucide-react';
 import {
   viajesApi,
   empresasTransportadorasApi,
@@ -370,18 +368,11 @@ export default function NuevoEditarViaje() {
 
       {/* Formulario */}
       <form onSubmit={guardarViaje}>
-        <div className="max-w-5xl mx-auto">
-          <Card className="gap-4">
-            <CardHeader className="pb-0">
-              <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-soft text-primary">
-                  <Truck className="h-5 w-5" strokeWidth={2} />
-                </span>
-                <div>
-                  <CardTitle>Información del viaje</CardTitle>
-                  <CardDescription>Datos básicos del despacho</CardDescription>
-                </div>
-              </div>
+        <div className="mx-auto max-w-5xl space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Información general</CardTitle>
+              <CardDescription>Datos básicos del viaje. Los campos con * son obligatorios.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Primera fila: Fecha · Prefijo · Número de Remisión.
@@ -390,10 +381,7 @@ export default function NuevoEditarViaje() {
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {/* Fecha */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="fecha" className="flex items-center gap-2 text-sm">
-                    <Calendar className="h-3.5 w-3.5" />
-                    Fecha del Viaje
-                  </Label>
+                  <Label htmlFor="fecha">Fecha del viaje <span className="text-destructive">*</span></Label>
                   <Input
                     id="fecha"
                     type="date"
@@ -409,10 +397,7 @@ export default function NuevoEditarViaje() {
                     Al elegir uno, "Número de Remisión" se auto-rellena
                     con el `numero_actual` del rango. */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="prefijo" className="flex items-center gap-2 text-sm">
-                    <Hash className="h-3.5 w-3.5" />
-                    Prefijo
-                  </Label>
+                  <Label htmlFor="prefijo">Prefijo</Label>
                   <Select
                     value={formData.prefijo}
                     onValueChange={(v) => {
@@ -445,7 +430,7 @@ export default function NuevoEditarViaje() {
                       {/* El campo arranca vacío y el rango es opcional (§18).
                           El marcador decía "Automático", y eso se leía como si
                           ya hubiera una opción escogida. */}
-                      <SelectValue placeholder="Seleccionar rango..." />
+                      <SelectValue placeholder="Seleccionar rango" />
                     </SelectTrigger>
                     <SelectContent>
                       {/* El rango es opcional (§18): esta opción permite
@@ -493,10 +478,7 @@ export default function NuevoEditarViaje() {
                     el payload, así que el usuario escribía un número que se
                     descartaba en silencio. */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="numeroRemision" className="flex items-center gap-2 text-sm">
-                    <FileText className="h-3.5 w-3.5" />
-                    Número de Remisión
-                  </Label>
+                  <Label htmlFor="numeroRemision">Número de remisión</Label>
                   <Input
                     id="numeroRemision"
                     placeholder={`REM-${(formData.fecha || '').slice(0, 4) || 'AAAA'}-NNN`}
@@ -516,10 +498,7 @@ export default function NuevoEditarViaje() {
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {/* Transportador (empresa) */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="transportador" className="flex items-center gap-2 text-sm">
-                    <Truck className="h-3.5 w-3.5" />
-                    Transportador
-                  </Label>
+                  <Label htmlFor="transportador">Transportador <span className="text-destructive">*</span></Label>
                   <Select
                     value={formData.transportadorId}
                     onValueChange={handleTransportadorChange}
@@ -528,7 +507,7 @@ export default function NuevoEditarViaje() {
                       id="transportador"
                       className={errors.transportadorId ? 'border-destructive' : ''}
                     >
-                      <SelectValue placeholder="Seleccionar transportador..." />
+                      <SelectValue placeholder="Seleccionar transportador" />
                     </SelectTrigger>
                     <SelectContent>
                       {transportadores.map((t) => (
@@ -545,10 +524,7 @@ export default function NuevoEditarViaje() {
 
                 {/* Conductor (auto) */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="conductor" className="flex items-center gap-2 text-sm">
-                    <User className="h-3.5 w-3.5" />
-                    Conductor
-                  </Label>
+                  <Label htmlFor="conductor">Conductor <span className="text-destructive">*</span></Label>
                   <Input
                     id="conductor"
                     placeholder="Selecciona un transportador primero"
@@ -561,10 +537,7 @@ export default function NuevoEditarViaje() {
 
                 {/* Placa (auto) */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="placaVehiculo" className="flex items-center gap-2 text-sm">
-                    <Truck className="h-3.5 w-3.5" />
-                    Placa del Vehículo
-                  </Label>
+                  <Label htmlFor="placaVehiculo">Placa del vehículo <span className="text-destructive">*</span></Label>
                   <Input
                     id="placaVehiculo"
                     placeholder="Selecciona un transportador primero"
@@ -579,10 +552,7 @@ export default function NuevoEditarViaje() {
 
                 {/* Extractora */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="extractora" className="flex items-center gap-2 text-sm">
-                    <MapPin className="h-3.5 w-3.5" />
-                    Extractora Destino
-                  </Label>
+                  <Label htmlFor="extractora">Extractora destino <span className="text-destructive">*</span></Label>
                   <Select
                     value={formData.extractoraId}
                     onValueChange={(v) => handleInputChange('extractoraId', v)}
@@ -591,7 +561,7 @@ export default function NuevoEditarViaje() {
                       id="extractora"
                       className={errors.extractoraId ? 'border-destructive' : ''}
                     >
-                      <SelectValue placeholder="Seleccionar extractora..." />
+                      <SelectValue placeholder="Seleccionar extractora" />
                     </SelectTrigger>
                     <SelectContent>
                       {extractoras.map((ext) => (
@@ -608,10 +578,7 @@ export default function NuevoEditarViaje() {
 
                 {/* Hora de Salida */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="horaSalida" className="flex items-center gap-2 text-sm">
-                    <Calendar className="h-3.5 w-3.5" />
-                    Hora de Salida
-                  </Label>
+                  <Label htmlFor="horaSalida">Hora de salida</Label>
                   <Input
                     id="horaSalida"
                     type="time"
@@ -630,27 +597,21 @@ export default function NuevoEditarViaje() {
               </div>
             </CardContent>
           </Card>
-        </div>
 
-        {/* Botones de acción */}
-        <div className="flex justify-end gap-3 mt-6">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate('/viajes')}
-            className="gap-2"
-          >
-            <X className="h-4 w-4" />
-            Cancelar
-          </Button>
-          <Button
-            type="submit"
-            disabled={guardando}
-            className="gap-2 bg-primary hover:bg-primary/90"
-          >
-            <Save className="h-4 w-4" />
-            {guardando ? 'Guardando...' : esEdicion ? 'Guardar Cambios' : 'Crear Viaje'}
-          </Button>
+          {/* Botones de acción */}
+          <div className="barra-acciones flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => navigate('/viajes')}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={guardando}>
+              <Save className="h-4 w-4" strokeWidth={2} />
+              {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear viaje'}
+            </Button>
+          </div>
         </div>
       </form>
     </div>

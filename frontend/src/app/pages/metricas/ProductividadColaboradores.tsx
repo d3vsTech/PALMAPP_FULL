@@ -1,5 +1,9 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import {
+  CHART_COLORS, gridProps, xAxisProps, yAxisProps, barProps, barCategoryGap, tooltipProps,
+} from '../../components/common/chartTheme';
+import PageHeader from '../../components/common/PageHeader';
 import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
 import {
@@ -34,10 +38,10 @@ export default function ProductividadColaboradores() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold">Productividad de Colaboradores</h1>
-        <p className="text-muted-foreground">Ranking y análisis de rendimiento del equipo</p>
-      </div>
+      <PageHeader
+        title="Productividad de colaboradores"
+        description="Rendimiento del equipo en el período."
+      />
 
       {/* Filtros */}
       <Card>
@@ -63,16 +67,16 @@ export default function ProductividadColaboradores() {
       {/* Gráfica de barras */}
       <Card>
         <CardHeader>
-          <CardTitle>Rendimiento por Colaborador (kg)</CardTitle>
+          <CardTitle>Rendimiento por colaborador (kg)</CardTitle>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="nombre" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="rendimiento" fill="hsl(var(--chart-1))" />
+            <BarChart data={chartData} barCategoryGap={barCategoryGap}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="nombre" {...xAxisProps} />
+              <YAxis {...yAxisProps} />
+              <Tooltip {...tooltipProps} />
+              <Bar dataKey="rendimiento" fill={CHART_COLORS[0]} {...barProps} />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
@@ -81,7 +85,7 @@ export default function ProductividadColaboradores() {
       {/* Tabla de datos */}
       <Card>
         <CardHeader>
-          <CardTitle>Detalle de Productividad</CardTitle>
+          <CardTitle>Detalle de productividad</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>

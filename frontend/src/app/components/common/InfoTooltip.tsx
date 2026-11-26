@@ -30,7 +30,7 @@ export function InfoTooltip({ text, className }: InfoTooltipProps) {
         <HelpCircle className="h-3.5 w-3.5" />
       </span>
       {visible && (
-        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-56 rounded-lg bg-foreground px-3 py-2 text-xs text-background shadow-lg pointer-events-none">
+        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-56 rounded-lg bg-foreground px-3 py-2 text-xs text-background shadow-md pointer-events-none">
           {text}
           <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-foreground" />
         </span>

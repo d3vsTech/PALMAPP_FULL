@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { cached } from '../../../api/cache';
 import { sortByFirstName } from '../../utils/personas';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { ConfigSection, ConfigEmpty, ConfigRowActions } from './ConfigSection';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Plus, Trash2, Edit, Building2, User, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, ChevronDown, ChevronRight } from 'lucide-react';
+import { Badge } from '../ui/badge';
 import { toast } from 'sonner';
 import {
   Select,
@@ -297,10 +298,10 @@ export function TransporteTab() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {empresaEdit ? 'Editar Empresa de Transporte' : 'Nueva Empresa de Transporte'}
+              {empresaEdit ? 'Editar empresa de transporte' : 'Nueva empresa de transporte'}
             </DialogTitle>
             <DialogDescription>
-              Compañía de transporte de carga
+              Compañía de transporte de carga.
             </DialogDescription>
           </DialogHeader>
 
@@ -319,8 +320,8 @@ export function TransporteTab() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="JURIDICA">Persona Jurídica</SelectItem>
-                  <SelectItem value="NATURAL">Persona Natural</SelectItem>
+                  <SelectItem value="JURIDICA">Persona jurídica</SelectItem>
+                  <SelectItem value="NATURAL">Persona natural</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -329,7 +330,7 @@ export function TransporteTab() {
               <>
                 <div className="space-y-2">
                   <Label htmlFor="nombre-empresa">
-                    Nombre de la Empresa <span className="text-destructive">*</span>
+                    Nombre de la empresa <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="nombre-empresa"
@@ -371,7 +372,7 @@ export function TransporteTab() {
               <>
                 <div className="space-y-2">
                   <Label htmlFor="nombre-natural">
-                    Nombre Completo <span className="text-destructive">*</span>
+                    Nombre completo <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="nombre-natural"
@@ -398,7 +399,7 @@ export function TransporteTab() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="razon-social">Razón Social / Nombre Comercial</Label>
+                  <Label htmlFor="razon-social">Razón social o nombre comercial</Label>
                   <Input
                     id="razon-social"
                     placeholder="Ej: Transporte JP"
@@ -438,17 +439,17 @@ export function TransporteTab() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {conductorEdit ? 'Editar Conductor' : 'Nuevo Conductor'}
+              {conductorEdit ? 'Editar conductor' : 'Nuevo conductor'}
             </DialogTitle>
             <DialogDescription>
-              Conductor y su vehículo
+              Conductor y su vehículo.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="empresa_transportadora_id">
-                Empresa de Transporte <span className="text-destructive">*</span>
+                Empresa de transporte <span className="text-destructive">*</span>
               </Label>
               <Select
                 value={formConductor.empresa_transportadora_id}
@@ -524,7 +525,7 @@ export function TransporteTab() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="placa">Placa del Vehículo</Label>
+              <Label htmlFor="placa">Placa del vehículo</Label>
               <Input
                 id="placa"
                 placeholder="ABC-123"
@@ -547,165 +548,128 @@ export function TransporteTab() {
 
       <TabLoadingGate loading={loading} message="Cargando transporte…">
       {/* Empresas de Transporte con Conductores */}
-      <Card className="border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Transportadores</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">Empresas de transporte y sus conductores</p>
-            </div>
-            <Button onClick={() => handleOpenModalEmpresa()}>
-              <Plus className="mr-2 h-4 w-4" />
-              Nueva Empresa
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6">
+      <ConfigSection
+        title="Transportadores"
+        description="Empresas de transporte y sus conductores."
+        flush
+        actions={
+          <Button onClick={() => handleOpenModalEmpresa()}>
+            <Plus strokeWidth={2} />
+            Nueva empresa
+          </Button>
+        }
+      >
           {empresas.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Building2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">No hay empresas de transporte registradas</p>
-            </div>
+            <ConfigEmpty
+              title="Sin empresas de transporte"
+              description="Agrega la primera empresa o persona que transporta tu fruta."
+              action={
+                <Button onClick={() => handleOpenModalEmpresa()}>
+                  <Plus strokeWidth={2} />
+                  Agregar empresa
+                </Button>
+              }
+            />
           ) : (
-            <div className="space-y-3">
+            <ul className="divide-y divide-border">
               {[...empresas].sort((a, b) => (a.razon_social ?? '').localeCompare(b.razon_social ?? '', 'es', { sensitivity: 'base' })).map((empresa) => {
                 const conductoresEmpresa = getConductoresPorEmpresa(empresa.id);
                 const estaExpandida = empresasExpandidas.includes(empresa.id);
                 const tipo = empresa.tipo_persona ?? 'JURIDICA';
 
                 return (
-                  <div
-                    key={empresa.id}
-                    className="rounded-lg border border-border bg-muted/30"
-                  >
-                    {/* Cabecera de la empresa */}
-                    <div className="flex items-center justify-between p-4">
-                      <div className="flex items-center gap-3 flex-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleEmpresa(empresa.id)}
-                          className="h-8 w-8 p-0"
-                        >
-                          {estaExpandida ? (
-                            <ChevronDown className="h-4 w-4" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" />
-                          )}
-                        </Button>
-                        <Building2 className="h-5 w-5 text-primary flex-shrink-0" />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="font-semibold">{empresa.razon_social}</p>
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${
-                              tipo === 'NATURAL'
-                                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                                : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
-                            }`}>
-                              {tipo === 'NATURAL' ? 'P. Natural' : 'P. Jurídica'}
-                            </span>
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                              {conductoresEmpresa.length} {conductoresEmpresa.length === 1 ? 'conductor' : 'conductores'}
-                            </span>
-                          </div>
-                          <div className="flex gap-4 mt-1 text-sm text-muted-foreground">
-                            {tipo === 'JURIDICA' && empresa.nit && <span>NIT: {empresa.nit}</span>}
-                            {tipo === 'NATURAL' && empresa.nit && <span>CC: {empresa.nit}</span>}
-                            {tipo === 'NATURAL' && empresa.contacto_nombre && <span>Razón Social: {empresa.contacto_nombre}</span>}
-                            {empresa.telefono && <span>Tel: {empresa.telefono}</span>}
-                          </div>
+                  <li key={empresa.id}>
+                    <div className="flex items-start gap-2 px-3 py-3 sm:px-5">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={estaExpandida ? 'Ocultar conductores' : 'Ver conductores'}
+                        aria-expanded={estaExpandida}
+                        onClick={() => toggleEmpresa(empresa.id)}
+                      >
+                        {estaExpandida
+                          ? <ChevronDown className="text-muted-foreground" strokeWidth={2} />
+                          : <ChevronRight className="text-muted-foreground" strokeWidth={2} />}
+                      </Button>
+                      <div className="min-w-0 flex-1 pt-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold text-foreground">{empresa.razon_social}</p>
+                          <Badge variant="secondary">
+                            {tipo === 'NATURAL' ? 'Persona natural' : 'Persona jurídica'}
+                          </Badge>
                         </div>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {[
+                            tipo === 'JURIDICA' && empresa.nit ? `NIT ${empresa.nit}` : null,
+                            tipo === 'NATURAL' && empresa.nit ? `CC ${empresa.nit}` : null,
+                            tipo === 'NATURAL' ? empresa.contacto_nombre : null,
+                            empresa.telefono || null,
+                            `${conductoresEmpresa.length} ${conductoresEmpresa.length === 1 ? 'conductor' : 'conductores'}`,
+                          ].filter(Boolean).join(' · ')}
+                        </p>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleOpenModalEmpresa(empresa)}
-                          className="h-8 w-8 p-0"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => eliminarEmpresa(empresa)}
-                          className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      <ConfigRowActions
+                        label={empresa.razon_social ?? 'empresa'}
+                        onEdit={() => handleOpenModalEmpresa(empresa)}
+                        onDelete={() => eliminarEmpresa(empresa)}
+                      />
                     </div>
 
                     {/* Conductores (cuando está expandida) */}
                     {estaExpandida && (
-                      <div className="border-t border-border bg-muted/10 p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm font-medium text-muted-foreground">Conductores</span>
-                          </div>
+                      <div className="border-t border-border bg-muted/30 px-3 py-3 sm:pl-14 sm:pr-5">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <p className="text-[13px] font-medium text-muted-foreground">Conductores</p>
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => handleOpenModalConductor(empresa.id)}
                           >
-                            <Plus className="mr-2 h-3 w-3" />
-                            Agregar Conductor
+                            <Plus strokeWidth={2} />
+                            Agregar conductor
                           </Button>
                         </div>
 
                         {conductoresEmpresa.length === 0 ? (
-                          <div className="text-center py-6 text-sm text-muted-foreground">
-                            No hay conductores registrados para esta empresa
-                          </div>
+                          <p className="py-4 text-center text-sm text-muted-foreground">
+                            Esta empresa todavía no tiene conductores.
+                          </p>
                         ) : (
-                          <div className="space-y-2">
+                          <ul className="divide-y divide-border rounded-lg border border-border bg-card">
                             {sortByFirstName(conductoresEmpresa).map((conductor) => (
-                              <div
+                              <li
                                 key={conductor.id}
-                                className="flex items-center justify-between p-3 rounded-lg bg-background border border-border"
+                                className="flex items-center justify-between gap-3 px-4 py-2.5"
                               >
-                                <div className="flex-1">
-                                  <p className="font-medium text-sm">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold text-foreground">
                                     {conductor.nombres} {conductor.apellidos}
                                   </p>
-                                  <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
-                                    {conductor.numero_documento && <span>CC: {conductor.numero_documento}</span>}
-                                    {conductor.telefono && <span>Tel: {conductor.telefono}</span>}
-                                    {conductor.placa_vehiculo && <span>Placa: {conductor.placa_vehiculo}</span>}
-                                  </div>
+                                  <p className="text-xs text-muted-foreground">
+                                    {[
+                                      conductor.numero_documento ? `CC ${conductor.numero_documento}` : null,
+                                      conductor.telefono || null,
+                                      conductor.placa_vehiculo ? `Placa ${conductor.placa_vehiculo}` : null,
+                                    ].filter(Boolean).join(' · ')}
+                                  </p>
                                 </div>
-                                <div className="flex items-center gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleOpenModalConductor(empresa.id, conductor)}
-                                    className="h-7 w-7 p-0"
-                                  >
-                                    <Edit className="h-3 w-3" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => eliminarConductor(conductor)}
-                                    className="h-7 w-7 p-0 hover:bg-destructive/10 hover:text-destructive"
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              </div>
+                                <ConfigRowActions
+                                  label={`${conductor.nombres} ${conductor.apellidos}`}
+                                  onEdit={() => handleOpenModalConductor(empresa.id, conductor)}
+                                  onDelete={() => eliminarConductor(conductor)}
+                                />
+                              </li>
                             ))}
-                          </div>
+                          </ul>
                         )}
                       </div>
                     )}
-                  </div>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           )}
-        </CardContent>
-      </Card>
+      </ConfigSection>
       </TabLoadingGate>
     </>
   );

@@ -112,7 +112,7 @@ export function LaborActividadesPanel({ laborId, open }: Props) {
     <div className="px-4 pb-4 pt-2 bg-muted/10 border-t border-border/50 space-y-3">
       {ConfirmDeleteDialog}
 
-      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+      <p className="text-[13px] font-medium text-muted-foreground">
         Trabajos disponibles
       </p>
 
@@ -167,19 +167,19 @@ export function LaborActividadesPanel({ laborId, open }: Props) {
                   <div className="flex items-center gap-1">
                     <Button
                       variant="ghost"
-                      size="sm"
+                      size="icon"
                       onClick={() => iniciarEdicion(act)}
-                      className="h-7 w-7 p-0"
+                      className="h-7 w-7 text-muted-foreground"
                     >
-                      <Edit className="h-3.5 w-3.5" />
+                      <Edit strokeWidth={2} />
                     </Button>
                     <Button
                       variant="ghost"
-                      size="sm"
+                      size="icon"
                       onClick={() => eliminar(act)}
-                      className="h-7 w-7 p-0"
+                      className="h-7 w-7 text-muted-foreground hover:bg-destructive-soft hover:text-destructive"
                     >
-                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      <Trash2 strokeWidth={2} />
                     </Button>
                   </div>
                 </>

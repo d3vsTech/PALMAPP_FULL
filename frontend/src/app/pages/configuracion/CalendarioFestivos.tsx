@@ -12,9 +12,9 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router';
 import { toast } from 'sonner';
-import { ArrowLeft, Plus, Pencil, Trash2, AlertCircle, Check, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, AlertCircle, Check, Loader2 } from 'lucide-react';
+import PageHeader from '../../components/common/PageHeader';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -186,32 +186,17 @@ export default function CalendarioFestivos({ standalone = true }: CalendarioFest
 
   return (
     <div className="space-y-6">
-      <div>
-        {standalone && (
-          <Button variant="ghost" size="sm" asChild className="gap-2 mb-4">
-            <Link to="/configuracion">
-              <ArrowLeft className="h-4 w-4" />
-              Volver a Configuración
-            </Link>
-          </Button>
-        )}
-
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-primary mb-1">Calendario de Festivos</h1>
-            <p className="text-muted-foreground text-sm">
-              Los festivos nacionales son de solo lectura. Puedes agregar festivos
-              locales o suprimir alguno nacional creando tu propia fila para esa fecha.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
+      <PageHeader
+        backTo={standalone ? '/configuracion' : undefined}
+        eyebrow={standalone ? 'Configuración' : undefined}
+        title="Calendario de festivos"
+        description="Los festivos nacionales son de solo lectura. Puedes agregar festivos locales o suprimir alguno nacional creando tu propia fila para esa fecha."
+        actions={
+          <>
             <div className="min-w-[140px]">
-              <Label className="text-xs text-muted-foreground mb-1 block">Año</Label>
-              <Select
-                value={String(anio)}
-                onValueChange={(v) => setAnio(Number(v))}
-              >
-                <SelectTrigger>
+              <Label htmlFor="festivos-anio" className="mb-1 block text-xs text-muted-foreground">Año</Label>
+              <Select value={String(anio)} onValueChange={(v) => setAnio(Number(v))}>
+                <SelectTrigger id="festivos-anio">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="max-h-[300px]">
@@ -221,17 +206,17 @@ export default function CalendarioFestivos({ standalone = true }: CalendarioFest
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={abrirCrear} className="gap-2">
-              <Plus className="h-4 w-4" />
+            <Button onClick={abrirCrear}>
+              <Plus strokeWidth={2} />
               Agregar festivo
             </Button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* Estado de verificación (§14.1). */}
       {verificacion && (
-        <Card className="border-border">
+        <Card>
           <CardContent className="p-4 flex items-center gap-3 flex-wrap">
             {verificacion.estado === 'COINCIDE' ? (
               <>
@@ -243,9 +228,9 @@ export default function CalendarioFestivos({ standalone = true }: CalendarioFest
               </>
             ) : (
               <>
-                <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
+                <AlertCircle className="h-5 w-5 text-warning shrink-0" />
                 <p className="text-sm">
-                  <strong className="text-amber-800 dark:text-amber-200">
+                  <strong className="text-warning">
                     Discrepancia con {verificacion.fuente}
                   </strong>
                   <span className="text-muted-foreground"> · verificado el {verificacion.verificado_at}</span>
@@ -260,7 +245,7 @@ export default function CalendarioFestivos({ standalone = true }: CalendarioFest
       )}
 
       {/* Listado. */}
-      <Card className="border-border">
+      <Card>
         <CardContent className="p-0">
           <div className="p-4 border-b border-border flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
@@ -279,7 +264,7 @@ export default function CalendarioFestivos({ standalone = true }: CalendarioFest
             </div>
           ) : (
             <div>
-              <div className="grid grid-cols-[120px_1fr_120px_100px_120px_auto] gap-2 px-4 py-2 text-xs uppercase tracking-wide text-muted-foreground bg-muted/40 border-b">
+              <div className="grid grid-cols-[120px_1fr_120px_100px_120px_auto] gap-2 border-b bg-muted/40 px-4 py-2 text-[13px] font-medium text-muted-foreground">
                 <span>Fecha</span>
                 <span>Nombre</span>
                 <span>Origen</span>

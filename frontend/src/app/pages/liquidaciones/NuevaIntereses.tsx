@@ -9,16 +9,18 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
+import { Textarea } from '../../components/ui/textarea';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
-import { ArrowLeft, Calendar, FileText, Percent, Loader2 } from 'lucide-react';
+import { AlertTriangle, Info, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import PageHeader from '../../components/common/PageHeader';
+import SeccionCard from '../../components/liquidaciones/SeccionCard';
 import {
   liquidacionesApi,
   LiquidacionesErrorCodes,
@@ -132,33 +134,19 @@ export default function NuevaIntereses() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones?tab=intereses')} className="gap-2">
-          <ArrowLeft className="h-4 w-4" />
-          Volver a Liquidaciones
-        </Button>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-primary">Nuevo Período de Intereses</h1>
-          <p className="text-muted-foreground mt-1">
-            Define el período anual (tasa 12% — Ley 52 de 1975). Los colaboradores se agregan al liquidar.
-          </p>
-        </div>
-      </div>
+    <div className="mx-auto max-w-3xl space-y-6">
+      <PageHeader
+        eyebrow="Liquidaciones"
+        title="Nuevo período de intereses"
+        description="Define el período anual (tasa 12 %, Ley 52 de 1975). Los colaboradores se agregan al liquidar."
+        backTo="/liquidaciones?tab=intereses"
+      />
 
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Información del Período
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <SeccionCard title="Información del período" description="Los campos con * son obligatorios.">
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="anio">
-                Año <span className="text-destructive">*</span>
-              </Label>
+              <Label htmlFor="anio">Año *</Label>
               <Input
                 id="anio"
                 type="number"
@@ -172,90 +160,82 @@ export default function NuevaIntereses() {
               <Label htmlFor="descripcion">Descripción</Label>
               <Input
                 id="descripcion"
-                placeholder={`Intereses de cesantías año ${formData.anio || anioActual}`}
+                placeholder={`Intereses de cesantías ${formData.anio || anioActual}`}
                 value={formData.descripcion}
                 onChange={(e) => handleChange('descripcion', e.target.value)}
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="fechaInicio">Fecha Inicio</Label>
-              <div className="relative">
-                <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="fechaInicio"
-                  type="date"
-                  value={formData.fechaInicio}
-                  onChange={(e) => handleChange('fechaInicio', e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">Si se deja vacía se usa la del período de cesantías</p>
+              <Label htmlFor="fechaInicio">Fecha de inicio</Label>
+              <Input
+                id="fechaInicio"
+                type="date"
+                value={formData.fechaInicio}
+                onChange={(e) => handleChange('fechaInicio', e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">Opcional. Si la dejas vacía, se usa la del período de cesantías.</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="fechaFin">Fecha Fin</Label>
-              <div className="relative">
-                <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="fechaFin"
-                  type="date"
-                  value={formData.fechaFin}
-                  onChange={(e) => handleChange('fechaFin', e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">Si se deja vacía se usa la del período de cesantías</p>
+              <Label htmlFor="fechaFin">Fecha de fin</Label>
+              <Input
+                id="fechaFin"
+                type="date"
+                value={formData.fechaFin}
+                onChange={(e) => handleChange('fechaFin', e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">Opcional. Si la dejas vacía, se usa la del período de cesantías.</p>
             </div>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="notas">Notas</Label>
-            <textarea
+            <Textarea
               id="notas"
               rows={3}
-              placeholder="Observaciones adicionales del período..."
+              placeholder="Observaciones adicionales del período"
               value={formData.notas}
               onChange={(e) => handleChange('notas', e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="resize-none"
             />
           </div>
 
           {/* Fechas límite del año elegido (legal + operativa, §2.2) */}
           {fechaLimite && (
-            <div className="p-4 rounded-xl border border-orange-200 bg-orange-50 text-sm text-orange-800">
-              Fecha límite de pago: legal el{' '}
-              <strong>{formatFecha(fechaLimite.fecha_limite_legal, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
-              {!fechaLimite.es_dia_habil && (
-                <>
-                  {' '}(cae en día no hábil) · operativa el{' '}
-                  <strong>{formatFecha(fechaLimite.fecha_limite_operativa, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
-                </>
-              )}
-              . Los intereses no pagados a tiempo generan sanción de mora.
+            <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-warning">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+              <p>
+                Fecha límite de pago: legal el{' '}
+                <strong>{formatFecha(fechaLimite.fecha_limite_legal, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
+                {!fechaLimite.es_dia_habil && (
+                  <>
+                    {' '}(cae en día no hábil) · operativa el{' '}
+                    <strong>{formatFecha(fechaLimite.fecha_limite_operativa, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
+                  </>
+                )}
+                . Los intereses no pagados a tiempo generan sanción de mora.
+              </p>
             </div>
           )}
 
-          <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 flex items-start gap-3">
-            <Percent className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-semibold text-primary">¿Cómo continuar?</p>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                Los intereses se calculan al 12% anual sobre las cesantías ya confirmadas del mismo año. Al crear el período pasarás directo al wizard para agregar colaboradores y calcular los montos.
-              </p>
-            </div>
+          <div className="flex items-start gap-3 rounded-lg bg-muted/60 px-4 py-3 text-sm">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2} />
+            <p className="text-muted-foreground">
+              <span className="font-medium text-foreground">¿Cómo continuar?</span> Los intereses se calculan al 12 % anual sobre las cesantías ya confirmadas del mismo año. Al crear el período pasarás directo al asistente para agregar colaboradores y calcular los montos.
+            </p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </SeccionCard>
 
-      <div className="flex justify-end gap-3">
-        <Button variant="outline" size="lg" onClick={() => navigate('/liquidaciones?tab=intereses')} disabled={guardando}>
+      <div className="barra-acciones flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button variant="outline" onClick={() => navigate('/liquidaciones?tab=intereses')} disabled={guardando}>
           Cancelar
         </Button>
-        <Button size="lg" onClick={() => guardar()} disabled={guardando} className="gap-2">
-          {guardando ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />}
-          Crear Período
+        <Button onClick={() => guardar()} disabled={guardando}>
+          {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
+          Crear período
         </Button>
       </div>
 
@@ -278,7 +258,7 @@ export default function NuevaIntereses() {
           <AlertDialogFooter>
             <AlertDialogCancel disabled={guardando}>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={() => guardar({ permitirMultiple: true })} disabled={guardando}>
-              {guardando && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
               Crear adicional
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -300,15 +280,15 @@ export default function NuevaIntereses() {
                 key={p.id}
                 type="button"
                 onClick={() => setBaseElegida(p.id)}
-                className={`w-full text-left rounded-lg border px-4 py-3 text-sm transition-colors ${
+                className={`w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                   baseElegida === p.id
-                    ? 'border-primary bg-primary/5 text-primary font-medium'
-                    : 'border-border hover:bg-muted/30'
+                    ? 'border-primary bg-primary-soft'
+                    : 'border-border hover:bg-muted/40'
                 }`}
               >
-                <span className="font-semibold">{p.descripcion}</span>
-                <span className="block text-xs text-muted-foreground mt-0.5">
-                  {formatFecha(p.fecha_inicio)} — {formatFecha(p.fecha_fin)} · {p.total_colaboradores} colaborador(es)
+                <span className="font-semibold text-foreground">{p.descripcion}</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  {formatFecha(p.fecha_inicio)} a {formatFecha(p.fecha_fin)} · {p.total_colaboradores} colaborador(es)
                 </span>
               </button>
             ))}
@@ -319,7 +299,7 @@ export default function NuevaIntereses() {
               onClick={() => baseElegida != null && guardar({ periodoBaseId: baseElegida })}
               disabled={guardando || baseElegida == null}
             >
-              {guardando && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
               Usar este período
             </AlertDialogAction>
           </AlertDialogFooter>

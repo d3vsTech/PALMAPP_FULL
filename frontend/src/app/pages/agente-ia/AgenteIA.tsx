@@ -20,6 +20,7 @@ import { agroAgenteApi, buildAttachmentUrl } from '../../../api/agroAgente';
 import type { ChatMessage } from '../../../api/agroAgente';
 import { toast } from 'sonner';
 import { usePreviewUrls } from '../../hooks/usePreviewUrl';
+import { cn } from '../../components/lib/utils';
 import { renderMarkdownChat } from './markdownChat';
 import type { RenderTexto } from './markdownChat';
 
@@ -223,7 +224,7 @@ export default function AgenteIA() {
         <>
           {partes.map((parte, i) =>
             parte.toLowerCase() === terminoBusqueda.toLowerCase() ? (
-              <mark key={i} className={`${esResultadoActual ? 'bg-accent text-white' : 'bg-yellow-200 dark:bg-yellow-800'} rounded px-0.5`}>
+              <mark key={i} className={`${esResultadoActual ? 'bg-accent text-white' : 'bg-warning-soft'} rounded px-0.5`}>
                 {parte}
               </mark>
             ) : (
@@ -406,108 +407,122 @@ export default function AgenteIA() {
   // Render
   // ────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full -m-8">
-      {/* Header compacto */}
-      <div className="flex flex-wrap items-center justify-between px-4 py-3 border-b border-border bg-background flex-shrink-0 gap-4">
-        <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center">
-            <Sparkles className="h-4 w-4 text-white" />
-          </div>
-          <div>
-            <h1 className="text-base font-semibold">Agente IA</h1>
-            <p className="text-xs text-muted-foreground">Tu asistente inteligente</p>
+    <div className="flex h-[calc(100dvh-6.5rem)] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xs md:h-[calc(100dvh-7.5rem)]">
+      {/* Cabecera */}
+      <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
+            <Sparkles className="h-4 w-4" strokeWidth={2} />
+          </span>
+          <div className="min-w-0">
+            <h3 className="truncate">Agente IA</h3>
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
+              En línea
+            </p>
           </div>
         </div>
         <Button
           variant="ghost"
           size="icon"
+          aria-label="Buscar en la conversación"
+          aria-pressed={mostrarBusqueda}
           onClick={() => setMostrarBusqueda(!mostrarBusqueda)}
-          className="h-8 w-8"
-          title="Buscar en conversación"
+          className="text-muted-foreground"
         >
-          <Search className="h-4 w-4" />
+          <Search strokeWidth={2} />
         </Button>
       </div>
 
       {/* Barra de búsqueda */}
       {mostrarBusqueda && (
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-muted/30 flex-shrink-0">
-          <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-          <Input
-            ref={searchInputRef}
-            value={terminoBusqueda}
-            onChange={(e) => setTerminoBusqueda(e.target.value)}
-            placeholder="Buscar en mensajes..."
-            className="h-8 border-0 focus-visible:ring-0 shadow-none bg-transparent"
-          />
+        <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
+            <Input
+              ref={searchInputRef}
+              value={terminoBusqueda}
+              onChange={(e) => setTerminoBusqueda(e.target.value)}
+              placeholder="Buscar en la conversación"
+              className="h-9 pl-9"
+            />
+          </div>
           {resultadosBusqueda.length > 0 && (
-            <>
-              <span className="text-xs text-muted-foreground whitespace-nowrap">
+            <div className="flex items-center gap-1">
+              <span className="whitespace-nowrap px-1 text-xs text-muted-foreground tabular-nums">
                 {indiceResultadoActual + 1} de {resultadosBusqueda.length}
               </span>
-              <Button variant="ghost" size="icon" onClick={irAlResultadoAnterior} className="h-7 w-7">
-                <ChevronUp className="h-4 w-4" />
+              <Button variant="ghost" size="icon" aria-label="Resultado anterior" onClick={irAlResultadoAnterior} className="h-8 w-8 text-muted-foreground">
+                <ChevronUp strokeWidth={2} />
               </Button>
-              <Button variant="ghost" size="icon" onClick={irAlSiguienteResultado} className="h-7 w-7">
-                <ChevronDown className="h-4 w-4" />
+              <Button variant="ghost" size="icon" aria-label="Resultado siguiente" onClick={irAlSiguienteResultado} className="h-8 w-8 text-muted-foreground">
+                <ChevronDown strokeWidth={2} />
               </Button>
-            </>
+            </div>
           )}
           <Button
             variant="ghost"
             size="icon"
+            aria-label="Cerrar búsqueda"
             onClick={() => { setMostrarBusqueda(false); setTerminoBusqueda(''); }}
-            className="h-7 w-7"
+            className="h-8 w-8 text-muted-foreground"
           >
-            <X className="h-4 w-4" />
+            <X strokeWidth={2} />
           </Button>
         </div>
       )}
 
       {/* Área de mensajes */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-4 py-8">
+      <div className="flex-1 overflow-y-auto bg-background">
+        <div className="mx-auto flex min-h-full max-w-3xl flex-col px-4 py-6">
           {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center py-20">
-              <div className="h-16 w-16 rounded-full bg-accent flex items-center justify-center mb-4">
-                <Sparkles className="h-8 w-8 text-white" />
+            <div className="flex flex-1 flex-col items-center justify-center gap-5 py-8 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-soft text-primary">
+                <Sparkles className="h-6 w-6" strokeWidth={2} />
+              </span>
+              <div className="space-y-1">
+                <h2>¿En qué te ayudo hoy?</h2>
+                <p className="text-sm text-muted-foreground">
+                  Pregunta por producción, lotes, colaboradores, nómina o viajes.
+                </p>
               </div>
-              <h2 className="text-2xl font-semibold mb-2">Agente IA de PalmApp</h2>
-              <p className="text-muted-foreground max-w-md mb-6">¿En qué puedo ayudarte hoy?</p>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl">
+              <div className="grid w-full max-w-xl grid-cols-1 gap-2 sm:grid-cols-2">
                 <button
-                  onClick={() => setInput('¿Cuántas palmas tengo registradas?')}
-                  className="p-4 bg-card border border-border rounded-xl hover:bg-muted transition-colors text-left"
+                  type="button"
+                  onClick={() => { setInput('¿Cuántas palmas tengo registradas?'); inputRef.current?.focus(); }}
+                  className="rounded-lg border border-border bg-card px-3.5 py-3 text-left transition-colors hover:border-primary/30 hover:bg-muted/40"
                 >
-                  <div className="text-sm font-medium mb-1">Estado de plantación</div>
-                  <div className="text-xs text-muted-foreground">Consulta el total de palmas y lotes</div>
+                  <span className="block text-sm font-semibold text-foreground">Estado de la plantación</span>
+                  <span className="block text-xs text-muted-foreground">Total de palmas y lotes</span>
                 </button>
                 <button
-                  onClick={() => setInput('Muéstrame el resumen de producción')}
-                  className="p-4 bg-card border border-border rounded-xl hover:bg-muted transition-colors text-left"
+                  type="button"
+                  onClick={() => { setInput('Muéstrame el resumen de producción'); inputRef.current?.focus(); }}
+                  className="rounded-lg border border-border bg-card px-3.5 py-3 text-left transition-colors hover:border-primary/30 hover:bg-muted/40"
                 >
-                  <div className="text-sm font-medium mb-1">Resumen de producción</div>
-                  <div className="text-xs text-muted-foreground">Estadísticas de cosecha actual</div>
+                  <span className="block text-sm font-semibold text-foreground">Resumen de producción</span>
+                  <span className="block text-xs text-muted-foreground">Cosecha de la quincena</span>
                 </button>
                 <button
-                  onClick={() => setInput('Información sobre colaboradores')}
-                  className="p-4 bg-card border border-border rounded-xl hover:bg-muted transition-colors text-left"
+                  type="button"
+                  onClick={() => { setInput('Información sobre colaboradores'); inputRef.current?.focus(); }}
+                  className="rounded-lg border border-border bg-card px-3.5 py-3 text-left transition-colors hover:border-primary/30 hover:bg-muted/40"
                 >
-                  <div className="text-sm font-medium mb-1">Colaboradores activos</div>
-                  <div className="text-xs text-muted-foreground">Estado del personal de la finca</div>
+                  <span className="block text-sm font-semibold text-foreground">Colaboradores activos</span>
+                  <span className="block text-xs text-muted-foreground">Personal de la finca</span>
                 </button>
                 <button
-                  onClick={() => setInput('Resumen de nómina actual')}
-                  className="p-4 bg-card border border-border rounded-xl hover:bg-muted transition-colors text-left"
+                  type="button"
+                  onClick={() => { setInput('Resumen de nómina actual'); inputRef.current?.focus(); }}
+                  className="rounded-lg border border-border bg-card px-3.5 py-3 text-left transition-colors hover:border-primary/30 hover:bg-muted/40"
                 >
-                  <div className="text-sm font-medium mb-1">Nómina y pagos</div>
-                  <div className="text-xs text-muted-foreground">Consulta información de salarios</div>
+                  <span className="block text-sm font-semibold text-foreground">Nómina y pagos</span>
+                  <span className="block text-xs text-muted-foreground">Salarios de la quincena</span>
                 </button>
               </div>
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-4">
               {messages.map((message, index) => (
                 <MessageBubble
                   key={message.id}
@@ -517,15 +532,13 @@ export default function AgenteIA() {
               ))}
 
               {isTyping && (
-                <div className="flex items-start gap-3">
-                  <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
-                    <Sparkles className="h-4 w-4 text-white" />
-                  </div>
-                  <div className="bg-muted rounded-2xl px-4 py-3">
+                <div className="flex items-start gap-2.5">
+                  <AgenteAvatar />
+                  <div className="rounded-xl rounded-tl-sm border border-border bg-card px-4 py-3" aria-label="El agente está escribiendo">
                     <div className="flex gap-1">
-                      <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                      <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                      <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: '0ms' }} />
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: '150ms' }} />
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: '300ms' }} />
                     </div>
                   </div>
                 </div>
@@ -544,7 +557,7 @@ export default function AgenteIA() {
               {attachedFiles.map((file, index) => {
                 const previewUrl = previewUrls[index];
                 return (
-                  <div key={index} className="relative group flex items-center gap-2 p-1 bg-card rounded-lg border border-border">
+                  <div key={index} className="group relative flex items-center gap-2 rounded-lg border border-border bg-card p-1">
                     {previewUrl ? (
                       <>
                         <img
@@ -556,16 +569,18 @@ export default function AgenteIA() {
                       </>
                     ) : (
                       <>
-                        <FileText className="h-4 w-4 text-primary flex-shrink-0 ml-2" />
+                        <FileText className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2} />
                         <span className="text-sm truncate max-w-[180px] pr-5">{file.name}</span>
                       </>
                     )}
                     <button
+                      type="button"
                       onClick={() => removeAttached(index)}
-                      className="absolute top-1 right-1 bg-background/90 hover:bg-background rounded-full p-0.5 shadow-sm"
+                      className="absolute right-1 top-1 rounded-md bg-background/90 p-0.5 shadow-xs hover:bg-background"
+                      aria-label={`Quitar ${file.name}`}
                       title="Quitar"
                     >
-                      <X className="h-3 w-3" />
+                      <X className="h-3 w-3" strokeWidth={2} />
                     </button>
                   </div>
                 );
@@ -576,70 +591,66 @@ export default function AgenteIA() {
       )}
 
       {/* Input bar fijo inferior */}
-      <div className="border-t border-border bg-background flex-shrink-0">
-        <div className="max-w-3xl mx-auto px-4 py-4">
-          <div className="relative bg-card border border-border rounded-3xl shadow-sm">
-            <div className="flex items-end gap-2 p-2">
-              {/* Botón + con menú */}
-              <div className="relative flex-shrink-0" ref={menuArchivosRef}>
+      <div className="shrink-0 border-t border-border bg-card px-3 py-3 sm:px-4">
+        <div className="mx-auto max-w-3xl">
+          <div className="flex items-center gap-1 rounded-lg border border-input bg-background p-1.5 focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-ring/20">
+              <div className="relative shrink-0" ref={menuArchivosRef}>
                 <Button
                   variant="ghost"
                   size="icon"
+                  aria-label="Adjuntar archivo"
+                  aria-expanded={mostrarMenuArchivos}
                   onClick={() => setMostrarMenuArchivos(!mostrarMenuArchivos)}
-                  className="h-9 w-9 rounded-full hover:bg-muted"
+                  className="h-8 w-8 text-muted-foreground"
                 >
-                  <Plus className="h-5 w-5 text-muted-foreground" />
+                  <Plus strokeWidth={2} />
                 </Button>
 
                 {mostrarMenuArchivos && (
-                  <div className="absolute bottom-full left-0 mb-2 bg-card border border-border rounded-xl shadow-lg p-2 min-w-[220px] z-10">
+                  <div className="absolute bottom-full left-0 z-10 mb-2 min-w-[210px] rounded-lg border border-border bg-popover p-1 shadow-md">
                     <button
+                      type="button"
                       onClick={() => handleFileSelect('imagen')}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted rounded-lg transition-colors text-left"
+                      className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-muted"
                     >
-                      <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                        <ImageIcon className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium">Imagen</div>
-                        <div className="text-xs text-muted-foreground">PNG, JPG, GIF</div>
-                      </div>
+                      <ImageIcon className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2} />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-foreground">Imagen</span>
+                        <span className="block text-xs text-muted-foreground">PNG, JPG, GIF</span>
+                      </span>
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleFileSelect('video')}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted rounded-lg transition-colors text-left"
+                      className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-muted"
                     >
-                      <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                        <Video className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium">Video</div>
-                        <div className="text-xs text-muted-foreground">MP4, AVI, MOV</div>
-                      </div>
+                      <Video className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2} />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-foreground">Video</span>
+                        <span className="block text-xs text-muted-foreground">MP4, AVI, MOV</span>
+                      </span>
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleFileSelect('documento')}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted rounded-lg transition-colors text-left"
+                      className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-muted"
                     >
-                      <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                        <FileText className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium">Documento</div>
-                        <div className="text-xs text-muted-foreground">PDF, DOC, XLS</div>
-                      </div>
+                      <FileText className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2} />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-foreground">Documento</span>
+                        <span className="block text-xs text-muted-foreground">PDF, DOC, XLS</span>
+                      </span>
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleFileSelect('archivo')}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted rounded-lg transition-colors text-left"
+                      className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-muted"
                     >
-                      <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                        <File className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium">Archivo</div>
-                        <div className="text-xs text-muted-foreground">Cualquier tipo</div>
-                      </div>
+                      <File className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2} />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-foreground">Archivo</span>
+                        <span className="block text-xs text-muted-foreground">Cualquier tipo</span>
+                      </span>
                     </button>
                   </div>
                 )}
@@ -654,10 +665,11 @@ export default function AgenteIA() {
               <Button
                 variant="ghost"
                 size="icon"
+                aria-label="Tomar foto"
                 onClick={handleCameraClick}
-                className="h-9 w-9 flex-shrink-0 rounded-full hover:bg-muted"
+                className="h-8 w-8 shrink-0 text-muted-foreground"
               >
-                <Camera className="h-5 w-5 text-muted-foreground" />
+                <Camera strokeWidth={2} />
               </Button>
               <input
                 aria-label="Seleccionar archivo"
@@ -670,21 +682,20 @@ export default function AgenteIA() {
               />
 
               {/* Input de texto */}
-              <div className="flex-1 max-h-32 overflow-y-auto">
-                <Input
-                  ref={inputRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      enviarMensaje();
-                    }
-                  }}
-                  placeholder="Envía un mensaje..."
-                  className="border-0 focus-visible:ring-0 shadow-none bg-transparent resize-none min-h-[36px]"
-                />
-              </div>
+              <Input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    enviarMensaje();
+                  }
+                }}
+                placeholder="Escribe tu pregunta"
+                aria-label="Mensaje para el agente"
+                className="h-8 min-w-0 flex-1 border-0 bg-transparent px-1.5 shadow-none focus-visible:ring-0"
+              />
 
               {/* Enviar o voz */}
               {(input.trim() || attachedFiles.length > 0) ? (
@@ -692,26 +703,33 @@ export default function AgenteIA() {
                   onClick={enviarMensaje}
                   disabled={isTyping}
                   size="icon"
-                  className="flex-shrink-0 h-9 w-9 rounded-full"
+                  aria-label="Enviar"
+                  className="h-8 w-8 shrink-0"
                 >
-                  <ArrowUp className="h-5 w-5" />
+                  <ArrowUp strokeWidth={2} />
                 </Button>
               ) : (
                 <Button
                   variant="ghost"
                   size="icon"
+                  aria-label={grabandoAudio ? 'Soltar para terminar la nota de voz' : 'Mantener para grabar nota de voz'}
                   onMouseDown={iniciarGrabacionAudio}
                   onMouseUp={detenerGrabacionAudio}
                   onMouseLeave={() => { if (grabandoAudio) detenerGrabacionAudio(); }}
-                  className={`h-9 w-9 flex-shrink-0 rounded-full hover:bg-muted ${
-                    grabandoAudio ? 'bg-destructive text-white hover:bg-destructive' : ''
-                  }`}
+                  className={cn(
+                    'h-8 w-8 shrink-0',
+                    grabandoAudio
+                      ? 'bg-destructive-soft text-destructive hover:bg-destructive-soft'
+                      : 'text-muted-foreground'
+                  )}
                 >
-                  <Mic className="h-5 w-5" />
+                  <Mic strokeWidth={2} />
                 </Button>
               )}
-            </div>
           </div>
+          <p className="mt-1.5 hidden text-center text-xs text-muted-foreground sm:block">
+            Las respuestas se basan en los datos registrados en PalmApp. Verifica las cifras antes de decidir.
+          </p>
         </div>
       </div>
     </div>
@@ -721,6 +739,15 @@ export default function AgenteIA() {
 // ────────────────────────────────────────────────────────────
 // Burbuja de mensaje
 // ────────────────────────────────────────────────────────────
+/** Marca del agente al lado de sus mensajes. */
+function AgenteAvatar() {
+  return (
+    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary" aria-hidden>
+      <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />
+    </span>
+  );
+}
+
 function MessageBubble({
   message,
   resaltar,
@@ -734,18 +761,17 @@ function MessageBubble({
   const tieneTexto = message.content && message.content.trim().length > 0;
 
   return (
-    <div className={`flex items-start gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
-      {!isUser && (
-        <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
-          <Sparkles className="h-4 w-4 text-white" />
-        </div>
-      )}
+    <div className={cn('flex items-start gap-2.5', isUser && 'justify-end')}>
+      {!isUser && <AgenteAvatar />}
 
-      <div className={`flex-1 ${isUser ? 'flex justify-end' : ''}`}>
+      <div className="max-w-[85%] sm:max-w-[75%]">
         <div
-          className={`rounded-2xl px-4 py-3 max-w-[85%] ${
-            isUser ? 'bg-primary text-primary-foreground ml-auto' : 'bg-muted text-foreground'
-          }`}
+          className={cn(
+            'overflow-hidden rounded-xl px-4 py-2.5',
+            isUser
+              ? 'rounded-tr-sm bg-primary text-primary-foreground'
+              : 'rounded-tl-sm border border-border bg-card text-foreground'
+          )}
         >
           {/* Adjunto: image / video / link según mime */}
           {att && (
@@ -755,27 +781,28 @@ function MessageBubble({
                   <img
                     src={att.url}
                     alt={att.name}
-                    className="max-h-56 max-w-full rounded-lg border border-border hover:opacity-90 transition-opacity cursor-pointer"
+                    className="max-h-80 max-w-full cursor-pointer rounded-lg border border-border transition-opacity hover:opacity-90"
                   />
                 </a>
               ) : att.isVideo ? (
                 <video
                   src={att.url}
                   controls
-                  className="max-h-72 max-w-full rounded-lg border border-border bg-black"
+                  className="max-h-80 max-w-full rounded-lg border border-border bg-black"
                 />
               ) : (
                 <a
                   href={att.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm hover:opacity-90 transition-opacity ${
+                  className={cn(
+                    'flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-opacity hover:opacity-90',
                     isUser
-                      ? 'bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground'
-                      : 'bg-background border-border text-foreground'
-                  }`}
+                      ? 'border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground'
+                      : 'border-border bg-background text-foreground'
+                  )}
                 >
-                  <FileText className="h-4 w-4 flex-shrink-0" />
+                  <FileText className="h-4 w-4 shrink-0" strokeWidth={2} />
                   <span className="truncate max-w-[220px]">{att.name}</span>
                 </a>
               )}
@@ -785,7 +812,7 @@ function MessageBubble({
           {/* Texto del mensaje. El del asistente llega en Markdown; el del
               usuario se muestra tal cual lo escribió. */}
           {tieneTexto && (
-            <div className="text-[15px] leading-relaxed break-words">
+            <div className="break-words text-sm leading-relaxed">
               {isUser ? (
                 <span className="whitespace-pre-wrap">
                   {resaltar ? resaltar(message.content) : message.content}
