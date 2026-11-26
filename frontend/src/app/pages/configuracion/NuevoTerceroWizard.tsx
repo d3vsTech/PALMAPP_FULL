@@ -14,6 +14,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
+import PageHeader from '../../components/common/PageHeader';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -596,7 +597,7 @@ export function Paso3({
           <div className="rounded-xl border border-border overflow-hidden">
             {operarios.map((op, idx) => (
               <div key={idx} className={`flex items-center gap-3 p-3.5 ${idx > 0 ? 'border-t border-border/50' : ''}`}>
-                <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold flex-shrink-0">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-sm font-bold text-primary">
                   {op.nombres?.[0]}{op.apellidos?.[0]}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -967,55 +968,48 @@ export default function NuevoTerceroWizard() {
   };
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/configuracion')}
-          className="h-12 w-12 rounded-xl hover:bg-muted border border-border/50">
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-primary">Nuevo Tercero</h1>
-          <p className="text-muted-foreground mt-1">Registra un contratista o empresa prestadora de servicios</p>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        backTo="/configuracion"
+        eyebrow="Configuración"
+        title="Nuevo tercero"
+        description="Contratista o empresa que presta servicios en la finca."
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="min-w-0 space-y-6 lg:col-span-2">
-          {/* Stepper */}
-          <Card>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                {STEPS.map((s, i) => (
-                  <React.Fragment key={s.num}>
-                    <div className="flex shrink-0 flex-col items-center gap-2">
-                      <div className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-sm font-bold transition md:h-12 md:w-12 ${
-                        paso > s.num
-                          ? 'bg-primary border-primary text-primary-foreground'
-                          : paso === s.num
-                          ? 'bg-primary/10 border-primary text-primary'
-                          : 'bg-muted border-border text-muted-foreground'
-                      }`}>
-                        {paso > s.num ? <Check className="h-5 w-5" /> : s.num}
-                      </div>
-                      <span className={`hidden text-xs font-semibold whitespace-nowrap md:inline ${paso === s.num ? 'text-primary' : 'text-muted-foreground'}`}>
-                        {s.label}
-                      </span>
-                    </div>
-                    {i < STEPS.length - 1 && (
-                      <div className="mx-2 h-0.5 flex-1 overflow-hidden rounded-full bg-border sm:mx-3">
-                        <div className={`h-full bg-primary transition-[width] duration-500 ${paso > s.num ? 'w-full' : 'w-0'}`} />
-                      </div>
-                    )}
-                  </React.Fragment>
-                ))}
-              </div>
-              {/* Reemplaza a los rotulos, escondidos en celular. */}
-              <p className="mt-3 text-center text-[13px] font-semibold text-foreground md:hidden">
-                Paso {paso} de {STEPS.length}: {STEPS.find((x) => x.num === paso)?.label}
-              </p>
-            </CardContent>
-          </Card>
+          {/* Pasos */}
+          <ol className="flex items-center gap-2 text-sm">
+            {STEPS.map((s, i) => {
+              const completa = paso > s.num;
+              const activa = paso === s.num;
+              return (
+                <li key={s.num} className={`flex items-center gap-2 ${i < STEPS.length - 1 ? 'flex-1' : ''}`}>
+                  <span
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-semibold ${
+                      completa
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : activa
+                          ? 'border-primary bg-primary-soft text-primary'
+                          : 'border-border bg-card text-muted-foreground'
+                    }`}
+                  >
+                    {completa ? <Check className="h-3.5 w-3.5" strokeWidth={2.5} /> : s.num}
+                  </span>
+                  <span
+                    className={`whitespace-nowrap font-medium ${
+                      activa || completa ? 'text-foreground' : 'text-muted-foreground'
+                    } ${activa ? '' : 'hidden sm:inline'}`}
+                  >
+                    {s.label}
+                  </span>
+                  {i < STEPS.length - 1 && (
+                    <span className={`h-px flex-1 ${completa ? 'bg-primary' : 'bg-border'}`} />
+                  )}
+                </li>
+              );
+            })}
+          </ol>
 
           {/* Contenido del paso */}
           {paso === 1 && <Paso1 data={datos} onChange={setDatos} />}

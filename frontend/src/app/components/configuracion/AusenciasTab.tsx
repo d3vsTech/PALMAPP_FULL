@@ -1,9 +1,19 @@
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { ConfigSection, ConfigEmpty, ConfigRowActions } from './ConfigSection';
+import { Badge } from '../ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../ui/table';
 import { Button } from '../ui/button';
+import { cn } from '../lib/utils';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Plus, Trash2, Edit, Check, X as XIcon } from 'lucide-react';
+import { Plus, Check, Minus } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Select,
@@ -23,6 +33,15 @@ import {
 import { Checkbox } from '../ui/checkbox';
 import { useConfirmDelete } from '../../hooks/useConfirmDelete';
 import { TabLoadingGate } from './TabLoadingGate';
+
+/** Sí o no de una columna, con el mismo peso visual en ambos casos. */
+function Marca({ activo }: { activo: boolean }) {
+  return activo ? (
+    <Check className="mx-auto h-4 w-4 text-success" strokeWidth={2} aria-label="Sí" />
+  ) : (
+    <Minus className="mx-auto h-4 w-4 text-muted-foreground" strokeWidth={2} aria-label="No" />
+  );
+}
 import {
   configuracionApi,
   ConfiguracionErrorCodes,
@@ -39,26 +58,29 @@ import {
  * (color: #RRGGBB) y de vuelta a clase para mostrar el preview.
  */
 
-const COLORES_DISPONIBLES: { value: string; hex: string; label: string }[] = [
-  { value: 'bg-info',   hex: '#3b82f6', label: 'Azul' },
-  { value: 'bg-success',  hex: '#22c55e', label: 'Verde' },
-  { value: 'bg-destructive',    hex: '#ef4444', label: 'Rojo' },
-  { value: 'bg-warning', hex: '#eab308', label: 'Amarillo' },
-  { value: 'bg-primary', hex: '#a855f7', label: 'Morado' },
-  { value: 'bg-destructive',   hex: '#ec4899', label: 'Rosa' },
-  { value: 'bg-warning', hex: '#f97316', label: 'Naranja' },
-  { value: 'bg-muted',   hex: '#6b7280', label: 'Gris' },
+const COLORES_DISPONIBLES: { hex: string; label: string }[] = [
+  { hex: '#3b82f6', label: 'Azul' },
+  { hex: '#22c55e', label: 'Verde' },
+  { hex: '#ef4444', label: 'Rojo' },
+  { hex: '#eab308', label: 'Amarillo' },
+  { hex: '#a855f7', label: 'Morado' },
+  { hex: '#ec4899', label: 'Rosa' },
+  { hex: '#f97316', label: 'Naranja' },
+  { hex: '#6b7280', label: 'Gris' },
 ];
 
-function claseDesdeHex(hex: string): string {
-  const c = COLORES_DISPONIBLES.find((c) => c.hex.toLowerCase() === hex.toLowerCase());
-  return c?.value ?? 'bg-info';
+/** El punto de color: es dato del motivo, no un token, asi que va en linea. */
+function PuntoColor({ hex, className }: { hex: string | null | undefined; className?: string }) {
+  return (
+    <span
+      className={cn('inline-block shrink-0 rounded-full', className)}
+      style={{ backgroundColor: hex || '#3b82f6' }}
+      aria-hidden
+    />
+  );
 }
 
-function hexDesdeClase(clase: string): string {
-  const c = COLORES_DISPONIBLES.find((c) => c.value === clase);
-  return c?.hex ?? '#3b82f6';
-}
+
 
 /**
  * Fallback para motivos viejos que aún no traen los flags individuales del
@@ -123,9 +145,9 @@ function flagsDeMotivo(motivo: MotivoAusencia): {
   };
 }
 
-/** "Remunerado" / "No Remunerado" según `es_remunerada` del motivo. */
+/** "Remunerado" / "No remunerado" según `es_remunerada` del motivo. */
 function conceptoDesdeMotivo(esRemunerada: boolean): string {
-  return esRemunerada ? 'Remunerado' : 'No Remunerado';
+  return esRemunerada ? 'Remunerado' : 'No remunerado';
 }
 
 /** Pinta el porcentaje como `100%` (sin decimales si es entero) o `66.67%`. */
@@ -154,7 +176,7 @@ const FORM_VACIO = {
   concepto: 'remunerada' as 'remunerada' | 'no_remunerada',
   porcentaje: '100',
   formulaCalculo: '',
-  color: 'bg-info',
+  color: '#3b82f6',
   seguridadSocial: true,
   parafiscales: true,
   prestaciones: true,
@@ -254,7 +276,7 @@ export function AusenciasTab() {
           ? String(Number(motivo.porcentaje_pago_default))
           : '0',
         formulaCalculo: motivo.formula_calculo ?? '',
-        color: claseDesdeHex(motivo.color),
+        color: motivo.color || '#3b82f6',
         seguridadSocial: flags.ss,
         parafiscales: flags.paraf,
         prestaciones: flags.prest,
@@ -290,7 +312,7 @@ export function AusenciasTab() {
       afecta_nomina: afectaNomina,
       porcentaje_pago_default: porcentaje,
       requiere_soporte: motivoEdit?.requiere_soporte ?? false,
-      color: hexDesdeClase(formData.color),
+      color: formData.color,
       condicion: formData.condicion.trim() || null,
       norma_legal: formData.normaLegal.trim() || null,
       formula_calculo: formData.formulaCalculo.trim() || null,
@@ -346,32 +368,32 @@ export function AusenciasTab() {
       {ConfirmDeleteDialog}
 
       <Dialog open={openModal} onOpenChange={setOpenModal}>
-        <DialogContent className="max-w-xl">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {motivoEdit ? 'Editar Tipo de Novedad' : 'Nuevo Tipo de Novedad'}
+              {motivoEdit ? 'Editar tipo de novedad' : 'Nuevo tipo de novedad'}
             </DialogTitle>
             <DialogDescription>
-              Configura permisos, incapacidades y novedades
+              Configura permisos, incapacidades y novedades.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-5 py-2">
-            {/* Nombre */}
-            <div className="space-y-2">
-              <Label htmlFor="nombre">
-                Nombre de la Novedad <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="nombre"
-                placeholder="Ej: Permiso Personal"
-                value={formData.nombre}
-                onChange={(e) => setFormData((prev) => ({ ...prev, nombre: e.target.value }))}
-              />
-            </div>
+          <div className="max-h-[65vh] space-y-4 overflow-y-auto py-2 pr-1">
+            <div className="grid gap-4 sm:grid-cols-2">
+              {/* Nombre */}
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="nombre">
+                  Nombre de la novedad <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="nombre"
+                  placeholder="Ej: permiso personal"
+                  value={formData.nombre}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, nombre: e.target.value }))}
+                />
+              </div>
 
-            {/* Condición + Norma Legal */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Condición */}
               <div className="space-y-2">
                 <Label htmlFor="condicion">Condición</Label>
                 <Input
@@ -382,8 +404,10 @@ export function AusenciasTab() {
                 />
                 <p className="text-xs text-muted-foreground">Especifica la duración o condiciones</p>
               </div>
+
+              {/* Norma legal */}
               <div className="space-y-2">
-                <Label htmlFor="normaLegal">Norma Legal</Label>
+                <Label htmlFor="normaLegal">Norma legal</Label>
                 <Input
                   id="normaLegal"
                   placeholder="Ej: Art. 57 CST"
@@ -392,10 +416,8 @@ export function AusenciasTab() {
                 />
                 <p className="text-xs text-muted-foreground">Referencia legal aplicable</p>
               </div>
-            </div>
 
-            {/* Concepto + % Aplicación */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Concepto */}
               <div className="space-y-2">
                 <Label htmlFor="concepto">
                   Concepto <span className="text-destructive">*</span>
@@ -411,12 +433,14 @@ export function AusenciasTab() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="remunerada">Remunerado</SelectItem>
-                    <SelectItem value="no_remunerada">No Remunerado</SelectItem>
+                    <SelectItem value="no_remunerada">No remunerado</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* % Aplicación */}
               <div className="space-y-2">
-                <Label htmlFor="porcentaje">% Aplicación</Label>
+                <Label htmlFor="porcentaje">Porcentaje de aplicación</Label>
                 <Input
                   id="porcentaje"
                   type="number" step="0.001"
@@ -428,107 +452,121 @@ export function AusenciasTab() {
                 />
                 <p className="text-xs text-muted-foreground">Porcentaje de pago que aplica</p>
               </div>
-            </div>
 
-            {/* Fórmula de Cálculo */}
-            <div className="space-y-2">
-              <Label htmlFor="formula">Fórmula de Cálculo</Label>
-              <Input
-                id="formula"
-                placeholder="Ej: Salario x días / 30"
-                value={formData.formulaCalculo}
-                onChange={(e) => setFormData((prev) => ({ ...prev, formulaCalculo: e.target.value }))}
-              />
-              <p className="text-xs text-muted-foreground">Cómo se calcula el valor de esta novedad</p>
-            </div>
+              {/* Fórmula de Cálculo */}
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="formula">Fórmula de cálculo</Label>
+                <Input
+                  id="formula"
+                  placeholder="Ej: Salario x días / 30"
+                  value={formData.formulaCalculo}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, formulaCalculo: e.target.value }))}
+                />
+                <p className="text-xs text-muted-foreground">Cómo se calcula el valor de esta novedad</p>
+              </div>
 
-            {/* Color */}
-            <div className="space-y-2">
-              <Label htmlFor="color">Color de Identificación</Label>
-              <Select
-                value={formData.color}
-                onValueChange={(value) => setFormData((prev) => ({ ...prev, color: value }))}
-              >
-                <SelectTrigger id="color">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {COLORES_DISPONIBLES.map((color) => (
-                    <SelectItem key={color.value} value={color.value}>
-                      <div className="flex items-center gap-2">
-                        <div className={`h-3 w-3 rounded-full ${color.value}`} />
-                        {color.label}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* Color */}
+              <div className="space-y-2">
+                <Label htmlFor="color">Color de identificación</Label>
+                <Select
+                  value={formData.color}
+                  onValueChange={(value) => setFormData((prev) => ({ ...prev, color: value }))}
+                >
+                  <SelectTrigger id="color">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COLORES_DISPONIBLES.map((color) => (
+                      <SelectItem key={color.hex} value={color.hex}>
+                        <div className="flex items-center gap-2">
+                          <PuntoColor hex={color.hex} className="h-3 w-3" />
+                          {color.label}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {/* Afectación en Nómina */}
-            <div className="space-y-3 pt-2 border-t border-border">
-              <Label className="text-base">Afectación en Nómina</Label>
+            <div className="space-y-3 border-t pt-4">
+              <p className="text-sm font-semibold text-foreground">Afectación en nómina</p>
 
-              <label className="flex items-start gap-3 cursor-pointer">
+              <div className="flex items-start space-x-3">
                 <Checkbox
+                  id="seguridadSocial"
                   checked={formData.seguridadSocial}
                   onCheckedChange={(checked) =>
                     setFormData((prev) => ({ ...prev, seguridadSocial: checked === true }))
                   }
-                  className="mt-0.5"
                 />
-                <div className="flex-1">
-                  <p className="font-medium text-sm">Seguridad Social</p>
-                  <p className="text-xs text-muted-foreground">Aplica cálculo de Salud y Pensión</p>
+                <div className="space-y-1">
+                  <Label htmlFor="seguridadSocial" className="cursor-pointer">
+                    Seguridad social
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Aplica cálculo de salud y pensión
+                  </p>
                 </div>
-              </label>
+              </div>
 
-              <label className="flex items-start gap-3 cursor-pointer">
+              <div className="flex items-start space-x-3">
                 <Checkbox
+                  id="parafiscales"
                   checked={formData.parafiscales}
                   onCheckedChange={(checked) =>
                     setFormData((prev) => ({ ...prev, parafiscales: checked === true }))
                   }
-                  className="mt-0.5"
                 />
-                <div className="flex-1">
-                  <p className="font-medium text-sm">Parafiscales</p>
-                  <p className="text-xs text-muted-foreground">Aplica cálculo de Caja, ICBF y SENA</p>
+                <div className="space-y-1">
+                  <Label htmlFor="parafiscales" className="cursor-pointer">
+                    Parafiscales
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Aplica cálculo de Caja, ICBF y SENA
+                  </p>
                 </div>
-              </label>
+              </div>
 
-              <label className="flex items-start gap-3 cursor-pointer">
+              <div className="flex items-start space-x-3">
                 <Checkbox
+                  id="valorPrestaciones"
                   checked={formData.prestaciones}
                   onCheckedChange={(checked) =>
                     setFormData((prev) => ({ ...prev, prestaciones: checked === true }))
                   }
-                  className="mt-0.5"
                 />
-                <div className="flex-1">
-                  <p className="font-medium text-sm">Valor Prestaciones</p>
-                  <p className="text-xs text-muted-foreground">Cuenta para cesantías, prima e intereses</p>
+                <div className="space-y-1">
+                  <Label htmlFor="valorPrestaciones" className="cursor-pointer">
+                    Valor prestaciones
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Cuenta para cesantías, prima e intereses
+                  </p>
                 </div>
-              </label>
+              </div>
 
               {/* PR-N1 — la nómina lo consume desde PR-N6: con el flag activo
                   los días de la novedad salen del cálculo del auxilio. */}
-              <label className="flex items-start gap-3 cursor-pointer">
+              <div className="flex items-start space-x-3">
                 <Checkbox
+                  id="auxilioTransporte"
                   checked={formData.auxilioTransporte}
                   onCheckedChange={(checked) =>
                     setFormData((prev) => ({ ...prev, auxilioTransporte: checked === true }))
                   }
-                  className="mt-0.5"
                 />
-                <div className="flex-1">
-                  <p className="font-medium text-sm">Afecta subsidio de transporte</p>
+                <div className="space-y-1">
+                  <Label htmlFor="auxilioTransporte" className="cursor-pointer">
+                    Afecta subsidio de transporte
+                  </Label>
                   <p className="text-xs text-muted-foreground">
                     Activo: los días de la novedad descuentan del auxilio.
                     Inactivo: el colaborador lo conserva completo.
                   </p>
                 </div>
-              </label>
+              </div>
             </div>
           </div>
 
@@ -536,115 +574,103 @@ export function AusenciasTab() {
             <Button variant="outline" onClick={() => setOpenModal(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSave} className="bg-success hover:bg-success/90">
-              Guardar
-            </Button>
+            <Button onClick={handleSave}>Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <TabLoadingGate loading={loading} message="Cargando novedades…">
-      <Card className="overflow-hidden">
-        <CardHeader className="border-b bg-muted/40">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Tipos de Novedades</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">Configuración de permisos, incapacidades y novedades</p>
-            </div>
-            <Button onClick={() => handleOpenModal()}>
-              <Plus className="mr-2 h-4 w-4" />
-              Nuevo Tipo
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {/* Tabla con las 6 columnas del diseño. El punto de color viene de
-              `motivo.color` (hex → clase Tailwind). Los checks de S.S./Paraf.
-              y Prest. leen los flags persistidos en el motivo (con fallback al
-              heurístico por `tipo_base` para registros viejos pre-migración). */}
-          <div className="rounded-lg border border-border overflow-x-auto">
-            <table className="w-full min-w-[640px]">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th className="text-left p-4 font-semibold text-sm">Novedad</th>
-                  <th className="text-left p-4 font-semibold text-sm">Concepto</th>
-                  <th className="text-left p-4 font-semibold text-sm">% Aplicación</th>
-                  <th className="text-left p-4 font-semibold text-sm">S.S. / Paraf.</th>
-                  <th className="text-left p-4 font-semibold text-sm">Prest.</th>
-                  <th className="text-left p-4 font-semibold text-sm">Aux. transp.</th>
-                  <th className="text-right p-4 font-semibold text-sm">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {motivos.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-6 text-center text-sm text-muted-foreground">
-                      No hay tipos de novedades registradas
-                    </td>
-                  </tr>
-                ) : (
-                  [...motivos].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((motivo) => {
-                    const { ss, prest, auxilio } = flagsDeMotivo(motivo);
-                    return (
-                      <tr key={motivo.id} className="border-t border-border hover:bg-muted/30 transition-colors">
-                        <td className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className={`h-3 w-3 rounded-full shrink-0 ${claseDesdeHex(motivo.color)}`} />
-                            <span className="font-medium">{motivo.nombre}</span>
+      <ConfigSection
+        title="Tipos de novedades"
+        description="Permisos, incapacidades y licencias, con su efecto en la nómina."
+        flush
+        actions={
+          <Button onClick={() => handleOpenModal()}>
+            <Plus strokeWidth={2} />
+            Nuevo tipo
+          </Button>
+        }
+      >
+        {/* El punto de color viene de `motivo.color` (hex → clase Tailwind).
+            Los checks de S.S./Paraf. y Prest. leen los flags persistidos en el
+            motivo, con respaldo heurístico por `tipo_base` para registros
+            viejos pre-migración. */}
+        {motivos.length === 0 ? (
+          <ConfigEmpty
+            title="Sin tipos de novedades"
+            description="Agrega el primer permiso, incapacidad o licencia."
+            action={
+              <Button onClick={() => handleOpenModal()}>
+                <Plus strokeWidth={2} />
+                Agregar tipo
+              </Button>
+            }
+          />
+        ) : (
+          <Table className="min-w-[760px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-5">Novedad</TableHead>
+                <TableHead>Concepto</TableHead>
+                <TableHead className="text-right">Aplicación</TableHead>
+                <TableHead className="text-center">S. social y paraf.</TableHead>
+                <TableHead className="text-center">Prestaciones</TableHead>
+                <TableHead className="text-center">Aux. transporte</TableHead>
+                <TableHead className="w-24 pr-5" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[...motivos]
+                .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' }))
+                .map((motivo) => {
+                  const { ss, prest, auxilio } = flagsDeMotivo(motivo);
+                  const detalle = [motivo.condicion, motivo.norma_legal]
+                    .filter((valor): valor is string => Boolean(valor?.trim()))
+                    .join(' · ');
+                  return (
+                    <TableRow key={motivo.id}>
+                      <TableCell className="whitespace-normal pl-5">
+                        <div className="flex items-start gap-2">
+                          <PuntoColor hex={motivo.color} className="mt-1.5 h-2.5 w-2.5" />
+                          <div className="min-w-0">
+                            <p className="font-semibold text-foreground">{motivo.nombre}</p>
+                            {detalle && <p className="text-xs text-muted-foreground">{detalle}</p>}
                           </div>
-                        </td>
-                        <td className="p-4 text-sm text-muted-foreground">
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={motivo.es_remunerada ? 'success' : 'secondary'}>
                           {conceptoDesdeMotivo(motivo.es_remunerada)}
-                        </td>
-                        <td className="p-4 text-sm font-medium">
-                          {fmtPorcentaje(motivo.porcentaje_pago_default)}
-                        </td>
-                        <td className="p-4">
-                          {ss
-                            ? <Check className="h-4 w-4 text-success" />
-                            : <XIcon className="h-4 w-4 text-destructive" />}
-                        </td>
-                        <td className="p-4">
-                          {prest
-                            ? <Check className="h-4 w-4 text-success" />
-                            : <XIcon className="h-4 w-4 text-destructive" />}
-                        </td>
-                        <td className="p-4">
-                          {/* Aquí el check significa "descuenta": es lo que la
-                              nómina va a restar del auxilio. */}
-                          {auxilio
-                            ? <Check className="h-4 w-4 text-success" />
-                            : <XIcon className="h-4 w-4 text-destructive" />}
-                        </td>
-                        <td className="p-4">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleOpenModal(motivo)}
-                              className="h-8 w-8 p-0"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => eliminarTipo(motivo)}
-                              className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">
+                        {fmtPorcentaje(motivo.porcentaje_pago_default)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Marca activo={ss} />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Marca activo={prest} />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {/* Aquí la marca significa "descuenta": es lo que la
+                            nómina va a restar del auxilio. */}
+                        <Marca activo={auxilio} />
+                      </TableCell>
+                      <TableCell className="pr-5 text-right">
+                        <ConfigRowActions
+                          label={motivo.nombre}
+                          onEdit={() => handleOpenModal(motivo)}
+                          onDelete={() => eliminarTipo(motivo)}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+            </TableBody>
+          </Table>
+        )}
+      </ConfigSection>
       </TabLoadingGate>
     </>
   );

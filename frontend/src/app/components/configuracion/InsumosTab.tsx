@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button } from '../ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import { ConfigSection, ConfigEmpty, ConfigRowActions } from './ConfigSection';
 import {
   Table,
   TableBody,
@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -67,7 +67,7 @@ const unidadesMedida: Array<{ value: string; label: string }> = [
  *  - Cualquier forma líquida → Litro.
  *  - Sólidos (gránulo, polvo, cápsula, sólido, cristales) → Kilogramo.
  *  - Si el valor ya es uno de nuestros codes (`kilogramo`, `litro`, ...) se
- *    deja pasar y se renderiza con su label largo.
+ *    deja pasar y se renderiza con su label.
  *  - Si no matchea, se devuelve el raw para no ocultar datos del backend.
  */
 const PRESENTACION_A_UNIDAD: Record<string, string> = {
@@ -114,7 +114,7 @@ const PRESENTACION_A_UNIDAD: Record<string, string> = {
 function formatearUnidad(raw?: string | null): string {
   if (!raw) return '—';
   const trim = raw.trim();
-  // 1) Si ya es uno de nuestros codes, devolvemos el label largo.
+  // 1) Si ya es uno de nuestros codes, devolvemos el label.
   const directo = unidadesMedida.find((u) => u.value === trim.toLowerCase());
   if (directo) return directo.label;
   // 2) Si es una presentación conocida del seed, traducimos a la unidad real.
@@ -225,21 +225,21 @@ export function InsumosTab() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {insumoEdit ? 'Editar Insumo' : 'Nuevo Insumo'}
+              {insumoEdit ? 'Editar insumo' : 'Nuevo insumo'}
             </DialogTitle>
             <DialogDescription>
-              Define un producto químico o fertilizante
+              Define un producto químico o fertilizante.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label htmlFor="nombre">
                 Nombre <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="nombre"
-                placeholder="Ej: KCl, Urea, Glifosato"
+                placeholder="Ej.: KCl, Urea, Glifosato"
                 value={formData.nombre}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, nombre: e.target.value }))
@@ -249,7 +249,7 @@ export function InsumosTab() {
 
             <div className="space-y-2">
               <Label htmlFor="unidad">
-                Unidad de Medida <span className="text-destructive">*</span>
+                Unidad de medida <span className="text-destructive">*</span>
               </Label>
               <Select
                 value={formData.unidadMedida}
@@ -281,80 +281,59 @@ export function InsumosTab() {
       </Dialog>
 
       <TabLoadingGate loading={loading} message="Cargando insumos…">
-      <Card className="bg-card">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>
-                Catálogo de Insumos
-              </CardTitle>
-              <CardDescription>
-                Productos químicos y fertilizantes utilizados en la finca
-              </CardDescription>
-            </div>
-            <Button onClick={() => handleOpenModal()}>
-              <Plus className="mr-2 h-4 w-4" />
-              Nuevo Insumo
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {insumos.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <h3 className="mb-2 text-lg font-semibold">No hay insumos registrados</h3>
-              <p className="mb-4 text-sm text-muted-foreground">
-                Comienza agregando tu primer insumo
-              </p>
+      <ConfigSection
+        title="Catálogo de insumos"
+        description="Productos químicos y fertilizantes utilizados en la finca."
+        flush
+        actions={
+          <Button onClick={() => handleOpenModal()}>
+            <Plus strokeWidth={2} />
+            Nuevo insumo
+          </Button>
+        }
+      >
+        {insumos.length === 0 ? (
+          <ConfigEmpty
+            title="No hay insumos registrados"
+            description="Agrega el primer insumo."
+            action={
               <Button onClick={() => handleOpenModal()}>
-                <Plus className="mr-2 h-4 w-4" />
-                Agregar Insumo
+                <Plus strokeWidth={2} />
+                Agregar insumo
               </Button>
-            </div>
-          ) : (
-            <div className="rounded-lg border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Unidad de Medida</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+            }
+          />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-5">Nombre</TableHead>
+                <TableHead>Unidad de medida</TableHead>
+                <TableHead className="w-24" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[...insumos]
+                .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' }))
+                .map((insumo) => (
+                  <TableRow key={insumo.id}>
+                    <TableCell className="pl-5 font-semibold text-foreground">{insumo.nombre}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatearUnidad(insumo.unidad_medida)}
+                    </TableCell>
+                    <TableCell className="pr-3">
+                      <ConfigRowActions
+                        label={insumo.nombre}
+                        onEdit={() => handleOpenModal(insumo)}
+                        onDelete={() => handleDelete(insumo.id, insumo.nombre)}
+                      />
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {[...insumos].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((insumo) => (
-                    <TableRow key={insumo.id} className="hover:bg-muted/50 transition-colors">
-                      <TableCell className="font-medium">{insumo.nombre}</TableCell>
-                      <TableCell>
-                        <span className="inline-flex items-center gap-2 rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
-                          {formatearUnidad(insumo.unidad_medida)}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleOpenModal(insumo)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(insumo.id, insumo.nombre)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                ))}
+            </TableBody>
+          </Table>
+        )}
+      </ConfigSection>
       </TabLoadingGate>
     </>
   );

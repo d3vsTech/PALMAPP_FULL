@@ -5,10 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Checkbox } from '../../components/ui/checkbox';
 import { Badge } from '../../components/ui/badge';
 import { Label } from '../../components/ui/label';
-import {
-  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator,
-} from '../../components/ui/breadcrumb';
-import { ArrowLeft, Shield, Save, CheckSquare, Square, Loader2 } from 'lucide-react';
+import PageHeader from '../../components/common/PageHeader';
+import { Shield, Check, Minus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { usuariosApi } from '../../../api/usuarios';
 
@@ -358,73 +356,52 @@ export default function UsuarioPermisos() {
   };
 
   if (loading) return (
-    <div className="flex items-center justify-center py-16 text-muted-foreground gap-3">
-      <Loader2 className="w-5 h-5 animate-spin" /> Cargando permisos...
+    <div className="space-y-6">
+      <PageHeader backTo="/usuarios" eyebrow="Usuarios" title="Editar permisos" />
+      <Card className="items-center py-14 text-center">
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
+          Cargando permisos...
+        </p>
+      </Card>
     </div>
   );
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild><Link to="/usuarios">Usuarios</Link></BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild><Link to={`/usuarios/${id}`}>{usuarioNombre}</Link></BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem><BreadcrumbPage>Editar Permisos</BreadcrumbPage></BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
+      <PageHeader
+        backTo={`/usuarios/${id}`}
+        eyebrow={
+          <>
+            <Link to="/usuarios" className="hover:text-foreground">Usuarios</Link>
+            {usuarioNombre && (
+              <>
+                {' · '}
+                <Link to={`/usuarios/${id}`} className="hover:text-foreground">{usuarioNombre}</Link>
+              </>
+            )}
+          </>
+        }
+        title="Editar permisos"
+        description={`Configura los permisos personalizados para ${usuarioNombre}.`}
+        actions={
+          <>
+            <Button variant="outline" size="sm" onClick={seleccionarTodos}>Seleccionar todos</Button>
+            <Button variant="outline" size="sm" onClick={quitarTodos}>Quitar todos</Button>
+          </>
+        }
+      />
 
-      {/* Header */}
-      <div className="flex items-start gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(`/usuarios/${id}`)}
-          className="h-12 w-12 rounded-xl border border-border/50 hover:bg-muted">
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div className="space-y-1 flex-1">
-          <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Editar Permisos</h1>
-          <p className="text-muted-foreground">Configura los permisos personalizados para {usuarioNombre}</p>
-        </div>
-      </div>
-
-      {/* Info para usuarios ADMIN — arrancan con todos los permisos del rol */}
+      {/* Un usuario administrador arranca con todos los permisos del rol. */}
       {isAdmin && (
-        <Card className="border-warning/20 bg-warning-soft">
-          <CardContent className="p-4 flex items-start gap-3">
-            <Shield className="h-5 w-5 text-warning mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="font-semibold text-sm">Usuario administrador</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Arranca con todos los permisos del rol. Puedes ajustar los que
-                quieras revocar o agregar y guardar los cambios.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="flex items-start gap-3 rounded-lg bg-warning-soft px-4 py-3">
+          <Shield className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
+          <p className="text-sm text-foreground">
+            Usuario administrador. Arranca con todos los permisos del rol; puedes
+            ajustar los que quieras revocar o agregar y guardar los cambios.
+          </p>
+        </div>
       )}
-
-      {/* Botones globales */}
-      <div className="flex gap-3">
-        <Button
-          variant="outline"
-          onClick={seleccionarTodos}
-          
-        >
-          <CheckSquare className="h-4 w-4" /> Seleccionar Todos
-        </Button>
-        <Button
-          variant="outline"
-          onClick={quitarTodos}
-          
-        >
-          <Square className="h-4 w-4" /> Quitar Todos
-        </Button>
-      </div>
 
       {/* Grid 2 columnas — una card por ítem del menú lateral */}
       <div className="grid gap-6 lg:grid-cols-2">
@@ -434,38 +411,29 @@ export default function UsuarioPermisos() {
           const sinPermisos = !tieneSecciones && !tienePermisosPlanos;
 
           return (
-            <Card key={modulo.id} className="glass-subtle">
+            <Card key={modulo.id} className="gap-4">
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3">
                   <button
                     type="button"
                     onClick={() => toggleModulo(modulo)}
                     disabled={sinPermisos}
-                    className={`flex items-center gap-3 group ${sinPermisos ? 'cursor-default' : 'cursor-pointer'}`}
+                    className="group flex min-w-0 items-center gap-3 text-left"
+                    aria-label={`Marcar o desmarcar todos los permisos de ${modulo.nombre}`}
                   >
                     {!sinPermisos && (
-                      <div className={`h-5 w-5 rounded border-2 flex items-center justify-center transition ${
-                        todosModuloActivos(modulo)   ? 'border-primary bg-primary'
-                        : algunoModuloActivo(modulo) ? 'border-primary bg-primary/50'
-                        : 'border-border hover:border-primary/50'}`}>
-                        {todosModuloActivos(modulo) && (
-                          <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                        {algunoModuloActivo(modulo) && !todosModuloActivos(modulo) && (
-                          <div className="h-2 w-2 bg-white rounded-sm" />
-                        )}
-                      </div>
+                      <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors ${
+                        todosModuloActivos(modulo) || algunoModuloActivo(modulo)
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-input bg-card group-hover:border-primary/50'}`}>
+                        {todosModuloActivos(modulo) && <Check className="h-3 w-3" strokeWidth={3} />}
+                        {algunoModuloActivo(modulo) && <Minus className="h-3 w-3" strokeWidth={3} />}
+                      </span>
                     )}
-                    <CardTitle className={!sinPermisos ? 'group-hover:text-primary transition-colors' : ''}>
-                      {modulo.nombre}
-                    </CardTitle>
+                    <CardTitle className="break-words">{modulo.nombre}</CardTitle>
                   </button>
                   {!sinPermisos && (
-                    <Badge variant="outline" className="bg-primary/5 border-primary/20">
-                      {getContador(modulo)}
-                    </Badge>
+                    <Badge variant="secondary" className="tabular-nums">{getContador(modulo)}</Badge>
                   )}
                 </div>
                 <CardDescription>Permisos del módulo {modulo.nombre}</CardDescription>
@@ -474,12 +442,12 @@ export default function UsuarioPermisos() {
               <CardContent className="space-y-4">
                 {/* Nota informativa para módulos sin permisos editables */}
                 {sinPermisos && modulo.nota && (
-                  <p className="text-sm text-muted-foreground italic">{modulo.nota}</p>
+                  <p className="text-sm text-muted-foreground">{modulo.nota}</p>
                 )}
 
                 {/* Permisos planos (módulo simple) */}
                 {tienePermisosPlanos && (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {modulo.permisos!.map(permiso => (
                       <PermisoRow
                         key={permiso.id}
@@ -516,15 +484,12 @@ export default function UsuarioPermisos() {
       </div>
 
       {/* Botones de acción */}
-      <div className="barra-acciones flex justify-end gap-3 pt-6 border-t">
+      <div className="barra-acciones flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button variant="outline" onClick={() => navigate(`/usuarios/${id}`)}>
           Cancelar
         </Button>
-        <Button
-          onClick={handleGuardar}
-          disabled={saving}
-        >
-          <Save className="h-4 w-4" /> {saving ? 'Guardando...' : 'Guardar Permisos'}
+        <Button onClick={handleGuardar} disabled={saving}>
+          {saving ? 'Guardando...' : 'Guardar permisos'}
         </Button>
       </div>
     </div>
@@ -545,10 +510,8 @@ function PermisoRow({
 }) {
   return (
     <div
-      className={`flex items-start gap-3 p-3 rounded-lg border transition ${
-        isActivo
-          ? 'bg-primary/5 border-primary/20 hover:bg-primary/10'
-          : 'border-border hover:border-primary/30'
+      className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
+        isActivo ? 'border-primary/20 bg-primary-soft' : 'border-border hover:bg-muted/40'
       }`}
     >
       <Checkbox
@@ -556,9 +519,10 @@ function PermisoRow({
         checked={isActivo}
         onCheckedChange={onToggle}
         disabled={disabled}
+        className="mt-0.5"
       />
-      <div className="flex-1 space-y-1">
-        <Label htmlFor={permiso.id} className="text-sm font-medium cursor-pointer">
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <Label htmlFor={permiso.id} className="cursor-pointer text-sm font-medium">
           {permiso.nombre}
         </Label>
         {permiso.descripcion && (

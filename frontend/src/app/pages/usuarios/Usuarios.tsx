@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { usuariosApi, type UsuarioTenant, type ResumenUsuarios } from '../../../api/usuarios';
 import { sortByFirstName } from '../../utils/personas';
@@ -8,14 +8,25 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent } from '../../components/ui/card';
+import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
-import { Users, UserCheck, UserX, Plus, Search, Eye, Edit, Shield, Trash2, Loader2 } from 'lucide-react';
+import PageHeader from '../../components/common/PageHeader';
+import StatStrip from '../../components/common/StatStrip';
+import Avatar from '../../components/common/Avatar';
+import { Users, UserCheck, UserX, Plus, Search, Pencil, Shield, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Usuario = UsuarioTenant;
 type Resumen = ResumenUsuarios;
+
+/** Acción pendiente de confirmar en el diálogo. */
+type Pendiente = {
+  id: number;
+  nombre: string;
+  accion: 'activar' | 'desactivar' | 'eliminar';
+  onConfirm: () => Promise<void>;
+};
 
 export default function Usuarios() {
   const navigate = useNavigate();
@@ -26,7 +37,7 @@ export default function Usuarios() {
   const [loading, setLoading] = useState(true);
   const [alertDialog, setAlertDialog] = useState(false);
   const searchMounted = useRef(false);
-  const [usuarioToggle, setUsuarioToggle] = useState<{ id: number; nombre: string; accion: 'activar' | 'desactivar' | 'eliminar'; onConfirm: () => Promise<void> } | null>(null);
+  const [usuarioToggle, setUsuarioToggle] = useState<Pendiente | null>(null);
 
   const cargar = useCallback(async (search?: string) => {
     if (!token) return;
@@ -66,7 +77,7 @@ export default function Usuarios() {
             toast.error(err?.message ?? 'Error al cambiar estado del usuario');
           }
         }
-      }
+      },
     });
     setAlertDialog(true);
   };
@@ -87,18 +98,12 @@ export default function Usuarios() {
             toast.error(err?.message ?? 'Error al eliminar usuario');
           }
         }
-      }
+      },
     });
     setAlertDialog(true);
   };
 
-  const getIniciales = (nombre: string) => {
-    const p = nombre.split(' ');
-    return p.length > 1 ? `${p[0][0]}${p[1][0]}`.toUpperCase() : nombre.substring(0, 2).toUpperCase();
-  };
-
-  // Heurística para extraer el primer apellido del campo `name` (que viene
-  // Orden alfabetico por PRIMER NOMBRE (helper unificado del sistema).
+  // Orden alfabético por primer nombre (helper unificado del sistema).
   const usuariosFiltrados = sortByFirstName(
     usuarios.filter(u =>
       u.name?.toLowerCase().includes(busqueda.toLowerCase()) ||
@@ -107,14 +112,14 @@ export default function Usuarios() {
   );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <AlertDialog open={alertDialog} onOpenChange={setAlertDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {usuarioToggle?.accion === 'desactivar' && '¿Desactivar el usuario?'}
-              {usuarioToggle?.accion === 'activar' && '¿Reactivar el usuario?'}
-              {usuarioToggle?.accion === 'eliminar' && '¿Eliminar el usuario?'}
+              {usuarioToggle?.accion === 'desactivar' && '¿Desactivar usuario?'}
+              {usuarioToggle?.accion === 'activar' && '¿Activar usuario?'}
+              {usuarioToggle?.accion === 'eliminar' && '¿Eliminar usuario?'}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {usuarioToggle?.accion === 'desactivar' && (
@@ -142,137 +147,153 @@ export default function Usuarios() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="space-y-1 mb-6">
-        <h1>Gestión de Usuarios</h1>
-        <p className="text-lead">Administra usuarios y permisos de la plataforma</p>
-      </div>
-
-      <div className="space-y-4">
-        <h2>Resumen</h2>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {[
-            { label: 'Total Usuarios', value: resumen.total, sub: 'registrados' },
-            { label: 'Usuarios Activos', value: resumen.activos, sub: 'activos' },
-            { label: 'Usuarios Inactivos', value: resumen.inactivos, sub: 'inactivos' },
-          ].map(({ label, value, sub }) => (
-            <Card key={label} className="transition-colors">
-              <CardContent>
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                  <div className="flex-1">
-                    <p className="text-sm text-muted-foreground mb-2">{label}</p>
-                    <div className="flex items-baseline gap-2">
-                      <p className="text-3xl sm:text-4xl font-bold">{loading ? '—' : value}</p>
-                      <span className="text-sm text-muted-foreground">{sub}</span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <div>
-          <h2 className="mb-2">Lista de Usuarios</h2>
-          <p className="text-muted-foreground">Todos los usuarios del sistema</p>
-        </div>
-
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input type="text" placeholder="Buscar por nombre, email o rol..."
-              value={busqueda} onChange={e => setBusqueda(e.target.value)} className="pl-10" />
-          </div>
+      <PageHeader
+        title="Usuarios"
+        description="Administra usuarios y permisos de la plataforma."
+        actions={
           <Button onClick={() => navigate('/usuarios/nuevo')}>
-            <Plus className="h-5 w-5" /> Nuevo Usuario
+            <Plus strokeWidth={2} />
+            Nuevo usuario
           </Button>
-        </div>
+        }
+      />
 
-        {loading ? (
-          <div className="flex items-center justify-center py-16 text-muted-foreground gap-3">
-            <Loader2 className="w-5 h-5 animate-spin" /> Cargando usuarios...
-          </div>
-        ) : usuariosFiltrados.length > 0 ? (
-          <Card className="overflow-hidden">
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/30">
-                      <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Nombre</th>
-                      <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Email</th>
-                      <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {usuariosFiltrados.map((u, i) => (
-                      <tr key={u.id} className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${i % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}>
-                        <td className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${u.estado ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-muted text-muted-foreground border border-border'}`}>
-                              {getIniciales(u.name)}
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="font-semibold text-sm">{u.name}</span>
-                              <Badge className={`w-fit mt-1 text-xs ${u.estado ? 'bg-success/10 text-success border-success/20' : 'bg-muted text-muted-foreground border-muted'}`}>
-                                {u.estado ? 'Activo' : 'Inactivo'}
-                              </Badge>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-4">
-                          <span className="text-sm font-medium text-foreground">{u.email}</span>
-                        </td>
-                        <td className="p-4">
-                          <div className="flex gap-2 justify-end">
-                            <Button size="sm" variant="outline" onClick={() => navigate(`/usuarios/${u.id}`)}
-                              className="hover:bg-primary/10 hover:text-primary hover:border-primary" title="Visualizar">
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => navigate(`/usuarios/editar/${u.id}`)}
-                              className="hover:bg-accent/10 hover:text-accent hover:border-accent" title="Editar">
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => navigate(`/usuarios/permisos/${u.id}`)}
-                              className="hover:bg-info-soft hover:text-info hover:border-info/40"
-                              title={u.is_admin ? 'Permisos (Administrador de la finca)' : 'Permisos'}>
-                              <Shield className="h-4 w-4" />
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => handleToggleEstado(u)}
-                              className={u.estado ? 'border-destructive/50 text-destructive hover:bg-destructive hover:text-white' : 'border-success/50 text-success hover:bg-success hover:text-primary'}
-                              title={u.estado ? 'Desactivar' : 'Activar'}>
-                              {u.estado ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
-                            </Button>
-                            <Button size="sm" variant="destructive" onClick={() => handleEliminar(u)} title="Eliminar">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card className="border-2 border-dashed bg-muted/30">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Users className="h-16 w-16 text-muted-foreground mb-4" />
-              <p className="text-lg font-semibold mb-2">No se encontraron usuarios</p>
-              <p className="text-sm text-muted-foreground mb-4">
-                {busqueda ? 'Intenta con otros términos de búsqueda' : 'Comienza agregando tu primer usuario'}
-              </p>
-              {!busqueda && (
-                <Button onClick={() => navigate('/usuarios/nuevo')}>
-                  <Plus className="h-4 w-4" /> Nuevo Usuario
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        )}
+      <StatStrip
+        loading={loading}
+        items={[
+          { label: 'Usuarios', value: resumen.total, note: 'registrados', icon: Users, tone: 'blue' },
+          { label: 'Activos', value: resumen.activos, note: 'con acceso al sistema', icon: UserCheck, tone: 'green' },
+          { label: 'Inactivos', value: resumen.inactivos, note: 'sin acceso al sistema', icon: UserX, tone: 'neutral' },
+        ]}
+      />
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2>Lista de usuarios</h2>
+        <div className="relative w-full sm:w-80">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
+          <Input
+            type="search"
+            placeholder="Buscar por nombre, correo o rol"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            className="pl-9"
+          />
+        </div>
       </div>
+
+      {loading ? (
+        <Card className="items-center py-14 text-center">
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
+            Cargando usuarios...
+          </p>
+        </Card>
+      ) : usuariosFiltrados.length > 0 ? (
+        <Card className="gap-0 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/60 text-[13px] font-medium text-muted-foreground">
+                <tr>
+                  <th className="px-5 py-2.5 text-left font-semibold">Nombre</th>
+                  <th className="hidden px-4 py-2.5 text-left font-semibold md:table-cell">Correo</th>
+                  <th className="hidden px-4 py-2.5 text-left font-semibold lg:table-cell">Rol</th>
+                  <th className="hidden px-4 py-2.5 text-left font-semibold sm:table-cell">Estado</th>
+                  <th className="px-4 py-2.5 text-right font-semibold">
+                    <span className="sr-only">Acciones</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {usuariosFiltrados.map((u) => (
+                  <tr key={u.id} className="transition-colors hover:bg-muted/40">
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        <Avatar nombre={u.name} className={u.estado ? undefined : 'opacity-60'} />
+                        <div className="min-w-0">
+                          <Link to={`/usuarios/${u.id}`} className="font-semibold text-foreground hover:text-primary">
+                            {u.name}
+                          </Link>
+                          <span className="block break-all text-xs text-muted-foreground md:hidden">{u.email}</span>
+                          {/* El estado acompaña al nombre mientras su columna no cabe. */}
+                          <span className="mt-1 block sm:hidden">
+                            <Badge variant={u.estado ? 'success' : 'secondary'}>{u.estado ? 'Activo' : 'Inactivo'}</Badge>
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">{u.email}</td>
+                    <td className="hidden px-4 py-3 lg:table-cell">{u.is_admin ? 'Administrador' : 'Usuario'}</td>
+                    <td className="hidden px-4 py-3 sm:table-cell">
+                      <Badge variant={u.estado ? 'success' : 'secondary'}>{u.estado ? 'Activo' : 'Inactivo'}</Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-0.5">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground"
+                          onClick={() => navigate(`/usuarios/editar/${u.id}`)}
+                          aria-label="Editar"
+                          title="Editar"
+                        >
+                          <Pencil strokeWidth={2} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground"
+                          onClick={() => navigate(`/usuarios/permisos/${u.id}`)}
+                          aria-label="Permisos"
+                          title={u.is_admin ? 'Permisos (Administrador de la finca)' : 'Permisos'}
+                        >
+                          <Shield strokeWidth={2} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground"
+                          onClick={() => handleToggleEstado(u)}
+                          aria-label={u.estado ? 'Desactivar' : 'Activar'}
+                          title={u.estado ? 'Desactivar' : 'Activar'}
+                        >
+                          {u.estado ? <UserX strokeWidth={2} /> : <UserCheck strokeWidth={2} />}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:bg-destructive-soft hover:text-destructive"
+                          onClick={() => handleEliminar(u)}
+                          aria-label="Eliminar"
+                          title="Eliminar"
+                        >
+                          <Trash2 strokeWidth={2} />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      ) : (
+        <Card className="items-center py-14 text-center">
+          <div className="space-y-1">
+            <h3>No se encontraron usuarios</h3>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              {busqueda ? 'Intenta con otros términos de búsqueda.' : 'Comienza agregando tu primer usuario.'}
+            </p>
+          </div>
+          {busqueda ? (
+            <Button variant="outline" size="sm" onClick={() => setBusqueda('')}>Limpiar búsqueda</Button>
+          ) : (
+            <Button onClick={() => navigate('/usuarios/nuevo')}>
+              <Plus strokeWidth={2} />
+              Nuevo usuario
+            </Button>
+          )}
+        </Card>
+      )}
     </div>
   );
 }

@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { ConfigSection, ConfigEmpty } from './ConfigSection';
+import { Badge } from '../ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../ui/table';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { toast } from 'sonner';
@@ -41,6 +50,13 @@ function franjaParaCodigo(codigo: CodigoHoraExtra): FranjaHoraria {
     default:
       return 'DIURNO';
   }
+}
+
+/** Etiqueta legible de la franja; el backend la devuelve en mayúsculas. */
+function franjaLabel(franja: FranjaHoraria): string {
+  if (franja === 'NOCTURNO') return 'Nocturna';
+  if (franja === 'MIXTO') return 'Mixta';
+  return 'Diurna';
 }
 
 /** Porcentaje legal por código según **Ley 2466/2025** (recargo dominical 75% → 90%).
@@ -227,79 +243,83 @@ export function HorasExtrasTab() {
     <TabLoadingGate loading={loading} message="Cargando horas extra…">
     <div className="space-y-6">
       {/* Jornada Laboral Semanal */}
-      <Card className="overflow-hidden">
-        <CardHeader className="border-b bg-muted/40">
-          <CardTitle>Jornada Laboral Semanal</CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">Número de horas ordinarias por semana</p>
-        </CardHeader>
-        <CardContent>
-          <div className="max-w-xs">
-            <Label htmlFor="horasSemanales">Horas Semanales *</Label>
-            <div className="flex items-center gap-3 mt-2">
-              <Input
-                id="horasSemanales"
-                type="number" step="0.001"
-                min={1}
-                max={96}
-                value={horasSemanales}
-                onChange={(e) => setHorasSemanales(e.target.value)}
-                onBlur={() => handleGuardarJornada(horasSemanales)}
-                className="text-2xl font-bold text-center"
-                disabled={!nominaActual}
-              />
-              <span className="text-lg font-medium text-muted-foreground">horas</span>
-            </div>
+      <ConfigSection
+        title="Jornada laboral semanal"
+        description="Número de horas ordinarias por semana."
+      >
+        <div className="max-w-xs space-y-2">
+          <Label htmlFor="horasSemanales">
+            Horas semanales <span className="text-destructive">*</span>
+          </Label>
+          <div className="flex items-center gap-2">
+            <Input
+              id="horasSemanales"
+              type="number"
+              step="0.001"
+              min={1}
+              max={96}
+              value={horasSemanales}
+              onChange={(e) => setHorasSemanales(e.target.value)}
+              onBlur={() => handleGuardarJornada(horasSemanales)}
+              disabled={!nominaActual}
+              className="w-28 tabular-nums"
+            />
+            <span className="text-sm text-muted-foreground">horas</span>
           </div>
-        </CardContent>
-      </Card>
+          <p className="text-xs text-muted-foreground">
+            Según la legislación colombiana: 48 horas semanales
+          </p>
+        </div>
+      </ConfigSection>
 
-      {/* Tipos de Horas Extras — solo lectura (catálogo legal colombiano). */}
-      <Card className="overflow-hidden">
-        <CardHeader className="border-b bg-muted/40">
-          <div>
-            <CardTitle>Tipos de Horas Extras</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">
-              Recargos sobre el valor hora ordinaria (7 tipos legales colombianos)
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {tipos.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                No hay tipos registrados.
-              </p>
-            ) : (
-              tipos.map((tipo) => (
-                <div
-                  key={tipo.id}
-                  className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <span className="px-2 py-0.5 rounded-md bg-muted text-foreground text-xs font-mono font-semibold">
-                        {tipo.codigo}
-                      </span>
-                      <p className="font-semibold">{tipo.nombre}</p>
-                      <span className="px-2 py-1 rounded-md bg-primary/10 text-primary text-sm font-bold">
-                        +{tipo.porcentaje_recargo}%
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {tipo.franja_horaria}
-                        {tipo.aplica_festivo && ' · festivo'}
-                        {!tipo.es_extra && ' · solo recargo'}
-                      </span>
-                    </div>
+      {/* Tipos de horas extra — solo lectura (catálogo legal colombiano). */}
+      <ConfigSection
+        flush
+        title="Tipos de horas extra"
+        description="Recargos sobre el valor de la hora ordinaria."
+      >
+        {tipos.length === 0 ? (
+          <ConfigEmpty
+            title="Sin tipos de hora extra"
+            description="El catálogo legal se carga con la nómina."
+          />
+        ) : (
+          <Table className="min-w-[640px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-5">Tipo</TableHead>
+                <TableHead>Condiciones</TableHead>
+                <TableHead className="pr-5 text-right">Recargo</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {tipos.map((tipo) => (
+                <TableRow key={tipo.id}>
+                  <TableCell className="whitespace-normal pl-5">
+                    <p className="font-semibold text-foreground">{tipo.nombre}</p>
+                    <p className="font-mono text-xs uppercase text-muted-foreground">{tipo.codigo}</p>
                     {tipo.descripcion && (
-                      <p className="text-sm text-muted-foreground mt-1">{tipo.descripcion}</p>
+                      <p className="text-xs text-muted-foreground">{tipo.descripcion}</p>
                     )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </CardContent>
-      </Card>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {tipo.franja_horaria && (
+                        <Badge variant="secondary">{franjaLabel(tipo.franja_horaria)}</Badge>
+                      )}
+                      {tipo.aplica_festivo && <Badge variant="info">Festivo</Badge>}
+                      {!tipo.es_extra && <Badge variant="secondary">Solo recargo</Badge>}
+                    </div>
+                  </TableCell>
+                  <TableCell className="pr-5 text-right font-semibold tabular-nums">
+                    +{tipo.porcentaje_recargo}%
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </ConfigSection>
     </div>
     </TabLoadingGate>
   );

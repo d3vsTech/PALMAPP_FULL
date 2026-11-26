@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { cached } from '../../../api/cache';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { ConfigSection, ConfigActions } from './ConfigSection';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -189,350 +189,331 @@ export function ConstantesLegalesTab() {
     <TabLoadingGate loading={loading} message="Cargando constantes legales…">
     <div className="space-y-6">
       {/* ── General: lo que pesa en todas las liquidaciones ──────────────── */}
-      <Card className="overflow-hidden">
-        <CardHeader className="border-b bg-muted/40">
-          <CardTitle>General</CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">
-            Valores y reglas que usan todas las liquidaciones. Cada liquidación los
-            congela al confirmarse: cambiarlos no altera las ya cerradas.
-          </p>
-        </CardHeader>
-        <CardContent className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <Label htmlFor="anoVigente">Año Vigente *</Label>
+      <ConfigSection
+        title="General"
+        description="Valores y reglas que usan todas las liquidaciones. Cada liquidación los congela al confirmarse: cambiarlos no altera las ya cerradas."
+        contentClassName="space-y-6"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="anoVigente">Año vigente <span className="text-destructive">*</span></Label>
+            <Input
+              id="anoVigente"
+              type="number" step="0.001"
+              min={2020}
+              max={2100}
+              value={constantes.anoVigente}
+              onChange={(e) => handleChange('anoVigente', e.target.value)} className="tabular-nums" />
+            <p className="text-xs text-muted-foreground">
+              Año fiscal con el que trabaja la finca (2020 – 2100).
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="smmlv">Salario mínimo mensual legal vigente (SMMLV) <span className="text-destructive">*</span></Label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
               <Input
-                id="anoVigente"
-                type="number" step="0.001"
-                min={2020}
-                max={2100}
-                value={constantes.anoVigente}
-                onChange={(e) => handleChange('anoVigente', e.target.value)}
-                className="text-lg font-semibold"
+                id="smmlv"
+                value={formatThousands(constantes.smmlv)}
+                onChange={(e) => handleChange('smmlv', parseCOP(e.target.value))}
+                placeholder="1.750.905"
+                className="pl-7 tabular-nums"
               />
-              <p className="text-xs text-muted-foreground">
-                Año fiscal con el que trabaja la finca (2020 – 2100).
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="smmlv">Salario Mínimo Mensual (SMMLV) *</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-lg">$</span>
-                <Input
-                  id="smmlv"
-                  value={formatThousands(constantes.smmlv)}
-                  onChange={(e) => handleChange('smmlv', parseCOP(e.target.value))}
-                  placeholder="1.750.905"
-                  className="pl-7 text-lg font-semibold"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="auxilioTransporte">Auxilio de Transporte Mensual *</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-lg">$</span>
-                <Input
-                  id="auxilioTransporte"
-                  value={formatThousands(constantes.auxilioTransporte)}
-                  onChange={(e) => handleChange('auxilioTransporte', parseCOP(e.target.value))}
-                  placeholder="249.095"
-                  className="pl-7 text-lg font-semibold"
-                />
-              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label htmlFor="diasAnoComercial">Días del Año Comercial *</Label>
+          <div className="space-y-2">
+            <Label htmlFor="auxilioTransporte">Auxilio de transporte mensual <span className="text-destructive">*</span></Label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
               <Input
-                id="diasAnoComercial"
-                type="number" step="0.001"
-                value={constantes.diasAnoComercial}
-                onChange={(e) => handleChange('diasAnoComercial', e.target.value)}
-                placeholder="360"
-                className="text-lg font-semibold"
+                id="auxilioTransporte"
+                value={formatThousands(constantes.auxilioTransporte)}
+                onChange={(e) => handleChange('auxilioTransporte', parseCOP(e.target.value))}
+                placeholder="249.095"
+                className="pl-7 tabular-nums"
               />
             </div>
+          </div>
+        </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="diasMesComercial">Días del Mes Comercial *</Label>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="diasAnoComercial">Días del año comercial <span className="text-destructive">*</span></Label>
+            <Input
+              id="diasAnoComercial"
+              type="number" step="0.001"
+              value={constantes.diasAnoComercial}
+              onChange={(e) => handleChange('diasAnoComercial', e.target.value)}
+              placeholder="360" className="tabular-nums" />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="diasMesComercial">Días del mes comercial <span className="text-destructive">*</span></Label>
+            <Input
+              id="diasMesComercial"
+              type="number" step="0.001"
+              value={constantes.diasMesComercial}
+              onChange={(e) => handleChange('diasMesComercial', e.target.value)}
+              placeholder="30" className="tabular-nums" />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="uvtVigente">Valor de la UVT</Label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
               <Input
-                id="diasMesComercial"
-                type="number" step="0.001"
-                value={constantes.diasMesComercial}
-                onChange={(e) => handleChange('diasMesComercial', e.target.value)}
-                placeholder="30"
-                className="text-lg font-semibold"
+                id="uvtVigente"
+                value={formatThousands(constantes.uvtVigente)}
+                onChange={(e) => handleChange('uvtVigente', parseCOP(e.target.value))}
+                placeholder="52.374"
+                className="pl-7 tabular-nums"
               />
             </div>
+            <p className="text-xs text-muted-foreground">
+              Unidad de Valor Tributario del año. Solo sirve para avisar cuando una
+              indemnización podría tener retención; el sistema no la calcula.
+            </p>
+          </div>
+        </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="uvtVigente">Valor de la UVT</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg text-muted-foreground">$</span>
-                <Input
-                  id="uvtVigente"
-                  value={formatThousands(constantes.uvtVigente)}
-                  onChange={(e) => handleChange('uvtVigente', parseCOP(e.target.value))}
-                  placeholder="52.374"
-                  className="pl-7 text-lg font-semibold"
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Unidad de Valor Tributario del año. Solo sirve para avisar cuando una
-                indemnización podría tener retención; el sistema no la calcula.
-              </p>
-            </div>
+        <div className="space-y-4 border-t border-border pt-6">
+          <SubtituloPolitica titulo="Política de cálculo" />
+
+          <div className="space-y-2 max-w-xl">
+            <Label htmlFor="liqAuxilioModo">Auxilio de transporte en la base</Label>
+            <Select
+              value={constantes.liqAuxilioModo}
+              onValueChange={(v) => handleChange('liqAuxilioModo', v)}
+            >
+              <SelectTrigger id="liqAuxilioModo">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="DEVENGADO_REAL">Devengado real (lo pagado en nómina)</SelectItem>
+                <SelectItem value="MENSUAL_COMPLETO">Mensual completo (si tiene derecho)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Devengado real suma lo pagado en las nóminas cerradas del período. Mensual
+              completo usa el valor vigente y es de mayor costo. No toca vacaciones: el
+              CST art. 192 deja el auxilio fuera de esa base.
+            </p>
           </div>
 
-          <div className="space-y-4 border-t border-border pt-6">
-            <SubtituloPolitica titulo="Política de cálculo" />
+          <FilaPolitica
+            titulo="Incapacidades fuera del divisor del promedio"
+            descripcion="El promedio salarial se calcula como si el incapacitado hubiera trabajado. Apagado, el promedio incluye esos días y puede diluirse. Aplica a cesantías, intereses, prima y vacaciones."
+            checked={constantes.liqPromedioExcluyeIncapacidad}
+            onCheckedChange={(v) => handleChange('liqPromedioExcluyeIncapacidad', v)}
+          />
+        </div>
 
-            <div className="space-y-2 max-w-xl">
-              <Label htmlFor="liqAuxilioModo">Auxilio de transporte en la base</Label>
-              <Select
-                value={constantes.liqAuxilioModo}
-                onValueChange={(v) => handleChange('liqAuxilioModo', v)}
-              >
-                <SelectTrigger id="liqAuxilioModo">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="DEVENGADO_REAL">Devengado real (lo pagado en nómina)</SelectItem>
-                  <SelectItem value="MENSUAL_COMPLETO">Mensual completo (si tiene derecho)</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Devengado real suma lo pagado en las nóminas cerradas del período. Mensual
-                completo usa el valor vigente y es de mayor costo. No toca vacaciones: el
-                CST art. 192 deja el auxilio fuera de esa base.
-              </p>
-            </div>
-
-            <FilaPolitica
-              titulo="Incapacidades fuera del divisor del promedio"
-              descripcion="El promedio salarial se calcula como si el incapacitado hubiera trabajado. Apagado, el promedio incluye esos días y puede diluirse. Aplica a cesantías, intereses, prima y vacaciones."
-              checked={constantes.liqPromedioExcluyeIncapacidad}
-              onCheckedChange={(v) => handleChange('liqPromedioExcluyeIncapacidad', v)}
-            />
-          </div>
-        </CardContent>
-      </Card>
+      </ConfigSection>
 
       {/* ── Cesantías ──────────────────────────────────────────────────────── */}
-      <Card className="overflow-hidden">
-        <CardHeader className="border-b bg-muted/40">
-          <CardTitle>Cesantías</CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">Fecha de consignación y reglas de conteo de días</p>
-        </CardHeader>
-        <CardContent className="p-6 space-y-6">
-          <div className="space-y-2 max-w-sm">
-            <Label htmlFor="fechaLimiteCesantias">Fecha Límite Consignación</Label>
-            <FechaDiaMesPicker
-              id="fechaLimiteCesantias"
-              value={constantes.fechaLimiteCesantias}
-              onChange={(v) => handleChange('fechaLimiteCesantias', v)}
-              placeholder="Ej: 14 de febrero"
-            />
+      <ConfigSection
+        title="Cesantías"
+        description="Fecha de consignación y reglas de conteo de días."
+        contentClassName="space-y-6"
+      >
+        <div className="space-y-2 max-w-sm">
+          <Label htmlFor="fechaLimiteCesantias">Fecha límite consignación</Label>
+          <FechaDiaMesPicker
+            id="fechaLimiteCesantias"
+            value={constantes.fechaLimiteCesantias}
+            onChange={(v) => handleChange('fechaLimiteCesantias', v)}
+            placeholder="Ej: 14 de febrero"
+          />
+        </div>
+
+        <div className="space-y-4 border-t border-border pt-6">
+          <SubtituloPolitica titulo="Política de cálculo" />
+
+          <FilaPolitica
+            titulo="Suspensiones descuentan días de cesantías"
+            descripcion="Permisos no remunerados y suspensiones disciplinarias restan días. Es una facultad del CST art. 53 y se aplica igual todos los años. Solo cesantías: la prima tiene su propio interruptor."
+            checked={constantes.liqDescontarSuspensiones}
+            onCheckedChange={(v) => handleChange('liqDescontarSuspensiones', v)}
+          />
+
+          <div className="space-y-2 max-w-xl">
+            <Label htmlFor="liqInteresesDiasModo">Días de la fórmula de intereses</Label>
+            <Select
+              value={constantes.liqInteresesDiasModo}
+              onValueChange={(v) => handleChange('liqInteresesDiasModo', v)}
+            >
+              <SelectTrigger id="liqInteresesDiasModo">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="DIAS_VINCULACION">Días de vinculación (recomendado)</SelectItem>
+                <SelectItem value="DIAS_COMPUTADOS">Días computados de la cesantía</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Elige con qué conteo de días se calculan los intereses. Cambia el valor de
+              los intereses, no el de la cesantía. Con días de vinculación las
+              suspensiones no se descuentan dos veces; días computados paga menos y no
+              tiene respaldo en el CST art. 53.
+            </p>
           </div>
+        </div>
 
-          <div className="space-y-4 border-t border-border pt-6">
-            <SubtituloPolitica titulo="Política de cálculo" />
-
-            <FilaPolitica
-              titulo="Suspensiones descuentan días de cesantías"
-              descripcion="Permisos no remunerados y suspensiones disciplinarias restan días. Es una facultad del CST art. 53 y se aplica igual todos los años. Solo cesantías: la prima tiene su propio interruptor."
-              checked={constantes.liqDescontarSuspensiones}
-              onCheckedChange={(v) => handleChange('liqDescontarSuspensiones', v)}
-            />
-
-            <div className="space-y-2 max-w-xl">
-              <Label htmlFor="liqInteresesDiasModo">Días de la fórmula de intereses</Label>
-              <Select
-                value={constantes.liqInteresesDiasModo}
-                onValueChange={(v) => handleChange('liqInteresesDiasModo', v)}
-              >
-                <SelectTrigger id="liqInteresesDiasModo">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="DIAS_VINCULACION">Días de vinculación (recomendado)</SelectItem>
-                  <SelectItem value="DIAS_COMPUTADOS">Días computados de la cesantía</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Elige con qué conteo de días se calculan los intereses. Cambia el valor de
-                los intereses, no el de la cesantía. Con días de vinculación las
-                suspensiones no se descuentan dos veces; días computados paga menos y no
-                tiene respaldo en el CST art. 53.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      </ConfigSection>
 
       {/* ── Intereses de cesantías ─────────────────────────────────────────── */}
-      <Card className="overflow-hidden">
-        <CardHeader className="border-b bg-muted/40">
-          <CardTitle>Intereses de Cesantías</CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">Tasa anual y fecha límite de pago</p>
-        </CardHeader>
-        <CardContent className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label htmlFor="tasaInteresesCesantias">Tasa de Interés Anual (%) *</Label>
-              <div className="relative">
-                <Input
-                  id="tasaInteresesCesantias"
-                  type="number" step="0.001"
-                  value={constantes.tasaInteresesCesantias}
-                  onChange={(e) => handleChange('tasaInteresesCesantias', e.target.value)}
-                  placeholder="12"
-                  className="text-lg font-semibold pr-8"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-lg">%</span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="fechaLimiteInteresesCesantias">Fecha Límite Pago Intereses</Label>
-              <FechaDiaMesPicker
-                id="fechaLimiteInteresesCesantias"
-                value={constantes.fechaLimiteInteresesCesantias}
-                onChange={(v) => handleChange('fechaLimiteInteresesCesantias', v)}
-                placeholder="Ej: 31 de enero"
+      <ConfigSection
+        title="Intereses de cesantías"
+        description="Tasa anual y fecha límite de pago."
+        contentClassName="space-y-6"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="tasaInteresesCesantias">Tasa de interés anual (%) <span className="text-destructive">*</span></Label>
+            <div className="relative">
+              <Input
+                id="tasaInteresesCesantias"
+                type="number" step="0.001"
+                value={constantes.tasaInteresesCesantias}
+                onChange={(e) => handleChange('tasaInteresesCesantias', e.target.value)}
+                placeholder="12"
+                className="pr-8 tabular-nums"
               />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
             </div>
           </div>
-        </CardContent>
-      </Card>
+
+          <div className="space-y-2">
+            <Label htmlFor="fechaLimiteInteresesCesantias">Fecha límite pago intereses</Label>
+            <FechaDiaMesPicker
+              id="fechaLimiteInteresesCesantias"
+              value={constantes.fechaLimiteInteresesCesantias}
+              onChange={(v) => handleChange('fechaLimiteInteresesCesantias', v)}
+              placeholder="Ej: 31 de enero"
+            />
+          </div>
+        </div>
+
+      </ConfigSection>
 
       {/* ── Prima de servicios ──────────────────────────────────────────────── */}
-      <Card className="overflow-hidden">
-        <CardHeader className="border-b bg-muted/40">
-          <CardTitle>Prima de Servicios</CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">Fechas límite por semestre y regla de días</p>
-        </CardHeader>
-        <CardContent className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label htmlFor="fechaLimitePrimaPrimerSemestre">Fecha Límite Primer Semestre</Label>
-              <FechaDiaMesPicker
-                id="fechaLimitePrimaPrimerSemestre"
-                value={constantes.fechaLimitePrimaPrimerSemestre}
-                onChange={(v) => handleChange('fechaLimitePrimaPrimerSemestre', v)}
-                placeholder="Ej: 30 de junio"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="fechaLimitePrimaSegundoSemestre">Fecha Límite Segundo Semestre</Label>
-              <FechaDiaMesPicker
-                id="fechaLimitePrimaSegundoSemestre"
-                value={constantes.fechaLimitePrimaSegundoSemestre}
-                onChange={(v) => handleChange('fechaLimitePrimaSegundoSemestre', v)}
-                placeholder="Ej: 20 de diciembre"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-4 border-t border-border pt-6">
-            <SubtituloPolitica titulo="Política de cálculo" />
-
-            <FilaPolitica
-              titulo="Suspensiones descuentan días de prima"
-              descripcion="Parámetro aparte del de cesantías. Apagado por defecto porque la Corte Suprema sostiene que el CST art. 53 no cubre la prima. Encendido paga menos a los de salario fijo."
-              checked={constantes.liqPrimaDescontarSuspensiones}
-              onCheckedChange={(v) => handleChange('liqPrimaDescontarSuspensiones', v)}
+      <ConfigSection
+        title="Primas de servicios"
+        description="Fechas límite por semestre y regla de días."
+        contentClassName="space-y-6"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="fechaLimitePrimaPrimerSemestre">Fecha límite primer semestre</Label>
+            <FechaDiaMesPicker
+              id="fechaLimitePrimaPrimerSemestre"
+              value={constantes.fechaLimitePrimaPrimerSemestre}
+              onChange={(v) => handleChange('fechaLimitePrimaPrimerSemestre', v)}
+              placeholder="Ej: 30 de junio"
             />
           </div>
-        </CardContent>
-      </Card>
+
+          <div className="space-y-2">
+            <Label htmlFor="fechaLimitePrimaSegundoSemestre">Fecha límite segundo semestre</Label>
+            <FechaDiaMesPicker
+              id="fechaLimitePrimaSegundoSemestre"
+              value={constantes.fechaLimitePrimaSegundoSemestre}
+              onChange={(v) => handleChange('fechaLimitePrimaSegundoSemestre', v)}
+              placeholder="Ej: 20 de diciembre"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-4 border-t border-border pt-6">
+          <SubtituloPolitica titulo="Política de cálculo" />
+
+          <FilaPolitica
+            titulo="Suspensiones descuentan días de prima"
+            descripcion="Parámetro aparte del de cesantías. Apagado por defecto porque la Corte Suprema sostiene que el CST art. 53 no cubre la prima. Encendido paga menos a los de salario fijo."
+            checked={constantes.liqPrimaDescontarSuspensiones}
+            onCheckedChange={(v) => handleChange('liqPrimaDescontarSuspensiones', v)}
+          />
+        </div>
+
+      </ConfigSection>
 
       {/* ── Vacaciones ──────────────────────────────────────────────────────── */}
-      <Card className="overflow-hidden">
-        <CardHeader className="border-b bg-muted/40">
-          <CardTitle>Vacaciones</CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">Días anuales y reglas de conteo</p>
-        </CardHeader>
-        <CardContent className="p-6 space-y-6">
-          <div className="space-y-2 max-w-xs">
-            <Label htmlFor="diasVacacionesAnuales">Días de Vacaciones Anuales *</Label>
-            <Input
-              id="diasVacacionesAnuales"
-              type="number" step="0.001"
-              value={constantes.diasVacacionesAnuales}
-              onChange={(e) => handleChange('diasVacacionesAnuales', e.target.value)}
-              placeholder="15"
-              className="text-lg font-semibold"
-            />
-            <p className="text-xs text-muted-foreground">
-              Según el CST art. 186: 15 días hábiles por año trabajado.
-            </p>
-          </div>
+      <ConfigSection
+        title="Vacaciones"
+        description="Días anuales y reglas de conteo."
+        contentClassName="space-y-6"
+      >
+        <div className="space-y-2 max-w-xs">
+          <Label htmlFor="diasVacacionesAnuales">Días de vacaciones anuales <span className="text-destructive">*</span></Label>
+          <Input
+            id="diasVacacionesAnuales"
+            type="number" step="0.001"
+            value={constantes.diasVacacionesAnuales}
+            onChange={(e) => handleChange('diasVacacionesAnuales', e.target.value)}
+            placeholder="15" className="tabular-nums" />
+          <p className="text-xs text-muted-foreground">
+            Según legislación colombiana: 15 días hábiles por año trabajado.
+          </p>
+        </div>
 
-          <div className="space-y-4 border-t border-border pt-6">
-            <SubtituloPolitica titulo="Política de cálculo" />
+        <div className="space-y-4 border-t border-border pt-6">
+          <SubtituloPolitica titulo="Política de cálculo" />
 
-            <FilaPolitica
-              titulo="El sábado cuenta como día hábil"
-              descripcion="Define cómo se cuentan los 15 días. Encendido por defecto porque la finca trabaja de lunes a sábado. Apagado, las mismas vacaciones terminan cuatro días después y se pagan más días."
-              checked={constantes.liqVacacionesSabadoHabil}
-              onCheckedChange={(v) => handleChange('liqVacacionesSabadoHabil', v)}
-            />
+          <FilaPolitica
+            titulo="El sábado cuenta como día hábil"
+            descripcion="Define cómo se cuentan los 15 días. Encendido por defecto porque la finca trabaja de lunes a sábado. Apagado, las mismas vacaciones terminan cuatro días después y se pagan más días."
+            checked={constantes.liqVacacionesSabadoHabil}
+            onCheckedChange={(v) => handleChange('liqVacacionesSabadoHabil', v)}
+          />
 
-            <FilaPolitica
-              titulo="Permitir vacaciones anticipadas"
-              descripcion="Deja liquidar días del año en curso, antes de cumplirlo. Apagado por defecto: si el trabajador se retira después, no se le puede exigir que devuelva esos días."
-              checked={constantes.liqVacacionesAnticipadas}
-              onCheckedChange={(v) => handleChange('liqVacacionesAnticipadas', v)}
-            />
+          <FilaPolitica
+            titulo="Permitir vacaciones anticipadas"
+            descripcion="Deja liquidar días del año en curso, antes de cumplirlo. Apagado por defecto: si el trabajador se retira después, no se le puede exigir que devuelva esos días."
+            checked={constantes.liqVacacionesAnticipadas}
+            onCheckedChange={(v) => handleChange('liqVacacionesAnticipadas', v)}
+          />
 
-            <p className="text-xs text-muted-foreground">
-              En vacaciones las suspensiones siempre descuentan días, por el CST art. 53.
-              No hay parámetro para eso.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+          <p className="text-xs text-muted-foreground">
+            En vacaciones las suspensiones siempre descuentan días, por el CST art. 53.
+            No hay parámetro para eso.
+          </p>
+        </div>
+
+      </ConfigSection>
 
       {/* ── Liquidación final de contrato ──────────────────────── */}
-      <Card className="overflow-hidden">
-        <CardHeader className="border-b bg-muted/40">
-          <CardTitle>Liquidación Final</CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">Qué se descuenta cuando alguien se retira</p>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <SubtituloPolitica titulo="Política de cálculo" />
+      <ConfigSection
+        title="Liquidación final"
+        description="Qué se descuenta cuando alguien se retira."
+      >
+        <div className="space-y-4">
+          <SubtituloPolitica titulo="Política de cálculo" />
 
-            <FilaPolitica
-              titulo="Descontar salud y pensión"
-              descripcion="Solo se descuentan sobre lo salarial, es decir, sobre el salario pendiente si se paga aquí. Las cesantías, los intereses, la prima, las vacaciones compensadas y la indemnización no cotizan."
-              checked={constantes.liqFinalDeducirSeguridadSocial}
-              onCheckedChange={(v) => handleChange('liqFinalDeducirSeguridadSocial', v)}
-            />
+          <FilaPolitica
+            titulo="Descontar salud y pensión"
+            descripcion="Solo se descuentan sobre lo salarial, es decir, sobre el salario pendiente si se paga aquí. Las cesantías, los intereses, la prima, las vacaciones compensadas y la indemnización no cotizan."
+            checked={constantes.liqFinalDeducirSeguridadSocial}
+            onCheckedChange={(v) => handleChange('liqFinalDeducirSeguridadSocial', v)}
+          />
 
-            <FilaPolitica
-              titulo="Proponer el descuento de préstamos"
-              descripcion="Trae los préstamos vigentes con su saldo para descontarlos de la liquidación. Descontar exige la autorización escrita del trabajador, CST arts. 149 y 150; el sistema la pide antes de guardar."
-              checked={constantes.liqFinalDescontarPrestamos}
-              onCheckedChange={(v) => handleChange('liqFinalDescontarPrestamos', v)}
-            />
-          </div>
-        </CardContent>
-      </Card>
+          <FilaPolitica
+            titulo="Proponer el descuento de préstamos"
+            descripcion="Trae los préstamos vigentes con su saldo para descontarlos de la liquidación. Descontar exige la autorización escrita del trabajador, CST arts. 149 y 150; el sistema la pide antes de guardar."
+            checked={constantes.liqFinalDescontarPrestamos}
+            onCheckedChange={(v) => handleChange('liqFinalDescontarPrestamos', v)}
+          />
+        </div>
 
-      {/* Botón Guardar */}
-      <div className="flex justify-end">
-        <Button onClick={handleSave} size="lg">
-          <Save className="h-5 w-5" />
-          Guardar Constantes
+      </ConfigSection>
+
+      <ConfigActions>
+        <Button onClick={handleSave}>
+          <Save strokeWidth={2} />
+          Guardar
         </Button>
-      </div>
+      </ConfigActions>
     </div>
     </TabLoadingGate>
   );

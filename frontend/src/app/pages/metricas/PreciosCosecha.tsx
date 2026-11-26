@@ -1,4 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import {
+  CHART_COLORS, gridProps, xAxisProps, yAxisProps, tooltipProps,
+} from '../../components/common/chartTheme';
+import PageHeader from '../../components/common/PageHeader';
 import { Button } from '../../components/ui/button';
 import {
   Table,
@@ -25,36 +29,36 @@ const evolucionData = [
 export default function PreciosCosecha() {
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Precios y Productividad de Cosecha</h1>
-          <p className="text-muted-foreground">Análisis de precios y producción por lote</p>
-        </div>
-        <Button>
-          <Download className="mr-2 h-4 w-4" />
-          Exportar
-        </Button>
-      </div>
+      <PageHeader
+        title="Precios y productividad de cosecha"
+        description="Análisis de precios y producción por lote."
+        actions={
+          <Button variant="outline">
+            <Download strokeWidth={2} />
+            Exportar
+          </Button>
+        }
+      />
 
       {/* Gráfica de evolución */}
       <Card>
         <CardHeader>
-          <CardTitle>Evolución de Precios vs Producción</CardTitle>
+          <CardTitle>Evolución de precios vs producción</CardTitle>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={evolucionData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="mes" />
-              <YAxis yAxisId="left" />
-              <YAxis yAxisId="right" orientation="right" />
-              <Tooltip />
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="mes" {...xAxisProps} />
+              <YAxis yAxisId="left" {...yAxisProps} />
+              <YAxis yAxisId="right" orientation="right" {...yAxisProps} />
+              <Tooltip {...tooltipProps} />
               <Legend />
               <Line
                 yAxisId="left"
                 type="monotone"
                 dataKey="precio"
-                stroke="hsl(var(--chart-1))"
+                stroke={CHART_COLORS[0]}
                 strokeWidth={2}
                 name="Precio ($/kg)"
               />
@@ -62,7 +66,7 @@ export default function PreciosCosecha() {
                 yAxisId="right"
                 type="monotone"
                 dataKey="produccion"
-                stroke="hsl(var(--chart-2))"
+                stroke={CHART_COLORS[1]}
                 strokeWidth={2}
                 name="Producción (kg)"
               />
@@ -74,7 +78,7 @@ export default function PreciosCosecha() {
       {/* Tabla de precios por lote */}
       <Card>
         <CardHeader>
-          <CardTitle>Precios por Lote</CardTitle>
+          <CardTitle>Precios por lote</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>

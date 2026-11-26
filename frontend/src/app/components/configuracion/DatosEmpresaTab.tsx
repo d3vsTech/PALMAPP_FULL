@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { ConfigSection, ConfigActions } from './ConfigSection';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Save, Upload, Image as ImageIcon } from 'lucide-react';
+import { Save, Upload, X, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Select,
@@ -375,334 +375,327 @@ export function DatosEmpresaTab() {
     <TabLoadingGate loading={loading} message="Cargando datos de empresa…">
     <div className="space-y-6">
       {/* Logo de la finca */}
-      <Card className="overflow-hidden">
-        <CardHeader className="border-b bg-muted/40">
-          <CardTitle>Logo de la Finca / Empresa</CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">
-            Este logo aparecerá en todos los documentos descargables del sistema
-            (desprendibles, liquidaciones, novedades, etc.)
-          </p>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap items-center gap-8">
-            {/* Recuadro de vista previa. Punteado y con la leyenda "Sin logo"
-                mientras la finca no tenga uno cargado. */}
-            <div className="h-28 w-40 shrink-0 rounded-xl border-2 border-dashed border-border bg-muted/20 overflow-hidden flex flex-col items-center justify-center gap-2">
-              {logoPreview || logoUrl ? (
+      <ConfigSection
+        title="Logo de la finca o empresa"
+        description="Aparece en los documentos descargables: desprendibles, liquidaciones y novedades."
+      >
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
+          {/* Vista previa. Punteado y con la leyenda "Sin logo" mientras la
+              finca no tenga uno cargado. */}
+          <div className="shrink-0">
+            {logoPreview || logoUrl ? (
+              <div className="flex h-28 w-48 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted/60">
                 <img
                   src={logoPreview ?? logoUrl ?? ''}
-                  alt="Logo de la finca"
-                  className="h-full w-full object-contain p-2"
+                  alt="Logo de la empresa"
+                  className="max-h-full max-w-full object-contain p-2"
                 />
-              ) : (
-                <>
-                  <ImageIcon className="h-7 w-7 text-muted-foreground/40" />
-                  <span className="text-xs text-muted-foreground">Sin logo</span>
-                </>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="flex h-28 w-48 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-muted/60 text-muted-foreground">
+                <ImageIcon className="h-5 w-5" strokeWidth={2} />
+                <span className="text-xs">Sin logo</span>
+              </div>
+            )}
+          </div>
 
-            <div className="space-y-3">
-              {/* El input real va oculto: el botón es el control visible. */}
-              <input
-                aria-label="Seleccionar archivo"
-                id="logo"
-                ref={logoInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={onLogoChange}
-                className="hidden"
-              />
+          <div className="flex-1 space-y-3">
+            {/* El input real va oculto: el botón es el control visible. */}
+            <input
+              aria-label="Seleccionar archivo"
+              id="logo"
+              ref={logoInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={onLogoChange}
+              className="hidden"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => logoInputRef.current?.click()}
+            >
+              <Upload strokeWidth={2} />
+              {logoUrl || logoPreview ? 'Cambiar logo' : 'Subir logo'}
+            </Button>
+            {logoFile && (
               <Button
                 type="button"
-                variant="outline"
-                onClick={() => logoInputRef.current?.click()}
-                
+                variant="ghost"
+                className="ml-2 text-muted-foreground hover:bg-destructive-soft hover:text-destructive"
+                onClick={quitarLogoPendiente}
               >
-                <Upload className="h-4 w-4" />
-                {logoUrl || logoPreview ? 'Cambiar logo' : 'Subir logo'}
+                <X strokeWidth={2} />
+                Descartar
               </Button>
+            )}
 
-              <div className="space-y-0.5">
-                <p className="text-sm text-muted-foreground">
-                  Formatos aceptados: PNG, JPG, WEBP · Máximo 2 MB
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Recomendado: fondo transparente, mínimo 200 × 80 px
-                </p>
-              </div>
+            <p className="text-xs text-muted-foreground">
+              Formatos PNG, JPG o WEBP de máximo 2 MB.<br />
+              Recomendado: fondo transparente, mínimo 200 × 80 px.
+            </p>
 
-              {logoFile && (
-                <div className="flex items-center gap-3">
-                  <p className="text-xs text-muted-foreground">
-                    {logoFile.name} — se sube al guardar los cambios
-                  </p>
-                  <Button type="button" variant="ghost" size="sm" onClick={quitarLogoPendiente}>
-                    Descartar
-                  </Button>
-                </div>
-              )}
-            </div>
+            {logoFile && (
+              <p className="text-xs text-muted-foreground">
+                {logoFile.name} · se sube al guardar los cambios.
+              </p>
+            )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+
+      </ConfigSection>
 
       {/* Información Legal */}
-      <Card className="overflow-hidden">
-        <CardHeader className="border-b bg-muted/40">
-          <CardTitle>Información Legal</CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">Datos de identificación y tipo de persona</p>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-6">
-            {/* Tipo de Persona */}
-            <div className="max-w-md">
-              <Label htmlFor="tipoPersona">Tipo de Persona *</Label>
-              <Select value={tipoPersona} onValueChange={cambiarTipoPersona}>
-                <SelectTrigger id="tipoPersona" className="mt-2">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="natural">Persona Natural</SelectItem>
-                  <SelectItem value="juridica">Persona Jurídica</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+      <ConfigSection
+        title="Información legal"
+        description="Datos de identificación y tipo de persona."
+      >
+        <div className="space-y-6">
+          {/* Tipo de Persona */}
+          <div className="max-w-md space-y-2">
+            <Label htmlFor="tipoPersona">Tipo de persona <span className="text-destructive">*</span></Label>
+            <Select value={tipoPersona} onValueChange={cambiarTipoPersona}>
+              <SelectTrigger id="tipoPersona">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="natural">Persona natural</SelectItem>
+                <SelectItem value="juridica">Persona jurídica (empresa)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-            {/* Campos según tipo de persona */}
-            <div className="border-t border-border pt-6">
-              {tipoPersona === 'natural' ? (
-                // Persona Natural
+          {/* Campos según tipo de persona */}
+          <div className="border-t border-border pt-6">
+            {tipoPersona === 'natural' ? (
+              // Persona Natural
+              <div>
+                <h4 className="mb-4 text-[13px] font-medium text-muted-foreground">Datos personales</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="nombres">Nombres <span className="text-destructive">*</span></Label>
+                    <Input
+                      id="nombres"
+                      value={datosEmpresa.nombres}
+                      onChange={(e) => handleChange('nombres', e.target.value)}
+                      placeholder="Ej.: Juan Carlos"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="apellidos">Apellidos <span className="text-destructive">*</span></Label>
+                    <Input
+                      id="apellidos"
+                      value={datosEmpresa.apellidos}
+                      onChange={(e) => handleChange('apellidos', e.target.value)}
+                      placeholder="Ej.: Pérez Gómez"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="cedula">Cédula <span className="text-destructive">*</span></Label>
+                    <Input
+                      id="cedula"
+                      value={datosEmpresa.cedula}
+                      onChange={(e) => handleChange('cedula', e.target.value)}
+                      placeholder="16.123.456"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-6 max-w-md space-y-2">
+                  <Label htmlFor="nombreComercial">Nombre comercial</Label>
+                  <Input
+                    id="nombreComercial"
+                    value={datosEmpresa.nombreComercial}
+                    onChange={(e) => handleChange('nombreComercial', e.target.value)}
+                    placeholder="Ej.: Finca La Esperanza"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Opcional. Si lo dejas vacío se usa el nombre completo.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              // Persona Jurídica
+              <div className="space-y-6">
                 <div>
-                  <h3 className="text-sm font-semibold mb-4 text-muted-foreground">Datos Personales</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <h4 className="mb-4 text-[13px] font-medium text-muted-foreground">Datos de la empresa</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="nombres">Nombres *</Label>
+                      <Label htmlFor="nombreEmpresa">Nombre de la empresa <span className="text-destructive">*</span></Label>
                       <Input
-                        id="nombres"
-                        value={datosEmpresa.nombres}
-                        onChange={(e) => handleChange('nombres', e.target.value)}
-                        placeholder="Ej: Juan Carlos"
+                        id="nombreEmpresa"
+                        value={datosEmpresa.nombreEmpresa}
+                        onChange={(e) => handleChange('nombreEmpresa', e.target.value)}
+                        placeholder="Ej.: AGRO CAMPO S.A.S."
                       />
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="apellidos">Apellidos *</Label>
+                      <Label htmlFor="razonSocial">Razón social <span className="text-destructive">*</span></Label>
                       <Input
-                        id="apellidos"
-                        value={datosEmpresa.apellidos}
-                        onChange={(e) => handleChange('apellidos', e.target.value)}
-                        placeholder="Ej: Pérez Gómez"
+                        id="razonSocial"
+                        value={datosEmpresa.razonSocial}
+                        onChange={(e) => handleChange('razonSocial', e.target.value)}
+                        placeholder="Ej.: AGRO CAMPO S.A.S."
                       />
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="cedula">Cédula *</Label>
+                      <Label htmlFor="nit">NIT <span className="text-destructive">*</span></Label>
                       <Input
-                        id="cedula"
-                        value={datosEmpresa.cedula}
-                        onChange={(e) => handleChange('cedula', e.target.value)}
+                        id="nit"
+                        value={datosEmpresa.nit}
+                        onChange={(e) => handleChange('nit', e.target.value)}
+                        placeholder="900.123.456-7"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Representante Legal */}
+                <div className="border-t border-border pt-6">
+                  <h4 className="mb-4 text-[13px] font-medium text-muted-foreground">Representante legal</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="representanteLegal">Nombre completo <span className="text-destructive">*</span></Label>
+                      <Input
+                        id="representanteLegal"
+                        value={datosEmpresa.representanteLegal}
+                        onChange={(e) => handleChange('representanteLegal', e.target.value)}
+                        placeholder="Juan Carlos Pérez Gómez"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="cedulaRepresentante">Cédula <span className="text-destructive">*</span></Label>
+                      <Input
+                        id="cedulaRepresentante"
+                        value={datosEmpresa.cedulaRepresentante}
+                        onChange={(e) => handleChange('cedulaRepresentante', e.target.value)}
                         placeholder="16.123.456"
                       />
                     </div>
                   </div>
-
-                  <div className="mt-6 max-w-md space-y-2">
-                    <Label htmlFor="nombreComercial">Nombre comercial</Label>
-                    <Input
-                      id="nombreComercial"
-                      value={datosEmpresa.nombreComercial}
-                      onChange={(e) => handleChange('nombreComercial', e.target.value)}
-                      placeholder="Ej: Finca La Esperanza"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Opcional. Si lo dejas vacío se usa el nombre completo.
-                    </p>
-                  </div>
                 </div>
-              ) : (
-                // Persona Jurídica
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="text-sm font-semibold mb-4 text-muted-foreground">Datos de la persona jurídica</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="nombreEmpresa">Nombre de la persona jurídica *</Label>
-                        <Input
-                          id="nombreEmpresa"
-                          value={datosEmpresa.nombreEmpresa}
-                          onChange={(e) => handleChange('nombreEmpresa', e.target.value)}
-                          placeholder="Ej: AGRO CAMPO S.A.S."
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="razonSocial">Razón Social *</Label>
-                        <Input
-                          id="razonSocial"
-                          value={datosEmpresa.razonSocial}
-                          onChange={(e) => handleChange('razonSocial', e.target.value)}
-                          placeholder="Ej: AGRO CAMPO S.A.S."
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="nit">NIT *</Label>
-                        <Input
-                          id="nit"
-                          value={datosEmpresa.nit}
-                          onChange={(e) => handleChange('nit', e.target.value)}
-                          placeholder="900.123.456-7"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Representante Legal */}
-                  <div className="border-t border-border pt-6">
-                    <h3 className="text-sm font-semibold mb-4 text-muted-foreground">Representante Legal</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="representanteLegal">Nombre Completo *</Label>
-                        <Input
-                          id="representanteLegal"
-                          value={datosEmpresa.representanteLegal}
-                          onChange={(e) => handleChange('representanteLegal', e.target.value)}
-                          placeholder="Juan Carlos Pérez Gómez"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="cedulaRepresentante">Cédula *</Label>
-                        <Input
-                          id="cedulaRepresentante"
-                          value={datosEmpresa.cedulaRepresentante}
-                          onChange={(e) => handleChange('cedulaRepresentante', e.target.value)}
-                          placeholder="16.123.456"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+
+      </ConfigSection>
 
       {/* Datos de contacto */}
-      <Card className="overflow-hidden">
-        <CardHeader className="border-b bg-muted/40">
-          <CardTitle>Datos de contacto</CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">Dirección, teléfonos y correos electrónicos</p>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-6">
-            {/* Ubicación */}
-            <div>
-              <h3 className="text-sm font-semibold mb-4 text-muted-foreground">Ubicación</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="direccion">Dirección *</Label>
-                  <Input
-                    id="direccion"
-                    value={datosEmpresa.direccion}
-                    onChange={(e) => handleChange('direccion', e.target.value)}
-                    placeholder="Km 5 Vía Palmira - Candelaria"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="departamento">Departamento *</Label>
-                  <Select value={deptoCodigo} onValueChange={onDepartamentoChange}>
-                    <SelectTrigger id="departamento">
-                      <SelectValue placeholder="Seleccionar departamento" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[...departamentos].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((d) => (
-                        <SelectItem key={d.codigo} value={d.codigo}>{d.nombre}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="municipio">Municipio *</Label>
-                  <Select
-                    value={datosEmpresa.municipio}
-                    onValueChange={onMunicipioChange}
-                    disabled={!deptoCodigo}
-                  >
-                    <SelectTrigger id="municipio">
-                      <SelectValue placeholder="Seleccionar municipio" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[...municipios].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((m) => (
-                        <SelectItem key={m.codigo} value={m.nombre}>{m.nombre}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+      <ConfigSection
+        title="Datos de contacto"
+        description="Dirección, teléfonos y correo electrónico."
+      >
+        <div className="space-y-6">
+          {/* Ubicación */}
+          <div>
+            <h4 className="mb-4 text-[13px] font-medium text-muted-foreground">Ubicación</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="direccion">Dirección <span className="text-destructive">*</span></Label>
+                <Input
+                  id="direccion"
+                  value={datosEmpresa.direccion}
+                  onChange={(e) => handleChange('direccion', e.target.value)}
+                  placeholder="Km 5 Vía Palmira - Candelaria"
+                />
               </div>
-            </div>
 
-            {/* Separador */}
-            <div className="border-t border-border pt-6">
-              <h3 className="text-sm font-semibold mb-4 text-muted-foreground">Datos de Contacto</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="telefono">Teléfono Fijo</Label>
-                  <Input
-                    id="telefono"
-                    value={datosEmpresa.telefono}
-                    onChange={(e) => handleChange('telefono', e.target.value)}
-                    placeholder="+57 (2) 123 4567"
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="departamento">Departamento <span className="text-destructive">*</span></Label>
+                <Select value={deptoCodigo} onValueChange={onDepartamentoChange}>
+                  <SelectTrigger id="departamento">
+                    <SelectValue placeholder="Seleccionar departamento" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[...departamentos].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((d) => (
+                      <SelectItem key={d.codigo} value={d.codigo}>{d.nombre}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="celular">Celular *</Label>
-                  <Input
-                    id="celular"
-                    value={datosEmpresa.celular}
-                    onChange={(e) => handleChange('celular', e.target.value)}
-                    placeholder="+57 300 123 4567"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="email">Correo Electrónico *</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={datosEmpresa.email}
-                    onChange={(e) => handleChange('email', e.target.value)}
-                    placeholder="contacto@agrocampo.com"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="sitioWeb">Sitio Web</Label>
-                  <Input
-                    id="sitioWeb"
-                    value={datosEmpresa.sitioWeb}
-                    onChange={(e) => handleChange('sitioWeb', e.target.value)}
-                    placeholder="www.agrocampo.com"
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="municipio">Municipio <span className="text-destructive">*</span></Label>
+                <Select
+                  value={datosEmpresa.municipio}
+                  onValueChange={onMunicipioChange}
+                  disabled={!deptoCodigo}
+                >
+                  <SelectTrigger id="municipio">
+                    <SelectValue placeholder="Seleccionar municipio" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[...municipios].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((m) => (
+                      <SelectItem key={m.codigo} value={m.nombre}>{m.nombre}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Botón Guardar */}
-      <div className="flex justify-end">
-        <Button onClick={handleSave} size="lg" disabled={guardando}>
-          <Save className="h-5 w-5" />
-          {guardando ? 'Guardando...' : 'Guardar Cambios'}
+          {/* Separador */}
+          <div className="border-t border-border pt-6">
+            <h4 className="mb-4 text-[13px] font-medium text-muted-foreground">Teléfonos y correo</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="telefono">Teléfono fijo</Label>
+                <Input
+                  id="telefono"
+                  value={datosEmpresa.telefono}
+                  onChange={(e) => handleChange('telefono', e.target.value)}
+                  placeholder="+57 (2) 123 4567"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="celular">Celular <span className="text-destructive">*</span></Label>
+                <Input
+                  id="celular"
+                  value={datosEmpresa.celular}
+                  onChange={(e) => handleChange('celular', e.target.value)}
+                  placeholder="+57 300 123 4567"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email">Correo electrónico <span className="text-destructive">*</span></Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={datosEmpresa.email}
+                  onChange={(e) => handleChange('email', e.target.value)}
+                  placeholder="contacto@agrocampo.com"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="sitioWeb">Sitio web</Label>
+                <Input
+                  id="sitioWeb"
+                  value={datosEmpresa.sitioWeb}
+                  onChange={(e) => handleChange('sitioWeb', e.target.value)}
+                  placeholder="www.agrocampo.com"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </ConfigSection>
+
+      <ConfigActions>
+        <Button onClick={handleSave} disabled={guardando}>
+          <Save strokeWidth={2} />
+          {guardando ? 'Guardando…' : 'Guardar'}
         </Button>
-      </div>
+      </ConfigActions>
     </div>
     </TabLoadingGate>
   );

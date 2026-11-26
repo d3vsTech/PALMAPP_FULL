@@ -4,7 +4,8 @@ import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { ArrowLeft, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
+import PageHeader from '../../components/common/PageHeader';
 import {
   Select,
   SelectContent,
@@ -116,6 +117,13 @@ function volverAConceptos(navigate: (to: string) => void) {
 
 export default function NuevoConceptoNomina() {
   const navigate = useNavigate();
+
+  // Al volver, Configuración abre el último tab guardado. Se escribe al entrar
+  // para que sirva igual con la flecha, con la barra de volver del celular y
+  // cuando se llega a esta pantalla por enlace directo.
+  useEffect(() => {
+    try { sessionStorage.setItem(SS_KEY_ULTIMO_TAB, 'conceptos'); } catch { /* ignorar */ }
+  }, []);
   const [searchParams] = useSearchParams();
   const conceptoIdParam = searchParams.get('id');
   const isEditing = !!conceptoIdParam;
@@ -242,24 +250,14 @@ export default function NuevoConceptoNomina() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => volverAConceptos(navigate)}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">
-              {isEditing ? 'Editar Concepto' : 'Nuevo Concepto de Nómina'}
-            </h1>
-            <p className="text-muted-foreground">
-              {isEditing
-                ? 'Modifica los datos del concepto'
-                : 'Define aportes, deducciones o bonificaciones para aplicar en la nómina'}
-            </p>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        backTo="/configuracion"
+        eyebrow="Configuración"
+        title={isEditing ? 'Editar concepto' : 'Nuevo concepto de nómina'}
+        description={isEditing
+          ? 'Modifica los datos del concepto.'
+          : 'Define aportes, deducciones o bonificaciones para aplicar en la nómina.'}
+      />
 
       <div className="max-w-4xl space-y-6">
         {/* Información Básica */}
@@ -410,7 +408,7 @@ export default function NuevoConceptoNomina() {
                       <span className="text-sm font-medium text-muted-foreground">
                         Porcentaje Total
                       </span>
-                      <span className="text-2xl font-bold text-primary">
+                      <span className="text-2xl font-bold">
                         {(
                           (Number(formData.porcentajeEmpleado) || 0) +
                           (Number(formData.porcentajeEmpresa) || 0)
@@ -450,7 +448,7 @@ export default function NuevoConceptoNomina() {
                       <span className="text-sm font-medium text-muted-foreground">
                         Valor Formateado
                       </span>
-                      <span className="text-2xl font-bold text-primary">
+                      <span className="text-2xl font-bold">
                         ${Number(parseCOP(formData.valorFijo)).toLocaleString('es-CO')}
                       </span>
                     </div>

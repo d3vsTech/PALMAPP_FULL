@@ -1,5 +1,9 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import {
+  CHART_COLORS, gridProps, xAxisProps, yAxisProps, tooltipProps,
+} from '../../components/common/chartTheme';
+import PageHeader from '../../components/common/PageHeader';
 import { Button } from '../../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import {
@@ -32,16 +36,16 @@ export default function ComparativosHistoricos() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Comparativos Históricos</h1>
-          <p className="text-muted-foreground">Análisis año vs año</p>
-        </div>
-        <Button>
-          <Download className="mr-2 h-4 w-4" />
-          Exportar
-        </Button>
-      </div>
+      <PageHeader
+        title="Comparativos históricos"
+        description="Análisis año contra año."
+        actions={
+          <Button variant="outline">
+            <Download strokeWidth={2} />
+            Exportar
+          </Button>
+        }
+      />
 
       {/* Filtros */}
       <Card>
@@ -67,20 +71,20 @@ export default function ComparativosHistoricos() {
       {/* Gráfica comparativa */}
       <Card>
         <CardHeader>
-          <CardTitle>Producción Mensual - 2025 vs 2026</CardTitle>
+          <CardTitle>Producción mensual - 2025 vs 2026</CardTitle>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={350}>
             <LineChart data={comparativoData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="mes" />
-              <YAxis />
-              <Tooltip />
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="mes" {...xAxisProps} />
+              <YAxis {...yAxisProps} />
+              <Tooltip {...tooltipProps} />
               <Legend />
               <Line
                 type="monotone"
                 dataKey="ano2025"
-                stroke="hsl(var(--chart-3))"
+                stroke={CHART_COLORS[2]}
                 strokeWidth={2}
                 name="2025"
                 strokeDasharray="5 5"
@@ -88,7 +92,7 @@ export default function ComparativosHistoricos() {
               <Line
                 type="monotone"
                 dataKey="ano2026"
-                stroke="hsl(var(--chart-1))"
+                stroke={CHART_COLORS[0]}
                 strokeWidth={2}
                 name="2026"
               />
@@ -100,7 +104,7 @@ export default function ComparativosHistoricos() {
       {/* Tabla resumen */}
       <Card>
         <CardHeader>
-          <CardTitle>Resumen Comparativo</CardTitle>
+          <CardTitle>Resumen comparativo</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>

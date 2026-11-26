@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent } from '../../components/ui/card';
+import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Badge } from '../../components/ui/badge';
@@ -9,37 +9,21 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
 import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '../../components/ui/dialog';
 import {
-  ShoppingCart, Search, Star, Package, Grid3x3, List, Plus,
-  Sprout, Droplet, Wrench, Cog, Apple, ShieldCheck,
-  ChevronLeft, ChevronRight, Minus, Loader2,
+  ShoppingCart, Search, Package, LayoutGrid, List, Plus,
+  ChevronLeft, ChevronRight, ArrowRight, Loader2,
 } from 'lucide-react';
+import PageHeader from '../../components/common/PageHeader';
+import { ProductoCard, ProductoFoto, Calificacion, CantidadInput } from '../../components/market/piezas';
+import { cop } from '../../lib/formato';
+import { cn } from '../../components/lib/utils';
 import { toast } from 'sonner';
 import {
   marketApi, toNumber, buildImagenUrl,
   type Categoria, type Producto, type ListadoParams,
 } from '../../../api/market';
-
-// Mapeo de íconos por slug/nombre de categoría
-const ICONOS_CATEGORIA: Record<string, any> = {
-  todas: Package,
-  fertilizantes: Sprout,
-  agroquimicos: Droplet,
-  herramientas: Wrench,
-  maquinaria: Cog,
-  insumos: Apple,
-  semillas: Sprout,
-  equipos: ShieldCheck,
-};
-
-function getIconoCategoria(slug: string): any {
-  const key = slug.toLowerCase().replace(/[áéíóúñ]/g, (c) => ({
-    á: 'a', é: 'e', í: 'i', ó: 'o', ú: 'u', ñ: 'n',
-  }[c] || c));
-  return ICONOS_CATEGORIA[key] ?? Package;
-}
 
 export default function Market() {
   const navigate = useNavigate();
@@ -83,8 +67,6 @@ export default function Market() {
     const value = typeof next === 'function' ? (next as (p: number) => number)(page) : next;
     updateParams({ page: value <= 1 ? null : value });
   };
-
-  const [indiceCarrusel, setIndiceCarrusel] = useState(0);
 
   // ── Datos ────────────────────────────────────────────────────────────────
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -164,10 +146,9 @@ export default function Market() {
     return [todasCat, ...categorias];
   }, [categorias, meta]);
 
-  const categoriasVisibles = 5;
-  const categoriasMostradas = categoriasConTodas.slice(indiceCarrusel, indiceCarrusel + categoriasVisibles);
-  const puedeIrAtras = indiceCarrusel > 0;
-  const puedeIrAdelante = indiceCarrusel + categoriasVisibles < categoriasConTodas.length;
+  /** Deja el catálogo sin filtros desde el estado vacío. */
+  const limpiarFiltros = () =>
+    updateParams({ buscar: null, categoria: null }, { resetPage: true });
 
   const abrirModalProducto = (producto: Producto) => {
     setProductoSel(producto);
@@ -203,554 +184,352 @@ export default function Market() {
   };
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between mb-8 gap-4">
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Market</h1>
-          <p className="text-muted-foreground mt-2">
-            Compra insumos y equipos para tu plantación
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            onClick={() => navigate('/market/pedidos')}
-            
-          >
-            <Package className="h-5 w-5" />
-            Mis Pedidos
-          </Button>
-          <Button
-            onClick={() => navigate('/market/carrito')}
-            className="relative"
-          >
-            <ShoppingCart className="h-5 w-5" />
-            Carrito
-            {cantidadCarrito > 0 && (
-              <span className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center rounded-full bg-destructive text-white text-xs font-bold border-2 border-background">
-                {cantidadCarrito}
-              </span>
-            )}
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Tienda de insumos"
+        description="Compra insumos y equipos para tu plantación."
+        actions={
+          <>
+            <Button variant="outline" onClick={() => navigate('/market/pedidos')}>
+              <Package strokeWidth={2} />
+              Mis pedidos
+            </Button>
+            <Button onClick={() => navigate('/market/carrito')}>
+              <ShoppingCart strokeWidth={2} />
+              Carrito
+              {cantidadCarrito > 0 && (
+                <span className="ml-0.5 rounded-md bg-primary-foreground/20 px-1.5 text-xs font-semibold tabular-nums">
+                  {cantidadCarrito}
+                </span>
+              )}
+            </Button>
+          </>
+        }
+      />
 
       {/* Categorías */}
-      <div>
-        <h2 className="text-2xl font-bold text-foreground mb-4">Categorías</h2>
-        {cargandoCats ? (
-          <div className="flex items-center gap-2 text-muted-foreground py-6">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Cargando categorías...
-          </div>
-        ) : (
-          <div className="relative">
-            {puedeIrAtras && (
-              <Button
-                variant="outline"
-                size="icon"
-                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-background shadow-md"
-                onClick={() => setIndiceCarrusel(Math.max(0, indiceCarrusel - 1))}
+      {cargandoCats ? (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
+          Cargando categorías...
+        </p>
+      ) : (
+        <div
+          role="tablist"
+          aria-label="Categorías"
+          className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 md:mx-0 md:flex-wrap md:px-0"
+        >
+          {categoriasConTodas.map((cat) => {
+            const activa = categoriaSlug === cat.slug;
+            return (
+              <button
+                key={cat.slug}
+                type="button"
+                role="tab"
+                aria-selected={activa}
+                onClick={() => setCategoriaSlug(cat.slug)}
+                className={cn(
+                  'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-3 text-[13px] font-medium transition-colors',
+                  activa
+                    ? 'border-primary bg-primary-soft text-primary'
+                    : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground'
+                )}
               >
-                <ChevronLeft className="h-5 w-5" />
-              </Button>
-            )}
+                {cat.nombre}
+                {cat.productos_count !== undefined && cat.productos_count > 0 && (
+                  <span className={cn('text-xs tabular-nums', activa ? 'text-primary/70' : 'text-muted-foreground/70')}>
+                    {cat.productos_count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-            <div className="px-12">
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-                {categoriasMostradas.map((cat) => {
-                  const Icon = getIconoCategoria(cat.slug);
-                  const isSelected = categoriaSlug === cat.slug;
-                  return (
-                    <Card
-                      key={cat.slug}
-                      className={`cursor-pointer transition duration-300 border-2 ${
-                        isSelected
-                          ? 'border-primary bg-primary-soft'
-                          : 'border-border hover:border-primary/50 hover:shadow-md'
-                      }`}
-                      onClick={() => setCategoriaSlug(cat.slug)}
-                    >
-                      <CardContent className="p-4 flex flex-col items-center justify-center gap-3">
-                        <div
-                          className={`h-14 w-14 rounded-2xl flex items-center justify-center transition-colors ${
-                            isSelected ? 'bg-primary/20' : 'bg-muted'
-                          }`}
-                        >
-                          <Icon
-                            className={`h-7 w-7 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`}
-                          />
-                        </div>
-                        <p
-                          className={`text-sm font-medium text-center leading-tight ${
-                            isSelected ? 'text-primary' : 'text-foreground'
-                          }`}
-                        >
-                          {cat.nombre}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            </div>
-
-            {puedeIrAdelante && (
-              <Button
-                variant="outline"
-                size="icon"
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-background shadow-md"
-                onClick={() => setIndiceCarrusel(indiceCarrusel + 1)}
-              >
-                <ChevronRight className="h-5 w-5" />
-              </Button>
-            )}
+      {/* Búsqueda, orden y vista */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
+          <Input
+            type="search"
+            placeholder="Buscar por nombre o descripción"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            className="pl-9"
+            aria-label="Buscar producto"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Select value={ordenPrecio} onValueChange={(val: 'precio_asc' | 'precio_desc' | 'none') => setOrdenPrecio(val)}>
+            <SelectTrigger className="w-full sm:w-48" aria-label="Ordenar por precio">
+              <SelectValue placeholder="Sin ordenar" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Sin ordenar</SelectItem>
+              <SelectItem value="precio_asc">Precio: menor a mayor</SelectItem>
+              <SelectItem value="precio_desc">Precio: mayor a menor</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="flex shrink-0 rounded-lg border border-border bg-card p-0.5">
+            <button
+              type="button"
+              aria-label="Ver en cuadrícula"
+              aria-pressed={vistaGrid}
+              onClick={() => setVistaGrid(true)}
+              className={cn(
+                'flex h-8 w-8 items-center justify-center rounded-md transition-colors',
+                vistaGrid ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <LayoutGrid className="h-4 w-4" strokeWidth={2} />
+            </button>
+            <button
+              type="button"
+              aria-label="Ver en lista"
+              aria-pressed={!vistaGrid}
+              onClick={() => setVistaGrid(false)}
+              className={cn(
+                'flex h-8 w-8 items-center justify-center rounded-md transition-colors',
+                !vistaGrid ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <List className="h-4 w-4" strokeWidth={2} />
+            </button>
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Filtros y búsqueda */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <div className="space-y-2 lg:col-span-2">
-                <Label>Buscar producto</Label>
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Nombre o descripción..."
-                    value={busqueda}
-                    onChange={(e) => setBusqueda(e.target.value)}
-                    className="pl-8"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Ordenar por precio</Label>
-                <Select value={ordenPrecio} onValueChange={(val: any) => setOrdenPrecio(val)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sin ordenar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sin ordenar</SelectItem>
-                    <SelectItem value="precio_asc">Menor a mayor</SelectItem>
-                    <SelectItem value="precio_desc">Mayor a menor</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between pt-2 gap-4">
-              <p className="text-sm text-muted-foreground">
-                Mostrando <span className="font-medium text-foreground">{productos.length}</span> productos
-                {meta && meta.total > productos.length && ` de ${meta.total}`}
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant={vistaGrid ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setVistaGrid(true)}
-                >
-                  <Grid3x3 className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={!vistaGrid ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setVistaGrid(false)}
-                >
-                  <List className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <p className="text-sm text-muted-foreground">
+        {meta?.total ?? productos.length} {(meta?.total ?? productos.length) === 1 ? 'producto' : 'productos'}
+      </p>
 
       {/* Catálogo */}
-      <div>
-        <h2 className="text-2xl font-bold text-foreground mb-4">Catálogo</h2>
-
-        {cargandoProds ? (
-          <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" />
+      {cargandoProds ? (
+        <Card className="items-center py-14 text-center">
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
             Cargando productos...
+          </p>
+        </Card>
+      ) : productos.length === 0 ? (
+        <Card className="items-center py-14 text-center">
+          <div className="space-y-1">
+            <h3>No hay productos</h3>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              Ningún producto coincide con la búsqueda o la categoría.
+            </p>
           </div>
-        ) : productos.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                <Package className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <h3 className="mb-2 text-lg font-semibold">No hay productos</h3>
-              <p className="mb-4 text-sm text-muted-foreground">
-                No se encontraron productos con los filtros seleccionados
-              </p>
-            </CardContent>
-          </Card>
-        ) : vistaGrid ? (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {productos.map((producto) => {
-              const precio = toNumber(producto.precio_unitario);
-              const rating = Number(producto.calificacion_promedio ?? 0);
-              return (
-                <Card
-                  key={producto.id}
-                  id={`prod-${producto.id}`}
-                  className="glass-subtle transition-colors overflow-hidden group cursor-pointer scroll-mt-24"
-                  onClick={() => verProducto(producto.id)}
+          {(busqueda || categoriaSlug !== 'todas') && (
+            <Button variant="outline" onClick={limpiarFiltros}>Limpiar filtros</Button>
+          )}
+        </Card>
+      ) : vistaGrid ? (
+        <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+          {productos.map((producto) => (
+            <ProductoCard
+              key={producto.id}
+              id={`prod-${producto.id}`}
+              onAbrir={() => verProducto(producto.id)}
+              nombre={producto.nombre}
+              categoria={producto.categoria.nombre}
+              imagen={producto.imagen_principal ? buildImagenUrl(producto.imagen_principal) : null}
+              precio={toNumber(producto.precio_unitario)}
+              unidad={producto.unidad_medida.abreviatura}
+              stockBajo={producto.stock_bajo}
+              rating={Number(producto.calificacion_promedio ?? 0)}
+              subtitulo={producto.proveedor.nombre_empresa}
+              marca={producto.destacado ? <Badge>Destacado</Badge> : undefined}
+              accion={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={producto.stock_disponible <= 0}
+                  onClick={() => abrirModalProducto(producto)}
                 >
-                  <div className="aspect-square bg-muted relative overflow-hidden">
-                    {producto.imagen_principal ? (
-                      <img
-                        src={buildImagenUrl(producto.imagen_principal)}
-                        alt={producto.nombre}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center bg-primary-soft">
-                        <Package className="h-16 w-16 text-primary/30" />
-                      </div>
-                    )}
-                    {producto.stock_bajo && (
-                      <Badge className="absolute top-2 right-2 bg-warning">Stock bajo</Badge>
-                    )}
-                    {producto.destacado && (
-                      <Badge className="absolute top-2 left-2 bg-primary">Destacado</Badge>
+                  <Plus strokeWidth={2} />
+                  Agregar
+                </Button>
+              }
+            />
+          ))}
+        </div>
+      ) : (
+        <Card className="gap-0 overflow-hidden">
+          <ul className="divide-y divide-border">
+            {productos.map((producto) => (
+              <li
+                key={producto.id}
+                id={`prod-${producto.id}`}
+                className="flex scroll-mt-24 items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/40 sm:px-5"
+              >
+                <ProductoFoto
+                  categoria={producto.categoria.nombre}
+                  src={producto.imagen_principal ? buildImagenUrl(producto.imagen_principal) : null}
+                  alt={producto.nombre}
+                  className="h-14 w-14 shrink-0"
+                  iconClassName="h-5 w-5"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => verProducto(producto.id)}
+                      className="line-clamp-2 text-left font-semibold text-foreground hover:text-primary"
+                    >
+                      {producto.nombre}
+                    </button>
+                    {producto.stock_bajo && <Badge variant="warning">Stock bajo</Badge>}
+                  </div>
+                  <p className="line-clamp-2 text-sm text-muted-foreground">{producto.descripcion}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span>{producto.proveedor.nombre_empresa}</span>
+                    <span>{producto.categoria.nombre}</span>
+                    {Number(producto.calificacion_promedio ?? 0) > 0 && (
+                      <Calificacion valor={Number(producto.calificacion_promedio)} />
                     )}
                   </div>
-                  <CardContent className="p-4">
-                    <div className="space-y-2">
-                      <div>
-                        <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-1">
-                          {producto.nombre}
-                        </h3>
-                        <p className="text-xs text-muted-foreground line-clamp-2">
-                          {producto.descripcion}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-1">
-                        {[...Array(5)].map((_, i) => (
-                          <Star
-                            key={i}
-                            className={`h-3 w-3 ${
-                              i < Math.floor(rating > 0 ? rating : 5)
-                                ? 'fill-warning text-warning'
-                                : 'text-muted'
-                            }`}
-                          />
-                        ))}
-                        {rating > 0 && (
-                          <span className="text-xs text-muted-foreground ml-1">
-                            ({rating.toFixed(1)})
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-xs text-muted-foreground">{producto.proveedor.nombre_empresa}</p>
-                          <p className="text-lg font-bold text-success">
-                            ${precio.toLocaleString('es-CO')}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            por {producto.unidad_medida.abreviatura}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="pt-2">
-                        <Button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            abrirModalProducto(producto);
-                          }}
-                          className="w-full"
-                          size="sm"
-                          disabled={producto.stock_disponible <= 0}
-                        >
-                          <ShoppingCart className="h-4 w-4" />
-                          Agregar
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {productos.map((producto) => {
-              const precio = toNumber(producto.precio_unitario);
-              const rating = Number(producto.calificacion_promedio ?? 0);
-              return (
-                <Card
-                  key={producto.id}
-                  id={`prod-${producto.id}`}
-                  className="overflow-hidden glass-subtle transition-colors cursor-pointer scroll-mt-24"
-                  onClick={() => verProducto(producto.id)}
+                </div>
+                <div className="hidden shrink-0 text-right sm:block">
+                  <p className="font-heading text-lg font-bold tabular-nums text-foreground">
+                    {cop(toNumber(producto.precio_unitario))}
+                  </p>
+                  <p className="text-xs text-muted-foreground">por {producto.unidad_medida.abreviatura}</p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  disabled={producto.stock_disponible <= 0}
+                  onClick={() => abrirModalProducto(producto)}
                 >
-                  <CardContent>
-                    <div className="flex gap-6">
-                      <div className="w-32 h-32 bg-muted rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
-                        {producto.imagen_principal ? (
-                          <img src={buildImagenUrl(producto.imagen_principal)} alt={producto.nombre} className="w-full h-full object-cover" />
-                        ) : (
-                          <Package className="h-12 w-12 text-primary/30" />
-                        )}
-                      </div>
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-lg text-foreground hover:text-primary transition-colors">
-                              {producto.nombre}
-                            </h3>
-                            <p className="text-sm text-muted-foreground">{producto.descripcion}</p>
-                          </div>
-                          {producto.stock_bajo && <Badge className="bg-warning">Stock bajo</Badge>}
-                        </div>
+                  <Plus strokeWidth={2} />
+                  <span className="hidden sm:inline">Agregar</span>
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
-                        <div className="flex items-center gap-1">
-                          {[...Array(5)].map((_, i) => (
-                            <Star
-                              key={i}
-                              className={`h-3 w-3 ${
-                                i < Math.floor(rating > 0 ? rating : 5)
-                                  ? 'fill-warning text-warning'
-                                  : 'text-muted'
-                              }`}
-                            />
-                          ))}
-                          {rating > 0 && (
-                            <span className="text-xs text-muted-foreground ml-1">
-                              ({rating.toFixed(1)})
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <Badge variant="outline">{producto.categoria.nombre}</Badge>
-                            <p className="text-sm text-muted-foreground mt-1">{producto.proveedor.nombre_empresa}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-2xl font-bold text-success">
-                              ${precio.toLocaleString('es-CO')}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              por {producto.unidad_medida.abreviatura}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex gap-2 pt-2">
-                          <Button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              verProducto(producto.id);
-                            }}
-                            variant="outline"
-                            size="sm"
-                          >
-                            Ver detalles
-                          </Button>
-                          <Button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              abrirModalProducto(producto);
-                            }}
-                            size="sm"
-                            
-                            disabled={producto.stock_disponible <= 0}
-                          >
-                            <ShoppingCart className="h-4 w-4" />
-                            Agregar al carrito
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+      {/* Paginación */}
+      {meta && meta.last_page > 1 && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">
+            Página {meta.current_page} de {meta.last_page} · {meta.total} productos
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={meta.current_page === 1}
+            >
+              <ChevronLeft strokeWidth={2} />
+              Anterior
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.min(meta.last_page, p + 1))}
+              disabled={meta.current_page === meta.last_page}
+            >
+              Siguiente
+              <ChevronRight strokeWidth={2} />
+            </Button>
           </div>
-        )}
-
-        {/* Paginación */}
-        {meta && meta.last_page > 1 && (
-          <div className="flex items-center justify-between pt-6">
-            <p className="text-sm text-muted-foreground">
-              Página {meta.current_page} de {meta.last_page} · {meta.total} productos
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={meta.current_page === 1}
-                
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Anterior
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.min(meta.last_page, p + 1))}
-                disabled={meta.current_page === meta.last_page}
-                
-              >
-                Siguiente
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Modal de producto */}
       <Dialog open={modalAbierto} onOpenChange={(o) => !agregando && setModalAbierto(o)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="sm:max-w-lg">
           {productoSel && (() => {
             const precio = toNumber(productoSel.precio_unitario);
             const rating = Number(productoSel.calificacion_promedio ?? 0);
             return (
               <>
                 <DialogHeader>
-                  <DialogTitle className="text-2xl">{productoSel.nombre}</DialogTitle>
+                  <DialogTitle>{productoSel.nombre}</DialogTitle>
                   <DialogDescription>{productoSel.proveedor.nombre_empresa}</DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-6 py-4">
-                  <div className="aspect-video bg-muted rounded-lg flex items-center justify-center overflow-hidden">
-                    {productoSel.imagen_principal ? (
-                      <img
-                        src={buildImagenUrl(productoSel.imagen_principal)}
-                        alt={productoSel.nombre}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <Package className="h-24 w-24 text-primary/30" />
-                    )}
-                  </div>
-
-                  <div>
-                    <h3 className="font-semibold mb-2">Descripción</h3>
-                    <p className="text-sm text-muted-foreground">{productoSel.descripcion}</p>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1">
-                      {[...Array(5)].map((_, i) => (
-                        <Star
-                          key={i}
-                          className={`h-4 w-4 ${
-                            i < Math.floor(rating > 0 ? rating : 5)
-                              ? 'fill-warning text-warning'
-                              : 'text-muted'
-                          }`}
-                        />
-                      ))}
-                      <span className="text-sm text-muted-foreground ml-2">
-                        {rating > 0 ? rating.toFixed(1) : 'Sin reseñas'}
-                      </span>
-                    </div>
-                    <Badge variant="outline">Stock: {productoSel.stock_disponible}</Badge>
-                  </div>
-
-                  <Card className="border-primary bg-primary/5">
-                    <CardContent className="p-4">
-                      <div className="flex items-baseline justify-between">
-                        <div>
-                          <p className="text-sm text-muted-foreground">Precio unitario</p>
-                          <p className="text-2xl font-bold text-success">
-                            ${precio.toLocaleString('es-CO')}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            por {productoSel.unidad_medida.abreviatura}
-                          </p>
-                        </div>
+                <div className="space-y-5">
+                  <div className="flex gap-4">
+                    <ProductoFoto
+                      categoria={productoSel.categoria.nombre}
+                      src={productoSel.imagen_principal ? buildImagenUrl(productoSel.imagen_principal) : null}
+                      alt={productoSel.nombre}
+                      className="h-20 w-20 shrink-0"
+                    />
+                    <div className="min-w-0 space-y-1.5">
+                      <p className="text-sm text-muted-foreground">{productoSel.descripcion}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {rating > 0 && <Calificacion valor={rating} />}
+                        <Badge variant="secondary">{productoSel.stock_disponible} disponibles</Badge>
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
 
-                  <div>
-                    <Label className="mb-3 block">Cantidad</Label>
-                    <div className="flex items-center gap-3">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => setCantidadModal(Math.max(1, cantidadModal - 1))}
-                        disabled={cantidadModal <= 1}
-                      >
-                        <Minus className="h-4 w-4" />
-                      </Button>
-                      <Input
-                        type="number" step="0.001"
-                        min="1"
-                        max={productoSel.stock_disponible}
+                  <div className="flex items-end justify-between gap-4 rounded-lg bg-muted/60 px-4 py-3">
+                    <div>
+                      <p className="text-[13px] font-medium text-muted-foreground">Precio unitario</p>
+                      <p className="font-heading text-lg font-bold tabular-nums">{cop(precio)}</p>
+                      <p className="text-xs text-muted-foreground">por {productoSel.unidad_medida.abreviatura}</p>
+                    </div>
+                    <div className="space-y-1.5 text-right">
+                      <Label className="block text-xs text-muted-foreground">Cantidad</Label>
+                      <CantidadInput
                         value={cantidadModal}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value) || 1;
-                          setCantidadModal(Math.min(productoSel.stock_disponible, Math.max(1, val)));
-                        }}
-                        className="w-24 text-center"
+                        onChange={setCantidadModal}
+                        max={productoSel.stock_disponible}
+                        disabled={agregando}
                       />
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => setCantidadModal(Math.min(productoSel.stock_disponible, cantidadModal + 1))}
-                        disabled={cantidadModal >= productoSel.stock_disponible}
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
                     </div>
                   </div>
 
-                  <Card className="border-success bg-success/5">
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-muted-foreground">Total a agregar</p>
-                          <p className="text-sm text-muted-foreground">
-                            {cantidadModal} × ${precio.toLocaleString('es-CO')}
-                          </p>
-                        </div>
-                        <p className="text-2xl sm:text-3xl font-bold text-success">
-                          ${(precio * cantidadModal).toLocaleString('es-CO')}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <div className="flex gap-3">
-                    <Button variant="outline" onClick={cerrarModal} className="flex-1" disabled={agregando}>
-                      Cancelar
-                    </Button>
-                    <Button
-                      onClick={agregarAlCarrito}
-                      className="flex-1"
-                      disabled={agregando}
-                    >
-                      {agregando ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <ShoppingCart className="h-4 w-4" />
-                      )}
-                      Agregar al Carrito
-                    </Button>
+                  <div className="flex items-baseline justify-between border-t border-border pt-4">
+                    <span className="text-sm text-muted-foreground">
+                      Total ({cantidadModal} × {cop(precio)})
+                    </span>
+                    <span className="text-2xl font-bold">{cop(precio * cantidadModal)}</span>
                   </div>
                 </div>
+
+                <DialogFooter>
+                  <Button variant="outline" onClick={cerrarModal} disabled={agregando}>Cancelar</Button>
+                  <Button onClick={agregarAlCarrito} disabled={agregando}>
+                    {agregando
+                      ? <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
+                      : <ShoppingCart strokeWidth={2} />}
+                    Agregar al carrito
+                  </Button>
+                </DialogFooter>
               </>
             );
           })()}
         </DialogContent>
       </Dialog>
 
+      {/* Espacio para que la barra del carrito no tape los últimos productos */}
+      {cantidadCarrito > 0 && <div className="h-20" aria-hidden />}
+
+      {/* Barra del carrito */}
+      {cantidadCarrito > 0 && (
+        <div className="fixed inset-x-4 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-40 flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-2 pl-4 shadow-md sm:inset-x-auto sm:right-6 lg:bottom-6">
+          <span className="text-sm text-muted-foreground">
+            <span className="font-semibold tabular-nums text-foreground">{cantidadCarrito}</span>{' '}
+            {cantidadCarrito === 1 ? 'unidad' : 'unidades'} en el carrito
+          </span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate('/market/carrito')}>Ver carrito</Button>
+            <Button size="sm" onClick={() => navigate('/market/checkout')}>
+              Ir a pagar
+              <ArrowRight strokeWidth={2} />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,8 +1,17 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { comoBoton } from '../../hooks/comoBoton';
 import { Button } from '../ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { Plus, Edit, Trash2, ChevronDown } from 'lucide-react';
+import { ConfigSection, ConfigEmpty, ConfigRowActions } from './ConfigSection';
+import { Plus, ChevronDown } from 'lucide-react';
+import { Badge } from '../ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../ui/table';
 import { LaborActividadesPanel } from './LaborActividadesPanel';
 import {
   Dialog,
@@ -244,12 +253,12 @@ export function LaboresTab() {
   };
 
   // ── Render helpers ─────────────────────────────────────────────────────────
-  // En COSECHA "POR_PALMA" se muestra como "Por Kilogramo" porque el pago se
+  // En COSECHA "POR_PALMA" se muestra como "Por kilogramo" porque el pago se
   // calcula sobre el peso confirmado (precios_cosecha). El value en backend
-  // sigue siendo POR_PALMA — solo cambia el label visible.
+  // sigue siendo POR_PALMA, solo cambia el label visible.
   const labelTipoPago = (tp: TipoPagoLabor, tipo?: TipoLaborPalma | null) => {
-    if (tp === 'POR_PALMA') return tipo === 'COSECHA' ? 'Por Kilogramo' : 'Por Palma';
-    return 'Jornal Fijo';
+    if (tp === 'POR_PALMA') return tipo === 'COSECHA' ? 'Por kilogramo' : 'Por palma';
+    return 'Jornal fijo';
   };
 
   const editingFija = modo?.kind === 'editar' && modo.labor.es_sistema;
@@ -267,21 +276,19 @@ export function LaboresTab() {
           <DialogHeader>
             <DialogTitle>
               {modo?.kind === 'editar'
-                ? `Editar ${modo.labor.nombre}`
-                : modo?.kind === 'crear-palma'
-                  ? 'Nueva Labor de Palma'
-                  : creandoTrabajo
-                    ? 'Nueva Labor'
-                    : 'Nueva Labor de Finca'}
+                ? 'Editar labor'
+                : creandoTrabajo
+                  ? 'Nuevo trabajo'
+                  : 'Nueva labor'}
             </DialogTitle>
             <DialogDescription>
               {creandoTrabajo
                 ? 'Queda dentro de Sanidad o de Otros, y desde ahí se elige al registrar la planilla en Operaciones.'
-                : 'Define un tipo de trabajo de campo. Los precios se configuran en "Nómina y Liquidaciones > Precios Labores".'}
+                : 'Define un tipo de trabajo de campo. Los precios se configuran en Pagos y liquidaciones.'}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-2">
             {creandoTrabajo && (
               <div className="space-y-2">
                 <Label htmlFor="labor_padre">
@@ -313,7 +320,7 @@ export function LaboresTab() {
 
             <div className="space-y-2">
               <Label htmlFor="nombre">
-                {creandoTrabajo ? 'Nombre del trabajo' : 'Nombre de la Labor'}{' '}
+                {creandoTrabajo ? 'Nombre del trabajo' : 'Nombre de la labor'}{' '}
                 <span className="text-destructive">*</span>
               </Label>
               <Input
@@ -341,7 +348,7 @@ export function LaboresTab() {
             {creandoTrabajo ? null : tipoPagoVisible ? (
               <div className="space-y-2">
                 <Label htmlFor="tipo_pago">
-                  Tipo de Pago <span className="text-destructive">*</span>
+                  Tipo de pago <span className="text-destructive">*</span>
                 </Label>
                 <Select
                   value={formData.tipo_pago}
@@ -354,22 +361,29 @@ export function LaboresTab() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="POR_PALMA">
-                      {editingCosecha ? 'Por Kilogramo' : 'Por Palma'}
+                      {editingCosecha ? 'Por kilogramo' : 'Por palma'}
                     </SelectItem>
-                    <SelectItem value="JORNAL_FIJO">Jornal Fijo</SelectItem>
+                    <SelectItem value="JORNAL_FIJO">Jornal fijo</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  {formData.tipo_pago === 'POR_PALMA'
+                    ? editingCosecha
+                      ? 'Se paga según kilogramos cosechados'
+                      : 'Se paga según cantidad de palmas trabajadas'
+                    : 'Se paga un valor fijo por día trabajado'}
+                </p>
               </div>
             ) : (
               <div className="space-y-2">
                 <Label htmlFor="tipo_pago_finca">
-                  Tipo de Pago <span className="text-destructive">*</span>
+                  Tipo de pago <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id="tipo_pago_finca"
-                  value="JORNAL FIJO"
+                  value="Jornal fijo"
                   disabled
-                  className="bg-muted"
+                  className="bg-muted/60"
                 />
                 <p className="text-xs text-muted-foreground">
                   Las labores de finca solo permiten pago por jornal fijo.
@@ -377,11 +391,9 @@ export function LaboresTab() {
               </div>
             )}
 
-            <div className="rounded-lg bg-info-soft border border-info/20 p-3">
-              <p className="text-sm text-info">
-                <strong>Nota:</strong> Los precios de las labores se configuran en la sección "Nómina y Liquidaciones &gt; Precios Labores".
-              </p>
-            </div>
+            <p className="rounded-lg bg-info-soft px-3 py-2.5 text-sm text-info">
+              Los precios de las labores se configuran en Pagos y liquidaciones, Precios de labores.
+            </p>
           </div>
 
           <DialogFooter>
@@ -398,181 +410,165 @@ export function LaboresTab() {
         {/* LABORES PALMA — 6 fijas del sistema. Ya no se crean labores
             custom desde aquí: los trabajos extra se registran como
             sub-actividades dentro de Sanidad u Otros. */}
-        <Card className="overflow-hidden">
-          <CardHeader className="border-b bg-primary-soft">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Labores Palma</CardTitle>
-                <CardDescription>
-                  Labores predefinidas del sistema — edita precio y tipo de pago.
-                </CardDescription>
-              </div>
+        <ConfigSection
+          title="Labores de palma"
+          description="Trabajos sobre la palma. Las predefinidas se pueden editar pero no eliminar."
+          flush
+          actions={
+            <>
               {/* Atajo al mismo "Nuevo trabajo" del desplegable de Sanidad y
                   Otros, que son las únicas labores a las que se les agregan. */}
               {laboresConTrabajos.length > 0 && (
-                <Button onClick={abrirNuevoTrabajo}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Nueva Labor
+                <Button variant="outline" onClick={abrirNuevoTrabajo}>
+                  <Plus strokeWidth={2} />
+                  Nueva labor de palma
                 </Button>
               )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {laboresPalma.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                No hay labores de palma configuradas.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {[...laboresPalma].sort((a, b) => {
-                  // Mismo orden que las tabs del wizard de Operaciones §3:
-                  // Cosecha → Plateo → Poda → Fertilización → Sanidad → Otros
-                  // → custom (alfabético). Las fijas usan `tipo`; las custom
-                  // van al final ordenadas por nombre.
-                  const ORDEN: Record<string, number> = {
-                    COSECHA: 1, PLATEO: 2, PODA: 3, FERTILIZACION: 4, SANIDAD: 5, OTROS: 6,
-                  };
-                  const oa = a.tipo ? ORDEN[a.tipo] ?? 99 : 99;
-                  const ob = b.tipo ? ORDEN[b.tipo] ?? 99 : 99;
-                  if (oa !== ob) return oa - ob;
-                  return (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' });
-                }).map((labor) => {
-                  // Desde agosto 2026, OTROS es una labor fija (`es_sistema=true`,
-                  // `tipo='OTROS'`) sembrada en todo tenant. `esFija` cubre las 6
-                  // fijas del sistema (COSECHA, PLATEO, PODA, FERT, SANIDAD, OTROS).
-                  const esFija = labor.es_sistema === true;
-                  // Solo las 2 fijas del sistema con desplegable de trabajos:
-                  // SANIDAD y OTROS. Las labores custom que el admin cree NO
-                  // muestran el panel — su propósito es ser labores planas con
-                  // su propio precio y tipo_pago.
-                  const admiteActividades = admiteTrabajos(labor);
-                  const expandida = expandidas.has(labor.id);
-                  return (
-                    <div
-                      key={labor.id}
-                      className="rounded-lg bg-muted/30 border border-border overflow-hidden"
+            </>
+          }
+        >
+          {laboresPalma.length === 0 ? (
+            <ConfigEmpty
+              title="No hay labores de palma"
+              description="Las labores predefinidas del sistema aparecerán aquí."
+            />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="pl-5">Labor</TableHead>
+                  <TableHead>Tipo de pago</TableHead>
+                  <TableHead className="w-24" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+              {[...laboresPalma].sort((a, b) => {
+                // Mismo orden que las tabs del wizard de Operaciones §3:
+                // Cosecha → Plateo → Poda → Fertilización → Sanidad → Otros
+                // → custom (alfabético). Las fijas usan `tipo`; las custom
+                // van al final ordenadas por nombre.
+                const ORDEN: Record<string, number> = {
+                  COSECHA: 1, PLATEO: 2, PODA: 3, FERTILIZACION: 4, SANIDAD: 5, OTROS: 6,
+                };
+                const oa = a.tipo ? ORDEN[a.tipo] ?? 99 : 99;
+                const ob = b.tipo ? ORDEN[b.tipo] ?? 99 : 99;
+                if (oa !== ob) return oa - ob;
+                return (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' });
+              }).map((labor) => {
+                // Desde agosto 2026, OTROS es una labor fija (`es_sistema=true`,
+                // `tipo='OTROS'`) sembrada en todo tenant. `esFija` cubre las 6
+                // fijas del sistema (COSECHA, PLATEO, PODA, FERT, SANIDAD, OTROS).
+                const esFija = labor.es_sistema === true;
+                // Solo las 2 fijas del sistema con desplegable de trabajos:
+                // SANIDAD y OTROS. Las labores custom que el admin cree NO
+                // muestran el panel — su propósito es ser labores planas con
+                // su propio precio y tipo_pago.
+                const admiteActividades = admiteTrabajos(labor);
+                const expandida = expandidas.has(labor.id);
+                return (
+                  <Fragment key={labor.id}>
+                    <TableRow
+                      className={admiteActividades ? 'cursor-pointer' : undefined}
+                      {...comoBoton(() => toggleExpandida(labor.id), admiteActividades)}
                     >
-                      <div
-                        className={`flex items-center justify-between p-4 hover:bg-muted/50 transition-colors ${
-                          admiteActividades ? 'cursor-pointer' : ''
-                        }`}
-                        {...comoBoton(() => toggleExpandida(labor.id), admiteActividades)}
-                      >
-                        <div className="flex items-center gap-2 flex-1">
+                      <TableCell className="pl-5">
+                        <div className="flex items-center gap-2">
                           {admiteActividades && (
                             <ChevronDown
-                              className={`h-4 w-4 text-muted-foreground transition-transform ${
-                                expandida ? 'rotate-180' : ''
+                              className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+                                expandida ? '' : '-rotate-90'
                               }`}
+                              strokeWidth={2}
                             />
                           )}
-                          <div className="flex-1">
-                            <p className="font-semibold">{labor.nombre}</p>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {labelTipoPago(labor.tipo_pago, labor.tipo)}
-                              {esFija && ' · Predefinida'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => abrirEditar(labor)}
-                            className="h-8 w-8 p-0"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          {!esFija && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDelete(labor)}
-                              className="h-8 w-8 p-0"
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
+                          <span className="font-semibold text-foreground">{labor.nombre}</span>
+                          {esFija && (
+                            <Badge variant="secondary" className="ml-2">Predefinida</Badge>
                           )}
                         </div>
-                      </div>
-                      {admiteActividades && expandida && (
-                        <LaborActividadesPanel
-                          key={`${labor.id}-${versionTrabajos}`}
-                          laborId={labor.id}
-                          open={expandida}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {labelTipoPago(labor.tipo_pago, labor.tipo)}
+                      </TableCell>
+                      <TableCell className="pr-3" onClick={(e) => e.stopPropagation()}>
+                        <ConfigRowActions
+                          label={labor.nombre}
+                          onEdit={() => abrirEditar(labor)}
+                          onDelete={esFija ? undefined : () => handleDelete(labor)}
                         />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                      </TableCell>
+                    </TableRow>
+                    {admiteActividades && expandida && (
+                      <TableRow>
+                        <TableCell colSpan={3} className="bg-muted/20 p-0">
+                          <LaborActividadesPanel
+                            key={`${labor.id}-${versionTrabajos}`}
+                            laborId={labor.id}
+                            open={expandida}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </Fragment>
+                );
+              })}
+              </TableBody>
+            </Table>
+          )}
+        </ConfigSection>
 
         {/* LABORES FINCA — custom (siempre JORNAL_FIJO) */}
-        <Card className="overflow-hidden">
-          <CardHeader className="border-b bg-muted/40">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Labores Finca</CardTitle>
-                <CardDescription>
-                  Labores personalizadas - Puedes crear y editar
-                </CardDescription>
-              </div>
-              <Button onClick={abrirNuevaFinca}>
-                <Plus className="mr-2 h-4 w-4" />
-                Nueva Labor
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {laboresFinca.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <h3 className="mb-2 text-lg font-semibold">No hay labores personalizadas</h3>
-                <p className="mb-4 text-sm text-muted-foreground">
-                  Comienza agregando tu primera labor de finca
-                </p>
+        <ConfigSection
+          title="Labores de finca"
+          description="Labores propias de la finca, pagadas por jornal fijo."
+          flush
+          actions={
+            <Button variant="outline" onClick={abrirNuevaFinca}>
+              <Plus strokeWidth={2} />
+              Nueva labor de finca
+            </Button>
+          }
+        >
+          {laboresFinca.length === 0 ? (
+            <ConfigEmpty
+              title="No hay labores de finca"
+              description="Agrega la primera labor personalizada de la finca."
+              action={
                 <Button onClick={abrirNuevaFinca}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Agregar Labor
+                  <Plus strokeWidth={2} />
+                  Agregar labor
                 </Button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {[...laboresFinca].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((labor) => (
-                  <div
-                    key={labor.id}
-                    className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="flex-1">
-                      <p className="font-semibold">{labor.nombre}</p>
-                      <p className="text-sm text-muted-foreground mt-1">Jornal Fijo</p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => abrirEditar(labor)}
-                        className="h-8 w-8 p-0"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(labor)}
-                        className="h-8 w-8 p-0"
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              }
+            />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="pl-5">Labor</TableHead>
+                  <TableHead>Tipo de pago</TableHead>
+                  <TableHead className="w-24" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {[...laboresFinca]
+                  .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' }))
+                  .map((labor) => (
+                    <TableRow key={labor.id}>
+                      <TableCell className="pl-5 font-semibold text-foreground">{labor.nombre}</TableCell>
+                      <TableCell className="text-muted-foreground">Jornal fijo</TableCell>
+                      <TableCell className="pr-3">
+                        <ConfigRowActions
+                          label={labor.nombre}
+                          onEdit={() => abrirEditar(labor)}
+                          onDelete={() => handleDelete(labor)}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          )}
+        </ConfigSection>
       </div>
       </TabLoadingGate>
     </>

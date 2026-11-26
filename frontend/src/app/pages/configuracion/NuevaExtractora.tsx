@@ -13,11 +13,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { ArrowLeft, Save, Factory, User } from 'lucide-react';
+import { Save } from 'lucide-react';
 import { toast } from 'sonner';
+import PageHeader from '../../components/common/PageHeader';
+import { ConfigSection } from '../../components/configuracion/ConfigSection';
 import { extractorasApi, type Extractora } from '../../../api/viajes';
 import { getDepartamentos, getMunicipios } from '../../../api/plantacion';
 import {
@@ -150,39 +151,19 @@ export default function NuevaExtractora() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header: back arrow + título. El botón Guardar va al pie. */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate('/configuracion')}
-            className="mt-1"
-            aria-label="Volver"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-primary">
-              {isEdit ? 'Editar Extractora' : 'Nueva Extractora'}
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Planta extractora de aceite de palma
-            </p>
-          </div>
-        </div>
-      </div>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeader
+        backTo="/configuracion"
+        eyebrow="Configuración · Viajes"
+        title={isEdit ? 'Editar extractora' : 'Nueva extractora'}
+        description="Planta extractora de aceite de palma a la que despachas fruto."
+      />
 
-      {/* Información de la Empresa */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-primary">
-            <Factory className="h-5 w-5" />
-            Información de la Empresa
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <ConfigSection
+        title="Datos de la empresa"
+        description="Identificación y ubicación de la planta."
+        contentClassName="grid grid-cols-1 gap-4 px-5 py-5 md:grid-cols-2"
+      >
           <div className="space-y-2">
             <Label htmlFor="razon_social">
               Nombre de la Extractora <span className="text-destructive">*</span>
@@ -266,18 +247,14 @@ export default function NuevaExtractora() {
               disabled={loading}
             />
           </div>
-        </CardContent>
-      </Card>
+      </ConfigSection>
 
       {/* Información de Contacto */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-primary">
-            <User className="h-5 w-5" />
-            Información de Contacto
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <ConfigSection
+        title="Contacto"
+        description="Persona y medios para coordinar los despachos."
+        contentClassName="grid grid-cols-1 gap-4 px-5 py-5 md:grid-cols-2"
+      >
           <div className="space-y-2">
             <Label htmlFor="contacto_nombre">Nombre de Contacto</Label>
             <Input
@@ -299,7 +276,7 @@ export default function NuevaExtractora() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="telefono_fijo">Teléfono Fijo</Label>
+            <Label htmlFor="telefono_fijo">Teléfono fijo</Label>
             <Input
               id="telefono_fijo"
               placeholder="+57 2 123 4567"
@@ -309,7 +286,7 @@ export default function NuevaExtractora() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">Correo Electrónico</Label>
+            <Label htmlFor="email">Correo electrónico</Label>
             <Input
               id="email"
               type="email"
@@ -319,17 +296,14 @@ export default function NuevaExtractora() {
               disabled={loading}
             />
           </div>
-        </CardContent>
-      </Card>
+      </ConfigSection>
 
-      {/* El botón va al pie del formulario, como en el resto de la app. */}
-      <div className="barra-acciones flex justify-end">
-        <Button
-          onClick={handleSave}
-          disabled={saving || loading}
-          className="rounded-full px-6"
-        >
-          <Save className="h-4 w-4" />
+      <div className="barra-acciones flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button variant="outline" onClick={() => navigate('/configuracion')} disabled={saving}>
+          Cancelar
+        </Button>
+        <Button onClick={handleSave} disabled={saving || loading}>
+          <Save strokeWidth={2} />
           {saving ? 'Guardando…' : 'Guardar'}
         </Button>
       </div>

@@ -1,15 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams, Link } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { usuariosApi, type UpdateUsuarioPayload } from '../../../api/usuarios';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import {
-  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator,
-} from '../../components/ui/breadcrumb';
-import { ArrowLeft, User, Mail, Lock, Save, X, Eye, EyeOff } from 'lucide-react';
+import PageHeader from '../../components/common/PageHeader';
+import { Info, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function UsuarioNuevoEditar() {
@@ -21,10 +19,10 @@ export default function UsuarioNuevoEditar() {
   const [nombre, setNombre] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [cargando, setCargando] = useState(esEdicion);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -41,6 +39,9 @@ export default function UsuarioNuevoEditar() {
       } finally { setCargando(false); }
     })();
   }, [id, esEdicion, token]);
+
+  const limpiarError = (campo: string) =>
+    setErrors(p => { const n = { ...p }; delete n[campo]; return n; });
 
   const validate = () => {
     const errs: Record<string, string> = {};
@@ -81,110 +82,142 @@ export default function UsuarioNuevoEditar() {
     } finally { setLoading(false); }
   };
 
+  /** Campo de contraseña con el botón de ver y ocultar. */
+  const campoPassword = (
+    campo: 'password' | 'confirmPassword',
+    etiqueta: string,
+    placeholder: string,
+    valor: string,
+    onChange: (v: string) => void,
+    visible: boolean,
+    toggle: () => void,
+  ) => (
+    <div className="space-y-2">
+      <Label htmlFor={campo}>
+        {etiqueta}
+        {esEdicion && <span className="font-normal text-muted-foreground"> (opcional)</span>}
+      </Label>
+      <div className="relative">
+        <Input
+          id={campo}
+          type={visible ? 'text' : 'password'}
+          placeholder={placeholder}
+          value={valor}
+          disabled={cargando}
+          onChange={(e) => { onChange(e.target.value); limpiarError(campo); }}
+          aria-invalid={!!errors[campo]}
+          className={errors[campo] ? 'border-destructive pr-10' : 'pr-10'}
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:bg-transparent"
+          onClick={toggle}
+          aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+        >
+          {visible ? <EyeOff strokeWidth={2} /> : <Eye strokeWidth={2} />}
+        </Button>
+      </div>
+      {errors[campo] && <p className="text-sm text-destructive">{errors[campo]}</p>}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem><BreadcrumbLink asChild><Link to="/usuarios">Usuarios</Link></BreadcrumbLink></BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem><BreadcrumbPage>{esEdicion ? 'Editar Usuario' : 'Nuevo Usuario'}</BreadcrumbPage></BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
+      <PageHeader
+        backTo="/usuarios"
+        eyebrow="Usuarios"
+        title={esEdicion ? 'Editar usuario' : 'Nuevo usuario'}
+        description={esEdicion ? 'Modifica la información del usuario.' : 'Registra un nuevo usuario en el sistema.'}
+      />
 
-      <div className="flex items-start gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/usuarios')}
-          className="h-12 w-12 rounded-xl border border-border/50 hover:bg-muted">
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div className="space-y-1">
-          <h1 className="text-3xl sm:text-4xl font-bold text-foreground">{esEdicion ? 'Editar Usuario' : 'Nuevo Usuario'}</h1>
-          <p className="text-muted-foreground">{esEdicion ? 'Modifica la información del usuario' : 'Registra un nuevo usuario en el sistema'}</p>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit}>
-        <Card className="glass-subtle">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <Card>
           <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-primary/20 bg-primary-soft">
-                <User className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <CardTitle>Información del Usuario</CardTitle>
-                <CardDescription>Completa los datos del usuario</CardDescription>
-              </div>
-            </div>
+            <CardTitle>Datos del usuario</CardTitle>
+            <CardDescription>Nombre y correo con el que entrará a la plataforma.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid gap-6 md:grid-cols-2">
+          <CardContent>
+            <div className="grid gap-5 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="nombre" className="flex items-center gap-2">
-                  <User className="h-4 w-4" /> Nombre Completo
-                </Label>
-                <Input id="nombre" placeholder="Carlos Rodríguez" value={nombre}
-                  onChange={e => { setNombre(e.target.value); setErrors(p => { const n = {...p}; delete n.nombre; return n; }); }}
-                  className={errors.nombre ? 'border-destructive' : ''} />
+                <Label htmlFor="nombre">Nombre completo</Label>
+                <Input
+                  id="nombre"
+                  placeholder="Carlos Rodríguez"
+                  value={nombre}
+                  disabled={cargando}
+                  onChange={(e) => { setNombre(e.target.value); limpiarError('nombre'); }}
+                  aria-invalid={!!errors.nombre}
+                  className={errors.nombre ? 'border-destructive' : ''}
+                />
                 {errors.nombre && <p className="text-sm text-destructive">{errors.nombre}</p>}
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="email" className="flex items-center gap-2">
-                  <Mail className="h-4 w-4" /> Correo Electrónico
-                </Label>
-                <Input id="email" type="email" placeholder="usuario@ejemplo.com" value={email}
-                  onChange={e => { setEmail(e.target.value); setErrors(p => { const n = {...p}; delete n.email; return n; }); }}
-                  className={errors.email ? 'border-destructive' : ''} />
+                <Label htmlFor="email">Correo electrónico</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="carlos.rodriguez@ejemplo.com"
+                  value={email}
+                  disabled={cargando}
+                  onChange={(e) => { setEmail(e.target.value); limpiarError('email'); }}
+                  aria-invalid={!!errors.email}
+                  className={errors.email ? 'border-destructive' : ''}
+                />
                 {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="password" className="flex items-center gap-2">
-                  <Lock className="h-4 w-4" /> Contraseña {esEdicion && '(Opcional)'}
-                </Label>
-                <div className="relative">
-                  <Input id="password" type={showPassword ? 'text' : 'password'}
-                    placeholder={esEdicion ? 'Dejar en blanco para no cambiar' : 'Mínimo 8 caracteres'}
-                    value={password}
-                    onChange={e => { setPassword(e.target.value); setErrors(p => { const n = {...p}; delete n.password; return n; }); }}
-                    className={`pr-10 ${errors.password ? 'border-destructive' : ''}`} />
-                  <button aria-label="Ocultar" type="button" tabIndex={-1} onClick={() => setShowPassword(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-                {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
-                {esEdicion && <p className="text-xs text-muted-foreground">Solo completa este campo si deseas cambiar la contraseña</p>}
-              </div>
-
-              {/* Repetir contraseña — solo si se está escribiendo una */}
-              {(!esEdicion || password) && (
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword" className="flex items-center gap-2">
-                    <Lock className="h-4 w-4" /> Repetir Contraseña
-                  </Label>
-                  <div className="relative">
-                    <Input id="confirmPassword" type={showConfirm ? 'text' : 'password'}
-                      placeholder="Repite la contraseña"
-                      value={confirmPassword}
-                      onChange={e => { setConfirmPassword(e.target.value); setErrors(p => { const n = {...p}; delete n.confirmPassword; return n; }); }}
-                      className={`pr-10 ${errors.confirmPassword ? 'border-destructive' : ''}`} />
-                    <button aria-label="Ocultar" type="button" tabIndex={-1} onClick={() => setShowConfirm(v => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
-                      {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  {errors.confirmPassword && <p className="text-sm text-destructive">{errors.confirmPassword}</p>}
-                </div>
-              )}
             </div>
-            
           </CardContent>
         </Card>
 
-        <div className="barra-acciones flex justify-end gap-3 mt-6">
-          <Button type="button" variant="outline" onClick={() => navigate('/usuarios')} >
-            <X className="h-4 w-4" /> Cancelar
+        <Card>
+          <CardHeader>
+            <CardTitle>Acceso</CardTitle>
+            <CardDescription>
+              {esEdicion
+                ? 'Solo completa estos campos si deseas cambiar la contraseña.'
+                : 'La contraseña debe tener al menos 8 caracteres.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid gap-5 md:grid-cols-2">
+              {campoPassword(
+                'password',
+                'Contraseña',
+                esEdicion ? 'Dejar en blanco para no cambiar' : 'Mínimo 8 caracteres',
+                password,
+                setPassword,
+                showPassword,
+                () => setShowPassword(v => !v),
+              )}
+              {campoPassword(
+                'confirmPassword',
+                'Confirmar contraseña',
+                esEdicion ? 'Confirmar nueva contraseña' : 'Repite la contraseña',
+                confirmPassword,
+                setConfirmPassword,
+                showConfirm,
+                () => setShowConfirm(v => !v),
+              )}
+            </div>
+
+            <div className="flex items-start gap-3 rounded-lg bg-muted/60 px-4 py-3">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2} />
+              <p className="text-sm text-muted-foreground">
+                Los permisos específicos se configuran después de crear el usuario, en la sección de permisos.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="barra-acciones flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="outline" onClick={() => navigate('/usuarios')}>
+            Cancelar
           </Button>
-          <Button type="submit" disabled={loading}>
-            <Save className="h-4 w-4" /> {esEdicion ? 'Guardar Cambios' : 'Crear Usuario'}
+          <Button type="submit" disabled={loading || cargando}>
+            {esEdicion ? 'Guardar cambios' : 'Crear usuario'}
           </Button>
         </div>
       </form>

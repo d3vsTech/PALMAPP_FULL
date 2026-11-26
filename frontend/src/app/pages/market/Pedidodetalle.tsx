@@ -9,10 +9,13 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 import {
-  ArrowLeft, Package, Clock, CheckCircle, XCircle, Truck, PackageCheck,
+  Clock, CheckCircle, XCircle, Truck, PackageCheck,
   MapPin, CreditCard, Store, Calendar, ChefHat, Loader2, Ban,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import PageHeader from '../../components/common/PageHeader';
+import { ProductoFoto, EstadoPedidoBadge } from '../../components/market/piezas';
+import { cop } from '../../lib/formato';
 import {
   marketApi, toNumber, buildImagenUrl, MarketErrorCodes,
   type Pedido, type EstadoPedido,
@@ -134,30 +137,19 @@ export default function PedidoDetalle() {
   const historial = pedido.historial ?? [];
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate('/market/pedidos')}
-          className="mb-4"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Volver a mis pedidos
-        </Button>
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-foreground">{pedido.codigo}</h1>
-            <p className="text-muted-foreground mt-2">
-              Realizado el {formatFecha(pedido.fecha_pedido)}
-            </p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Badge className={`${config.bgColor} ${config.color} ${config.borderColor} border h-fit`}>
-              <Icon className="h-4 w-4 mr-1" />
-              {config.label}
-            </Badge>
+    <div className="space-y-6">
+      <PageHeader
+        backTo="/market/pedidos"
+        eyebrow="Mis pedidos"
+        title={
+          <>
+            {pedido.codigo}
+            <EstadoPedidoBadge estado={pedido.estado} className="ml-3 align-middle" />
+          </>
+        }
+        description={`Realizado el ${formatFecha(pedido.fecha_pedido)}`}
+        actions={
+          <>
             {/* Botón cancelar — §5.3. Estados cancelables:
                 pendiente/confirmado/preparando/en_transito y estado_pago
                 distinto de pagado/procesando. */}
@@ -167,17 +159,16 @@ export default function PedidoDetalle() {
               && (
                 <Button
                   variant="outline"
-                  size="sm"
                   onClick={() => setDialogoCancelarAbierto(true)}
-                  className="border-destructive/40 text-destructive hover:bg-destructive/5 hover:text-destructive"
+                  className="text-destructive hover:bg-destructive-soft hover:text-destructive"
                 >
-                  <Ban className="h-4 w-4" />
+                  <Ban strokeWidth={2} />
                   Cancelar pedido
                 </Button>
               )}
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
@@ -185,7 +176,7 @@ export default function PedidoDetalle() {
           {historial.length > 0 && (
             <Card>
               <CardContent>
-                <h2 className="text-xl font-bold text-foreground mb-6">Seguimiento del Pedido</h2>
+                <h2 className="mb-6">Seguimiento del pedido</h2>
 
                 <div className="relative">
                   {historial.map((evento, index) => {
@@ -199,15 +190,15 @@ export default function PedidoDetalle() {
                           <div className="absolute left-6 top-12 bottom-0 w-0.5 bg-border" />
                         )}
 
-                        <div
-                          className={`relative z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 ${eventoConfig.borderColor} ${eventoConfig.bgColor}`}
+                        <span
+                          className={`relative z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ${eventoConfig.bgColor} ${eventoConfig.color}`}
                         >
-                          <EventoIcon className={`h-6 w-6 ${eventoConfig.color}`} />
-                        </div>
+                          <EventoIcon className="h-5 w-5" />
+                        </span>
 
                         <div className="flex-1 pt-1">
                           <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <h3 className="font-semibold text-foreground">{eventoConfig.label}</h3>
+                            <h3>{eventoConfig.label}</h3>
                             <span className="text-xs text-muted-foreground">
                               {formatFechaHora(evento.fecha_cambio)}
                             </span>
@@ -230,7 +221,7 @@ export default function PedidoDetalle() {
           {/* Productos */}
           <Card className="overflow-hidden">
             <CardContent>
-              <h2 className="text-xl font-bold text-foreground mb-4">Productos</h2>
+              <h2 className="mb-4">Productos</h2>
 
               <div className="space-y-4">
                 {pedido.items.map((producto) => (
@@ -239,26 +230,21 @@ export default function PedidoDetalle() {
                     className="flex items-center justify-between pb-4 border-b border-border last:border-0 last:pb-0"
                   >
                     <div className="flex items-center gap-4">
-                      <div className="h-16 w-16 bg-muted rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
-                        {producto.producto?.imagen_principal ? (
-                          <img
-                            src={buildImagenUrl(producto.producto.imagen_principal)}
-                            alt={producto.nombre_producto}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <Package className="h-8 w-8 text-primary/30" />
-                        )}
-                      </div>
-                      <div>
+                      <ProductoFoto
+                        src={producto.producto?.imagen_principal ? buildImagenUrl(producto.producto.imagen_principal) : null}
+                        alt={producto.nombre_producto}
+                        className="h-14 w-14 shrink-0"
+                        iconClassName="h-5 w-5"
+                      />
+                      <div className="min-w-0">
                         <p className="font-medium text-foreground">{producto.nombre_producto}</p>
                         <p className="text-sm text-muted-foreground">
-                          {producto.cantidad} × ${toNumber(producto.precio_unitario).toLocaleString('es-CO')}
+                          {producto.cantidad} × {cop(toNumber(producto.precio_unitario))}
                         </p>
                       </div>
                     </div>
-                    <p className="text-lg font-bold text-foreground">
-                      ${toNumber(producto.subtotal).toLocaleString('es-CO')}
+                    <p className="font-semibold tabular-nums text-foreground">
+                      {cop(toNumber(producto.subtotal))}
                     </p>
                   </div>
                 ))}
@@ -269,7 +255,7 @@ export default function PedidoDetalle() {
           {/* Información de entrega */}
           <Card>
             <CardContent>
-              <h2 className="text-xl font-bold text-foreground mb-4">Información de Entrega</h2>
+              <h2 className="mb-4">Información de entrega</h2>
 
               <div className="space-y-4">
                 {pedido.direccion_entrega && (
@@ -367,20 +353,20 @@ export default function PedidoDetalle() {
           <div className="sticky top-8 space-y-4">
             <Card>
               <CardContent className="p-6 space-y-4">
-                <h2 className="text-xl font-bold text-foreground">Resumen del Pedido</h2>
+                <h2>Resumen del pedido</h2>
 
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Subtotal</span>
-                    <span className="font-semibold">${subtotal.toLocaleString('es-CO')}</span>
+                    <span className="font-semibold tabular-nums">{cop(subtotal)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Envío</span>
                     <span className="font-semibold">
                       {envio === 0 ? (
-                        <span className="text-success">GRATIS</span>
+                        <span className="font-semibold">Gratis</span>
                       ) : (
-                        `$${envio.toLocaleString('es-CO')}`
+                        cop(envio)
                       )}
                     </span>
                   </div>
@@ -389,9 +375,7 @@ export default function PedidoDetalle() {
 
                   <div className="flex justify-between">
                     <span className="text-lg font-semibold">Total</span>
-                    <span className="text-2xl font-bold text-success">
-                      ${total.toLocaleString('es-CO')}
-                    </span>
+                    <span className="text-2xl font-bold tabular-nums">{cop(total)}</span>
                   </div>
                 </div>
               </CardContent>

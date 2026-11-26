@@ -1,17 +1,16 @@
 import { useEffect, useState } from 'react';
-import { comoBoton } from '../../hooks/comoBoton';
 import { useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent } from '../../components/ui/card';
-import { Input } from '../../components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
-import {
-  ArrowLeft, Trash2, Plus, Minus, ShoppingCart, Package, ArrowRight, Loader2,
-} from 'lucide-react';
+import { Trash2, ArrowRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import PageHeader from '../../components/common/PageHeader';
+import { ProductoFoto, CantidadInput, ResumenLinea } from '../../components/market/piezas';
+import { cop } from '../../lib/formato';
 import { marketApi, toNumber, buildImagenUrl, type Carrito as CarritoT } from '../../../api/market';
 
 export default function Carrito() {
@@ -75,9 +74,14 @@ export default function Carrito() {
 
   if (cargando) {
     return (
-      <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" />
-        Cargando carrito...
+      <div className="space-y-6">
+        <PageHeader backTo="/market" title="Carrito" />
+        <Card className="items-center py-14 text-center">
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
+            Cargando carrito...
+          </p>
+        </Card>
       </div>
     );
   }
@@ -87,208 +91,135 @@ export default function Carrito() {
 
   if (items.length === 0) {
     return (
-      <div className="space-y-8">
-        <div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/market')}
-            className="mb-4"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Volver al catálogo
-          </Button>
-          <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Carrito de Compras</h1>
-        </div>
-
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-              <ShoppingCart className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <h3 className="mb-2 text-lg font-semibold">Tu carrito está vacío</h3>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Agrega productos para continuar con tu compra
+      <div className="space-y-6">
+        <PageHeader backTo="/market" title="Carrito" />
+        <Card className="items-center py-14 text-center">
+          <div className="space-y-1">
+            <h3>Tu carrito está vacío</h3>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              Agrega productos del catálogo para continuar con la compra.
             </p>
-            <Button onClick={() => navigate('/market')}>
-              <Package className="mr-2 h-4 w-4" />
-              Ver catálogo
-            </Button>
-          </CardContent>
+          </div>
+          <Button onClick={() => navigate('/market')}>Ver catálogo</Button>
         </Card>
       </div>
     );
   }
 
+  const etiqueta = `${items.length} ${items.length === 1 ? 'producto' : 'productos'}`;
+  const envio = toNumber(resumen.costo_envio);
+
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/market')}
-            className="mb-4"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Continuar comprando
-          </Button>
-          <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Carrito de Compras</h1>
-          <p className="text-muted-foreground mt-2">
-            {items.length} {items.length === 1 ? 'producto' : 'productos'} en tu carrito
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          onClick={() => setConfirmVaciar(true)}
-          className="text-destructive hover:bg-destructive/10"
-        >
-          <Trash2 className="h-4 w-4" />
-          Vaciar carrito
-        </Button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        backTo="/market"
+        title="Carrito"
+        description={`${etiqueta} en tu carrito`}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => navigate('/market')}>Seguir comprando</Button>
+            <Button
+              variant="outline"
+              className="text-destructive hover:bg-destructive-soft hover:text-destructive"
+              onClick={() => setConfirmVaciar(true)}
+            >
+              <Trash2 strokeWidth={2} />
+              Vaciar carrito
+            </Button>
+          </>
+        }
+      />
 
-      <div className="grid gap-8 lg:grid-cols-3">
-        {/* Lista de productos */}
-        <div className="lg:col-span-2 space-y-4">
-          {items.map((item) => {
-            const precio = toNumber(item.precio_unitario);
-            const subtotal = toNumber(item.subtotal);
-            const isUpdating = actualizando === item.id;
-            return (
-              <Card key={item.id} className="overflow-hidden">
-                <CardContent>
-                  <div className="flex gap-6">
-                    <div className="w-24 h-24 bg-muted rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
-                      {item.producto.imagen_principal ? (
-                        <img
-                          src={buildImagenUrl(item.producto.imagen_principal)}
-                          alt={item.producto.nombre}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <Package className="h-10 w-10 text-primary/30" />
-                      )}
-                    </div>
-
-                    <div className="flex-1 space-y-3">
-                      <div>
-                        <h3
-                          className="font-semibold text-foreground cursor-pointer hover:text-primary"
-                          {...comoBoton(() => navigate(`/market/productos/${item.producto.id}`))}
-                        >
-                          {item.producto.nombre}
-                        </h3>
-                        <p className="text-sm text-muted-foreground">{item.producto.proveedor.nombre_empresa}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Precio unitario: ${precio.toLocaleString('es-CO')} / {item.producto.unidad_medida.abreviatura}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => cambiarCantidad(item.id, item.cantidad - 1)}
-                            disabled={isUpdating || item.cantidad <= 1}
-                          >
-                            <Minus className="h-4 w-4" />
-                          </Button>
-                          <Input
-                            type="number" step="0.001"
-                            value={item.cantidad}
-                            onChange={(e) => {
-                              const v = parseFloat(e.target.value) || 1;
-                              if (v !== item.cantidad) cambiarCantidad(item.id, v);
-                            }}
-                            className="w-16 text-center"
-                            min="1"
-                            max={item.producto.stock_disponible}
-                            disabled={isUpdating}
-                          />
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => cambiarCantidad(item.id, item.cantidad + 1)}
-                            disabled={isUpdating || item.cantidad >= item.producto.stock_disponible}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </div>
-
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => eliminarItem(item.id)}
-                          disabled={isUpdating}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Eliminar
-                        </Button>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-2 border-t border-border">
-                        <p className="text-sm text-muted-foreground">Subtotal:</p>
-                        <p className="text-xl font-bold text-success">
-                          ${subtotal.toLocaleString('es-CO')}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-
-        {/* Resumen de compra */}
-        <div className="lg:col-span-1">
-          <div className="sticky top-8 space-y-4">
-            <Card>
-              <CardContent className="p-6 space-y-4">
-                <h2 className="text-xl font-bold text-foreground">Resumen de Compra</h2>
-
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      Subtotal ({resumen.cantidad_items} {resumen.cantidad_items === 1 ? 'producto' : 'productos'})
-                    </span>
-                    <span className="font-semibold">${toNumber(resumen.subtotal).toLocaleString('es-CO')}</span>
-                  </div>
-
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Envío</span>
-                    <span className="font-semibold">
-                      {toNumber(resumen.costo_envio) === 0
-                        ? 'Gratis'
-                        : `$${toNumber(resumen.costo_envio).toLocaleString('es-CO')}`}
-                    </span>
-                  </div>
-
-                  <div className="h-px bg-border my-3" />
-
-                  <div className="flex justify-between">
-                    <span className="text-lg font-semibold">Total</span>
-                    <span className="text-2xl font-bold text-success">
-                      ${toNumber(resumen.total).toLocaleString('es-CO')}
-                    </span>
-                  </div>
-                </div>
-
-                <Button
-                  onClick={() => navigate('/market/checkout')}
-                  className="w-full"
-                  size="lg"
-                >
-                  Proceder al pago
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </CardContent>
-            </Card>
+      <div className="grid items-start gap-6 lg:grid-cols-3">
+        {/* Productos */}
+        <Card className="gap-0 overflow-hidden lg:col-span-2">
+          <div className="hidden grid-cols-[1fr_auto_8rem_2.25rem] gap-4 bg-muted/60 px-5 py-2.5 text-[13px] font-medium text-muted-foreground sm:grid">
+            <span>Producto</span>
+            <span className="w-[8.5rem] text-center">Cantidad</span>
+            <span className="text-right">Subtotal</span>
+            <span />
           </div>
+          <ul className="divide-y divide-border">
+            {items.map((item) => {
+              const precio = toNumber(item.precio_unitario);
+              const enCurso = actualizando === item.id;
+              return (
+                <li
+                  key={item.id}
+                  className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-3 px-5 py-4 sm:grid-cols-[1fr_auto_8rem_2.25rem] sm:items-center"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <ProductoFoto
+                      src={item.producto.imagen_principal ? buildImagenUrl(item.producto.imagen_principal) : null}
+                      alt={item.producto.nombre}
+                      className="h-14 w-14 shrink-0"
+                      iconClassName="h-5 w-5"
+                    />
+                    <div className="min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/market/productos/${item.producto.id}`)}
+                        className="line-clamp-2 max-w-full text-left font-semibold text-foreground hover:text-primary"
+                      >
+                        {item.producto.nombre}
+                      </button>
+                      <p className="break-words text-xs text-muted-foreground">
+                        {item.producto.proveedor.nombre_empresa}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {cop(precio)} / {item.producto.unidad_medida.abreviatura}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Quitar ${item.producto.nombre}`}
+                    disabled={enCurso}
+                    onClick={() => eliminarItem(item.id)}
+                    className="text-muted-foreground hover:text-destructive sm:order-last"
+                  >
+                    <Trash2 strokeWidth={2} />
+                  </Button>
+                  <CantidadInput
+                    size="sm"
+                    value={item.cantidad}
+                    max={item.producto.stock_disponible}
+                    disabled={enCurso}
+                    onChange={(n) => cambiarCantidad(item.id, n)}
+                  />
+                  <p className="self-center text-right font-semibold tabular-nums">
+                    {cop(toNumber(item.subtotal))}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+
+        {/* Resumen */}
+        <div className="lg:sticky lg:top-6">
+          <Card className="gap-4">
+            <CardHeader>
+              <CardTitle>Resumen de compra</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <ResumenLinea
+                  label={`Subtotal (${resumen.cantidad_items} ${resumen.cantidad_items === 1 ? 'producto' : 'productos'})`}
+                  value={cop(toNumber(resumen.subtotal))}
+                />
+                <ResumenLinea label="Envío" value={envio === 0 ? 'Gratis' : cop(envio)} />
+                <div className="border-t border-border">
+                  <ResumenLinea total label="Total" value={cop(toNumber(resumen.total))} />
+                </div>
+              </div>
+              <Button onClick={() => navigate('/market/checkout')} className="w-full">
+                Continuar al pago
+                <ArrowRight strokeWidth={2} />
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </div>
 

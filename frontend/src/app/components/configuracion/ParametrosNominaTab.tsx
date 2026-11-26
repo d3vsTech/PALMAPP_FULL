@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { cached } from '../../../api/cache';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { ConfigSection, ConfigActions } from './ConfigSection';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
-import { Save } from 'lucide-react';
+import { Info, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Select,
@@ -70,6 +70,53 @@ function formToPayload(f: FormState): ConfiguracionNominaPayload {
   };
 }
 
+const DIAS = Array.from({ length: 31 }, (_, i) => i + 1);
+
+function DiaSelect({
+  id, label, value, onChange,
+}: { id: string; label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger id={id}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {DIAS.map((dia) => (
+            <SelectItem key={dia} value={String(dia)}>Día {dia}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+/** Un período de corte: día de inicio, día de fin y el rango en texto. */
+function Periodo({
+  titulo, idPrefijo, inicio, fin, onInicio, onFin,
+}: {
+  titulo: string;
+  idPrefijo: string;
+  inicio: string;
+  fin: string;
+  onInicio: (v: string) => void;
+  onFin: (v: string) => void;
+}) {
+  return (
+    <div className="rounded-lg bg-muted/60 p-4">
+      <p className="mb-3 text-sm font-semibold text-foreground">{titulo}</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <DiaSelect id={`${idPrefijo}-inicio`} label="Día de inicio" value={inicio} onChange={onInicio} />
+        <DiaSelect id={`${idPrefijo}-fin`} label="Día de fin" value={fin} onChange={onFin} />
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Período: del {inicio} al {fin} de cada mes
+      </p>
+    </div>
+  );
+}
+
 export function ParametrosNominaTab() {
   const [parametros, setParametros] = useState<FormState>(FORM_VACIO);
   const [loading, setLoading] = useState(true);
@@ -82,6 +129,9 @@ export function ParametrosNominaTab() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  const cambiar = (campo: keyof typeof parametros) => (valor: string) =>
+    setParametros((prev) => ({ ...prev, [campo]: valor }));
 
   const handleSave = async () => {
     try {
@@ -105,222 +155,88 @@ export function ParametrosNominaTab() {
 
   return (
     <TabLoadingGate loading={loading} message="Cargando parámetros de nómina…">
-    <Card className="overflow-hidden">
-      <CardHeader className="border-b bg-muted/40">
-        <CardTitle>Parámetros de Nómina</CardTitle>
-        <p className="text-sm text-muted-foreground mt-1">
-          Configura la periodicidad y fechas de corte de la nómina
-        </p>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-6">
-          {/* Periodicidad */}
-          <div className="max-w-md">
-            <Label htmlFor="periodicidad">
-              Periodicidad de la Nómina <span className="text-destructive">*</span>
-            </Label>
-            <Select
-              value={parametros.periodicidad}
-              onValueChange={(value: TipoPagoNomina) =>
-                setParametros((prev) => ({ ...prev, periodicidad: value }))
-              }
-            >
-              <SelectTrigger id="periodicidad" className="mt-2">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="QUINCENAL">Quincenal</SelectItem>
-                <SelectItem value="MENSUAL">Mensual</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground mt-2">
-              {parametros.periodicidad === 'QUINCENAL'
-                ? 'La nómina se procesará dos veces al mes'
-                : 'La nómina se procesará una vez al mes'}
+    <div className="space-y-6">
+      <ConfigSection title="Periodicidad" description="Cada cuánto se procesa la nómina.">
+        <div className="max-w-sm space-y-2">
+          <Label htmlFor="periodicidad">
+            Periodicidad de la nómina <span className="text-destructive">*</span>
+          </Label>
+          <Select
+            value={parametros.periodicidad}
+            onValueChange={(value: TipoPagoNomina) =>
+              setParametros((prev) => ({ ...prev, periodicidad: value }))
+            }
+          >
+            <SelectTrigger id="periodicidad">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="QUINCENAL">Quincenal</SelectItem>
+              <SelectItem value="MENSUAL">Mensual</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            {parametros.periodicidad === 'QUINCENAL'
+              ? 'La nómina se procesará dos veces al mes'
+              : 'La nómina se procesará una vez al mes'}
+          </p>
+        </div>
+      </ConfigSection>
+
+      <ConfigSection
+        title="Fechas de corte"
+        description="Días que abren y cierran cada período de pago."
+      >
+        <div className="space-y-4">
+          {parametros.periodicidad === 'QUINCENAL' ? (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Periodo
+                titulo="Primera quincena"
+                idPrefijo="q1"
+                inicio={parametros.fechaInicioQuincena1}
+                fin={parametros.fechaFinQuincena1}
+                onInicio={cambiar('fechaInicioQuincena1')}
+                onFin={cambiar('fechaFinQuincena1')}
+              />
+              <Periodo
+                titulo="Segunda quincena"
+                idPrefijo="q2"
+                inicio={parametros.fechaInicioQuincena2}
+                fin={parametros.fechaFinQuincena2}
+                onInicio={cambiar('fechaInicioQuincena2')}
+                onFin={cambiar('fechaFinQuincena2')}
+              />
+            </div>
+          ) : (
+            <div className="max-w-xl">
+              <Periodo
+                titulo="Período mensual"
+                idPrefijo="mes"
+                inicio={parametros.fechaInicioMes}
+                fin={parametros.fechaFinMes}
+                onInicio={cambiar('fechaInicioMes')}
+                onFin={cambiar('fechaFinMes')}
+              />
+            </div>
+          )}
+
+          <div className="flex gap-2.5 rounded-lg bg-info-soft px-4 py-3 text-sm text-info">
+            <Info className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+            <p>
+              Estos parámetros definen los períodos de corte para procesar la nómina.
+              Revisa que las fechas coincidan con las políticas de pago de tu empresa.
             </p>
-          </div>
-
-          {/* Fechas de Corte */}
-          <div className="border-t border-border pt-6">
-            <h3 className="text-sm font-semibold mb-4 text-muted-foreground">
-              Fechas de Corte
-            </h3>
-
-            {parametros.periodicidad === 'QUINCENAL' ? (
-              <div className="space-y-6 max-w-2xl">
-                {/* Primera Quincena */}
-                <div className="p-4 rounded-lg bg-muted/30 border border-border">
-                  <h4 className="font-medium mb-3">Primera Quincena</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="fechaInicioQ1">Día de Inicio</Label>
-                      <Select
-                        value={parametros.fechaInicioQuincena1}
-                        onValueChange={(value) =>
-                          setParametros((prev) => ({ ...prev, fechaInicioQuincena1: value }))
-                        }
-                      >
-                        <SelectTrigger id="fechaInicioQ1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                            <SelectItem key={day} value={String(day)}>
-                              Día {day}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="fechaFinQ1">Día de Fin</Label>
-                      <Select
-                        value={parametros.fechaFinQuincena1}
-                        onValueChange={(value) =>
-                          setParametros((prev) => ({ ...prev, fechaFinQuincena1: value }))
-                        }
-                      >
-                        <SelectTrigger id="fechaFinQ1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                            <SelectItem key={day} value={String(day)}>
-                              Día {day}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Periodo: Del {parametros.fechaInicioQuincena1} al {parametros.fechaFinQuincena1} de cada mes
-                  </p>
-                </div>
-
-                {/* Segunda Quincena */}
-                <div className="p-4 rounded-lg bg-muted/30 border border-border">
-                  <h4 className="font-medium mb-3">Segunda Quincena</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="fechaInicioQ2">Día de Inicio</Label>
-                      <Select
-                        value={parametros.fechaInicioQuincena2}
-                        onValueChange={(value) =>
-                          setParametros((prev) => ({ ...prev, fechaInicioQuincena2: value }))
-                        }
-                      >
-                        <SelectTrigger id="fechaInicioQ2">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                            <SelectItem key={day} value={String(day)}>
-                              Día {day}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="fechaFinQ2">Día de Fin</Label>
-                      <Select
-                        value={parametros.fechaFinQuincena2}
-                        onValueChange={(value) =>
-                          setParametros((prev) => ({ ...prev, fechaFinQuincena2: value }))
-                        }
-                      >
-                        <SelectTrigger id="fechaFinQ2">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                            <SelectItem key={day} value={String(day)}>
-                              Día {day}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Periodo: Del {parametros.fechaInicioQuincena2} al {parametros.fechaFinQuincena2} de cada mes
-                  </p>
-                </div>
-              </div>
-            ) : (
-              /* Nómina Mensual */
-              <div className="max-w-2xl">
-                <div className="p-4 rounded-lg bg-muted/30 border border-border">
-                  <h4 className="font-medium mb-3">Periodo Mensual</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="fechaInicioMes">Día de Inicio</Label>
-                      <Select
-                        value={parametros.fechaInicioMes}
-                        onValueChange={(value) =>
-                          setParametros((prev) => ({ ...prev, fechaInicioMes: value }))
-                        }
-                      >
-                        <SelectTrigger id="fechaInicioMes">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                            <SelectItem key={day} value={String(day)}>
-                              Día {day}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="fechaFinMes">Día de Fin</Label>
-                      <Select
-                        value={parametros.fechaFinMes}
-                        onValueChange={(value) =>
-                          setParametros((prev) => ({ ...prev, fechaFinMes: value }))
-                        }
-                      >
-                        <SelectTrigger id="fechaFinMes">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                            <SelectItem key={day} value={String(day)}>
-                              Día {day}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Periodo: Del {parametros.fechaInicioMes} al {parametros.fechaFinMes} de cada mes
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Nota informativa */}
-          <div className="rounded-lg bg-info-soft border border-info/20 p-4">
-            <p className="text-sm text-info">
-              <strong>Nota:</strong> Estos parámetros definen los periodos de corte para el procesamiento de la nómina.
-              Asegúrate de que las fechas correspondan con las políticas de pago de tu empresa.
-            </p>
-          </div>
-
-          {/* Botón Guardar */}
-          <div className="flex justify-end pt-4">
-            <Button onClick={handleSave} size="lg">
-              <Save className="h-5 w-5" />
-              Guardar Parámetros
-            </Button>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </ConfigSection>
+
+      <ConfigActions>
+        <Button onClick={handleSave}>
+          <Save strokeWidth={2} />
+          Guardar
+        </Button>
+      </ConfigActions>
+    </div>
     </TabLoadingGate>
   );
 }

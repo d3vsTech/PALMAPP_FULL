@@ -1,4 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import {
+  CHART_COLORS, gridProps, xAxisProps, yAxisProps, barProps, barCategoryGap, tooltipProps,
+} from '../../components/common/chartTheme';
+import PageHeader from '../../components/common/PageHeader';
 import { Button } from '../../components/ui/button';
 import {
   Table,
@@ -25,30 +29,30 @@ const chartData = promediosData.map((item) => ({
 export default function PromediosLote() {
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Promedios por Lote</h1>
-          <p className="text-muted-foreground">Análisis histórico de producción por lote</p>
-        </div>
-        <Button>
-          <Download className="mr-2 h-4 w-4" />
-          Exportar
-        </Button>
-      </div>
+      <PageHeader
+        title="Promedios por lote"
+        description="Análisis histórico de producción por lote."
+        actions={
+          <Button variant="outline">
+            <Download strokeWidth={2} />
+            Exportar
+          </Button>
+        }
+      />
 
       <Card>
         <CardHeader>
-          <CardTitle>Kg Promedio por Gajo - Comparativo por Lote</CardTitle>
+          <CardTitle>Kg promedio por gajo - comparativo por lote</CardTitle>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="lote" />
-              <YAxis domain={[0, 2]} />
-              <Tooltip />
+            <BarChart data={chartData} barCategoryGap={barCategoryGap}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="lote" {...xAxisProps} />
+              <YAxis domain={[0, 2]} {...yAxisProps} />
+              <Tooltip {...tooltipProps} />
               <Legend />
-              <Bar dataKey="kg" fill="hsl(var(--chart-1))" name="Kg promedio" />
+              <Bar dataKey="kg" fill={CHART_COLORS[0]} name="Kg promedio" {...barProps} />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
@@ -56,7 +60,7 @@ export default function PromediosLote() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Detalle de Promedios</CardTitle>
+          <CardTitle>Detalle de promedios</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>

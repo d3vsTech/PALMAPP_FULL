@@ -21,7 +21,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '../ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { ConfigSection } from './ConfigSection';
 import {
   Table,
   TableBody,
@@ -351,192 +351,187 @@ export function RangosNumeracionTab() {
     <>
       {ConfirmDeleteDialog}
 
-      <Card className="overflow-hidden">
-        <CardHeader className="border-b bg-muted/40">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Rangos de numeración manual</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                Configura los prefijos y consecutivos de remisiones y notas
-                asociadas a los viajes.
-              </p>
+      <ConfigSection
+        title="Rangos de numeración manual"
+        description="Configura los prefijos y consecutivos de remisiones y notas asociadas a los viajes."
+        contentClassName="space-y-6"
+        actions={
+          <Button onClick={abrirCrear}>
+            <Plus strokeWidth={2} />
+            Crear nuevo
+          </Button>
+        }
+      >
+        {/* Filtros — solo por prefijo (único tipo = Remisión).
+            Input + botón "Buscar" en la misma fila para un layout compacto. */}
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-foreground">
+            Filtro de búsqueda
+          </h3>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="flex-1 space-y-1.5">
+              <Label htmlFor="filtro-prefijo" className="text-sm">
+                Prefijo
+              </Label>
+              <Input
+                id="filtro-prefijo"
+                value={filtroPrefijoInput}
+                onChange={(e) => setFiltroPrefijoInput(e.target.value)}
+                placeholder="Escribe un prefijo…"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') buscar();
+                }}
+              />
             </div>
-            <Button onClick={abrirCrear}>
-              <Plus className="mr-2 h-4 w-4" />
-              Crear nuevo
-            </Button>
-          </div>
-        </CardHeader>
-
-        <CardContent className="p-6 space-y-6">
-          {/* Filtros — solo por prefijo (único tipo = Remisión).
-              Input + botón "Buscar" en la misma fila para un layout compacto. */}
-          <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-foreground">
-              Filtro de búsqueda
-            </h3>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-              <div className="flex-1 space-y-1.5">
-                <Label htmlFor="filtro-prefijo" className="text-sm">
-                  Prefijo
-                </Label>
-                <Input
-                  id="filtro-prefijo"
-                  value={filtroPrefijoInput}
-                  onChange={(e) => setFiltroPrefijoInput(e.target.value)}
-                  placeholder="Escribe un prefijo…"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') buscar();
-                  }}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Button onClick={buscar} variant="outline">
-                  <Search className="h-4 w-4" />
-                  Buscar
+            <div className="flex items-center gap-2">
+              <Button onClick={buscar} variant="outline">
+                <Search className="h-4 w-4" />
+                Buscar
+              </Button>
+              {filtroPrefijo && (
+                <Button variant="ghost" onClick={limpiarFiltros}>
+                  <X className="h-4 w-4" />
+                  Limpiar
                 </Button>
-                {filtroPrefijo && (
-                  <Button variant="ghost" onClick={limpiarFiltros}>
-                    <X className="h-4 w-4" />
-                    Limpiar
-                  </Button>
-                )}
-              </div>
+              )}
             </div>
           </div>
+        </div>
 
-          {/* Tabla */}
-          <div className="rounded-lg border border-border overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/40">
-                  <TableHead className="w-[80px] text-center">Nro.</TableHead>
-                  <TableHead>Prefijo</TableHead>
-                  <TableHead className="text-center">Número Desde</TableHead>
-                  <TableHead className="text-center">Número Hasta</TableHead>
-                  <TableHead className="text-center">Número Actual</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
+        {/* Tabla */}
+        <div className="rounded-lg border border-border overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/40">
+                <TableHead className="w-[80px] text-center">Nro.</TableHead>
+                <TableHead>Prefijo</TableHead>
+                <TableHead className="text-center">Número desde</TableHead>
+                <TableHead className="text-center">Número hasta</TableHead>
+                <TableHead className="text-center">Número actual</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {cargando ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Cargando rangos…
+                    </div>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {cargando ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
-                      <div className="flex items-center justify-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Cargando rangos…
+              ) : rangosPagina.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
+                    {rangos.length === 0
+                      ? 'Aún no has creado ningún rango de numeración.'
+                      : 'No hay resultados para los filtros aplicados.'}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                rangosPagina.map((r, idx) => (
+                  <TableRow key={r.id} className="hover:bg-muted/20 transition-colors">
+                    <TableCell className="text-center text-sm text-muted-foreground">
+                      {(pageSafe - 1) * pageSize + idx + 1}
+                    </TableCell>
+                    <TableCell className="text-sm font-medium">{r.prefijo}</TableCell>
+                    <TableCell className="text-center text-sm">{r.numero_desde}</TableCell>
+                    <TableCell className="text-center text-sm">{r.numero_hasta}</TableCell>
+                    <TableCell className="text-center text-sm font-medium text-primary">
+                      {r.numero_actual}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center gap-2 mr-2">
+                          <Switch
+                            checked={r.estado}
+                            onCheckedChange={() => toggleActivo(r)}
+                            disabled={toggleandoId === r.id}
+                            aria-label={r.estado ? 'Desactivar rango' : 'Activar rango'}
+                          />
+                          <span className={`text-xs font-medium ${r.estado ? 'text-success' : 'text-muted-foreground'}`}>
+                            {r.estado ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Editar rango"
+                          onClick={() => abrirEditar(r)}
+                          className="text-muted-foreground"
+                        >
+                          <Edit strokeWidth={2} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Eliminar rango"
+                          onClick={() => eliminarRango(r)}
+                          className="text-muted-foreground hover:bg-destructive-soft hover:text-destructive"
+                        >
+                          <Trash2 strokeWidth={2} />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
-                ) : rangosPagina.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
-                      {rangos.length === 0
-                        ? 'Aún no has creado ningún rango de numeración.'
-                        : 'No hay resultados para los filtros aplicados.'}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  rangosPagina.map((r, idx) => (
-                    <TableRow key={r.id} className="hover:bg-muted/20 transition-colors">
-                      <TableCell className="text-center text-sm text-muted-foreground">
-                        {(pageSafe - 1) * pageSize + idx + 1}
-                      </TableCell>
-                      <TableCell className="text-sm font-medium">{r.prefijo}</TableCell>
-                      <TableCell className="text-center text-sm">{r.numero_desde}</TableCell>
-                      <TableCell className="text-center text-sm">{r.numero_hasta}</TableCell>
-                      <TableCell className="text-center text-sm font-medium text-primary">
-                        {r.numero_actual}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="flex items-center gap-2 mr-2">
-                            <Switch
-                              checked={r.estado}
-                              onCheckedChange={() => toggleActivo(r)}
-                              disabled={toggleandoId === r.id}
-                              aria-label={r.estado ? 'Desactivar rango' : 'Activar rango'}
-                            />
-                            <span className={`text-xs font-medium ${r.estado ? 'text-success' : 'text-muted-foreground'}`}>
-                              {r.estado ? 'Activo' : 'Inactivo'}
-                            </span>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="Editar rango"
-                            onClick={() => abrirEditar(r)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="Eliminar rango"
-                            onClick={() => eliminarRango(r)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
 
-          {/* Paginación */}
-          {rangosFiltrados.length > 0 && (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-sm">
-              <p className="text-muted-foreground">
-                Mostrando registros del{' '}
-                <span className="font-medium text-foreground">
-                  {(pageSafe - 1) * pageSize + 1}
-                </span>{' '}
-                al{' '}
-                <span className="font-medium text-foreground">
-                  {Math.min(pageSafe * pageSize, rangosFiltrados.length)}
-                </span>{' '}
-                de{' '}
-                <span className="font-medium text-foreground">
-                  {rangosFiltrados.length}
-                </span>
-              </p>
+        {/* Paginación */}
+        {rangosFiltrados.length > 0 && (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-sm">
+            <p className="text-muted-foreground">
+              Mostrando registros del{' '}
+              <span className="font-medium text-foreground">
+                {(pageSafe - 1) * pageSize + 1}
+              </span>{' '}
+              al{' '}
+              <span className="font-medium text-foreground">
+                {Math.min(pageSafe * pageSize, rangosFiltrados.length)}
+              </span>{' '}
+              de{' '}
+              <span className="font-medium text-foreground">
+                {rangosFiltrados.length}
+              </span>
+            </p>
 
-              <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={pageSafe === 1}
+              >
+                Anterior
+              </Button>
+              {Array.from({ length: totalPaginas }, (_, i) => i + 1).map((n) => (
                 <Button
-                  variant="ghost"
+                  key={n}
+                  variant={n === pageSafe ? 'default' : 'ghost'}
                   size="sm"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={pageSafe === 1}
+                  className="min-w-[36px]"
+                  onClick={() => setPage(n)}
                 >
-                  Anterior
+                  {n}
                 </Button>
-                {Array.from({ length: totalPaginas }, (_, i) => i + 1).map((n) => (
-                  <Button
-                    key={n}
-                    variant={n === pageSafe ? 'default' : 'ghost'}
-                    size="sm"
-                    className="min-w-[36px]"
-                    onClick={() => setPage(n)}
-                  >
-                    {n}
-                  </Button>
-                ))}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.min(totalPaginas, p + 1))}
-                  disabled={pageSafe === totalPaginas}
-                >
-                  Siguiente
-                </Button>
-              </div>
+              ))}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setPage((p) => Math.min(totalPaginas, p + 1))}
+                disabled={pageSafe === totalPaginas}
+              >
+                Siguiente
+              </Button>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        )}
+
+      </ConfigSection>
 
       {/* Modal crear / editar */}
       <Dialog open={modalAbierto} onOpenChange={(o) => (o ? null : cerrarModal())}>
@@ -575,7 +570,7 @@ export function RangosNumeracionTab() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="numero-desde" className="text-sm">
-                  Número Desde <span className="text-destructive">*</span>
+                  Número desde <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id="numero-desde"
@@ -607,7 +602,7 @@ export function RangosNumeracionTab() {
 
               <div className="space-y-1.5">
                 <Label htmlFor="numero-hasta" className="text-sm">
-                  Número Hasta <span className="text-destructive">*</span>
+                  Número hasta <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id="numero-hasta"
@@ -625,7 +620,7 @@ export function RangosNumeracionTab() {
 
             <div className="space-y-1.5">
               <Label htmlFor="numero-actual" className="text-sm">
-                Número Actual <span className="text-destructive">*</span>
+                Número actual <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="numero-actual"

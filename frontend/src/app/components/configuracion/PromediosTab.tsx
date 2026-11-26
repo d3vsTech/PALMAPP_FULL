@@ -14,7 +14,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { cached, invalidate } from '../../../api/cache';
 import { Button } from '../ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import { Badge } from '../ui/badge';
+import { ConfigSection, ConfigActions } from './ConfigSection';
 import {
   Table,
   TableBody,
@@ -373,349 +374,317 @@ export function PromediosTab() {
 
   return (
     <TabLoadingGate loading={loading} message="Cargando promedios…">
-    <Card className="overflow-hidden bg-card">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Promedios Anuales</CardTitle>
-            <CardDescription>Kg promedio por gajo para cada lote</CardDescription>
-          </div>
-          <div className="flex items-center gap-2">
-            <Label className="text-sm">Año:</Label>
-            <Select
-              value={anioSeleccionado.toString()}
-              onValueChange={(value) => setAnioSeleccionado(parseInt(value))}
-            >
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {aniosDisponibles.map((anio) => (
-                  <SelectItem key={anio} value={anio.toString()}>
-                    {anio}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+    <div className="space-y-6">
+    <ConfigSection
+      title="Promedios anuales"
+      description="Kg promedio por gajo de cada lote."
+      actions={
+        <div className="flex items-center gap-2">
+          <Label htmlFor="anio-promedios" className="text-sm text-muted-foreground">Año</Label>
+          <Select
+            value={anioSeleccionado.toString()}
+            onValueChange={(value) => setAnioSeleccionado(parseInt(value))}
+          >
+            <SelectTrigger id="anio-promedios" className="w-28">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {aniosDisponibles.map((anio) => (
+                <SelectItem key={anio} value={anio.toString()}>
+                  {anio}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-      </CardHeader>
-
-      <CardContent className="space-y-6">
-        {/* KPIs */}
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card className="border-primary/20 bg-primary-soft">
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-2">Promedio General {anioSeleccionado}</p>
-                <p className="text-3xl sm:text-4xl font-bold text-primary">
-                  {promedioGeneral.toFixed(2)} <span className="text-lg">kg/gajo</span>
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-info/20 bg-info-soft">
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">Última Actualización</p>
-                </div>
-                <p className="text-2xl font-bold text-info">
-                  {obtenerUltimaActualizacion()
-                    ? formatearFecha(obtenerUltimaActualizacion()!)
-                    : 'N/A'}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+      }
+    >
+      <dl className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-lg bg-muted/60 px-4 py-3">
+          <dt className="text-xs font-medium text-muted-foreground">
+            Promedio general {anioSeleccionado}
+          </dt>
+          <dd className="mt-1 flex items-baseline gap-1">
+            <span className="text-2xl font-bold tabular-nums text-foreground">
+              {promedioGeneral.toFixed(2)}
+            </span>
+            <span className="text-xs font-medium text-muted-foreground">kg/gajo</span>
+          </dd>
         </div>
+        <div className="rounded-lg bg-muted/60 px-4 py-3">
+          <dt className="text-xs font-medium text-muted-foreground">Última actualización</dt>
+          <dd className="mt-1 text-2xl font-bold text-foreground">
+            {obtenerUltimaActualizacion()
+              ? formatearFecha(obtenerUltimaActualizacion()!)
+              : 'Sin dato'}
+          </dd>
+        </div>
+      </dl>
+    </ConfigSection>
 
-        {/* Tabla con acordeón por lote */}
-        <div className="rounded-lg border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead>Lote</TableHead>
-                <TableHead>Año</TableHead>
-                <TableHead className="text-right">Kg Promedio por Gajo</TableHead>
-                <TableHead>Fecha Actualización</TableHead>
-                <TableHead className="w-10" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {[...lotes].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((lote) => {
-                // Promedio más reciente del año seleccionado para este lote.
-                // Si hay varios baselines por (lote, año), se elige por
-                // `updated_at` desc (mismo criterio que `valorActual`).
-                const promedioLote = promedioMasRecientePorLote.get(lote.id);
-                const ultimoRegistro = ultimoRegistroPorLote.get(lote.id);
-                const fechaUltimo = ultimoRegistro ? fechaDeRegistro(ultimoRegistro) : null;
-                const historial = historicoPorLote.get(lote.id) ?? [];
-                // Base fijo arriba, el mismo que edita el input, más los
-                // registros filtrados por mes. Con 'todos' se listan los
-                // últimos `ULTIMOS_VISIBLES`. Con tres cupos, los baselines
-                // sembrados se los llevaban todos y los promedios de viaje
-                // no alcanzaban a aparecer.
-                const registros = registrosPorLote.get(lote.id) ?? [];
-                const sinBase = registros.filter((r) => r.id !== promedioLote?.id);
-                const ultimos = mesFiltroHistorico === 'todos'
-                  ? sinBase.slice(0, ULTIMOS_VISIBLES)
-                  : sinBase.filter((r) => mesDeRegistro(r) === mesFiltroHistorico);
-                const estaExpandido = expandido === lote.id;
-                const valor = valorActual(lote.id);
+    <ConfigSection
+      flush
+      title="Promedio por lote"
+      description="Edita el valor del año seleccionado; el historial muestra los años anteriores."
+    >
+        <Table className="min-w-[760px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="pl-5">Lote</TableHead>
+              <TableHead>Año</TableHead>
+              <TableHead className="text-right">Kg por gajo</TableHead>
+              <TableHead>Actualizado</TableHead>
+              <TableHead className="w-12 pr-5" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {[...lotes].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((lote) => {
+              // Promedio más reciente del año seleccionado para este lote.
+              // Si hay varios baselines por (lote, año), se elige por
+              // `updated_at` desc (mismo criterio que `valorActual`).
+              const promedioLote = promedioMasRecientePorLote.get(lote.id);
+              const ultimoRegistro = ultimoRegistroPorLote.get(lote.id);
+              const fechaUltimo = ultimoRegistro ? fechaDeRegistro(ultimoRegistro) : null;
+              const historial = historicoPorLote.get(lote.id) ?? [];
+              // Base fijo arriba, el mismo que edita el input, más los
+              // registros filtrados por mes. Con 'todos' se listan los
+              // últimos `ULTIMOS_VISIBLES`. Con tres cupos, los baselines
+              // sembrados se los llevaban todos y los promedios de viaje
+              // no alcanzaban a aparecer.
+              const registros = registrosPorLote.get(lote.id) ?? [];
+              const sinBase = registros.filter((r) => r.id !== promedioLote?.id);
+              const ultimos = mesFiltroHistorico === 'todos'
+                ? sinBase.slice(0, ULTIMOS_VISIBLES)
+                : sinBase.filter((r) => mesDeRegistro(r) === mesFiltroHistorico);
+              const estaExpandido = expandido === lote.id;
+              const valor = valorActual(lote.id);
 
-                return (
-                  <React.Fragment key={lote.id}>
-                    {/* Fila principal */}
-                    <TableRow className="hover:bg-muted/50 transition-colors">
-                      <TableCell className="font-medium">{lote.nombre}</TableCell>
-                      <TableCell>{anioSeleccionado}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Input
-                            type="number"
-                            step="0.1"
-                            className="w-32 text-right"
-                            value={valor || ''}
-                            onChange={(e) =>
-                              handlePromedioChange(lote.id, parseFloat(e.target.value) || 0)
-                            }
-                          />
-                          <span className="text-muted-foreground text-sm">kg/gajo</span>
-                          <span
-                            className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary"
-                            title="Promedio base definido por el administrador. Los promedios que generan los viajes al pesar no se editan; se consultan en el histórico."
-                          >
-                            Base
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div
-                          className="flex items-center gap-2 text-sm text-muted-foreground"
-                          title={
-                            ultimoRegistro?.viaje_id != null
-                              ? `Último promedio generado por un viaje${ultimoRegistro.viaje?.remision ? `, remisión ${ultimoRegistro.viaje.remision}` : ''}`
-                              : 'Último promedio base registrado por el administrador'
+              return (
+                <React.Fragment key={lote.id}>
+                  {/* Fila principal */}
+                  <TableRow>
+                    <TableCell className="pl-5 font-semibold text-foreground">{lote.nombre}</TableCell>
+                    <TableCell className="text-muted-foreground">{anioSeleccionado}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Input
+                          type="number"
+                          step="0.1"
+                          aria-label={`Kg por gajo de ${lote.nombre}`}
+                          className="ml-auto h-8 w-24 text-right tabular-nums"
+                          value={valor || ''}
+                          onChange={(e) =>
+                            handlePromedioChange(lote.id, parseFloat(e.target.value) || 0)
                           }
+                        />
+                        <span className="text-muted-foreground text-sm">kg/gajo</span>
+                        <span
+                          className="rounded-md bg-primary-soft px-2 py-0.5 text-xs font-semibold text-primary"
+                          title="Promedio base definido por el administrador. Los promedios que generan los viajes al pesar no se editan; se consultan en el histórico."
                         >
-                          <Calendar className="h-3.5 w-3.5" />
-                          {fechaUltimo ? formatearFecha(fechaUltimo) : 'N/A'}
-                          {ultimoRegistro?.viaje_id != null && (
-                            <span className="text-xs">
-                              · {Number(ultimoRegistro.promedio).toLocaleString('es-CO', { maximumFractionDigits: 2 })} kg/gajo de viaje
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {(historial.length > 0 || registros.length > 0) && (
-                          <button aria-label="Desplegar"
-                            type="button"
-                            onClick={(e) => toggleExpandido(lote.id, e)}
-                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-1.5 py-1 rounded hover:bg-muted"
-                            title="Ver historial"
-                          >
-                            <History className="h-3.5 w-3.5" />
-                            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${estaExpandido ? 'rotate-180' : ''}`} />
-                          </button>
+                          Base
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div
+                        className="flex items-center gap-2 text-sm text-muted-foreground"
+                        title={
+                          ultimoRegistro?.viaje_id != null
+                            ? `Último promedio generado por un viaje${ultimoRegistro.viaje?.remision ? `, remisión ${ultimoRegistro.viaje.remision}` : ''}`
+                            : 'Último promedio base registrado por el administrador'
+                        }
+                      >
+                        {fechaUltimo ? formatearFecha(fechaUltimo) : 'Sin dato'}
+                        {ultimoRegistro?.viaje_id != null && (
+                          <span className="text-xs">
+                            · {Number(ultimoRegistro.promedio).toLocaleString('es-CO', { maximumFractionDigits: 2 })} kg/gajo de viaje
+                          </span>
                         )}
-                      </TableCell>
-                    </TableRow>
+                      </div>
+                    </TableCell>
+                    <TableCell className="pr-5 text-right">
+                      {(historial.length > 0 || registros.length > 0) && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Ver historial de ${lote.nombre}`}
+                          aria-expanded={estaExpandido}
+                          onClick={(e) => toggleExpandido(lote.id, e)}
+                        >
+                          <ChevronDown
+                            className={`text-muted-foreground transition-transform ${estaExpandido ? 'rotate-180' : ''}`}
+                            strokeWidth={2}
+                          />
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
 
-                    {/* Acordeón histórico */}
-                    {estaExpandido && (
-                      <TableRow className="bg-muted/20">
-                        <TableCell colSpan={5} className="p-0">
-                          <div className="px-6 py-3 space-y-3">
-                            {/* Últimos 3 registros del lote (cualquier año).
-                                "Base" = baseline del admin (viaje_id null);
-                                con remisión = lo generó un viaje al pesar. */}
-                            {registros.length > 0 && (
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between gap-3">
-                                  <p className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground">
-                                    <History className="h-3.5 w-3.5" />
-                                    Últimos registros — {lote.nombre}
-                                  </p>
-                                  <Select
-                                    value={mesFiltroHistorico}
-                                    onValueChange={setMesFiltroHistorico}
-                                  >
-                                    <SelectTrigger className="w-40 h-8 text-xs">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="todos">Más recientes</SelectItem>
-                                      {MESES.map(([v, nombre]) => (
-                                        <SelectItem key={v} value={v}>{nombre}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div className="rounded-lg border border-border/60 overflow-x-auto">
-                                  <table className="w-full min-w-[640px] text-sm">
-                                    <thead>
-                                      <tr className="bg-muted/40 border-b border-border/60">
-                                        <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground">Fecha</th>
-                                        <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground">Kg Promedio por Gajo</th>
-                                        <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground">Origen</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {ultimos.length === 0 && (
-                                        <tr>
-                                          <td colSpan={3} className="px-4 py-3 text-center text-xs text-muted-foreground">
-                                            Sin registros en el mes seleccionado
-                                          </td>
-                                        </tr>
-                                      )}
-                                      {ultimos.map((r) => (
-                                        <tr key={r.id} className="border-b border-border/40 last:border-0 hover:bg-muted/30 transition-colors">
-                                          <td className="px-4 py-2.5 text-muted-foreground text-xs">
-                                            <span className="inline-flex items-center gap-1.5">
-                                              <Calendar className="h-3 w-3" />
-                                              {r.fecha
-                                                ? formatearFecha(r.fecha)
-                                                : (r.updated_at ? formatearFecha(r.updated_at) : '—')}
-                                            </span>
-                                          </td>
-                                          <td className="px-4 py-2.5">
-                                            <span className="font-semibold">
-                                              {Number(r.promedio).toLocaleString('es-CO', { maximumFractionDigits: 4 })}
-                                            </span>
-                                            <span className="text-muted-foreground text-xs ml-1">kg/gajo</span>
-                                          </td>
-                                          <td className="px-4 py-2.5">
-                                            {r.viaje_id == null ? (
-                                              <span
-                                                className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary"
-                                                title="Baseline definido por el admin (sin viaje)"
-                                              >
-                                                Base
-                                              </span>
-                                            ) : (
-                                              <span
-                                                className="text-xs font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground"
-                                                title="Generado automáticamente por un viaje homogéneo al pesar"
-                                              >
-                                                {r.viaje?.remision ? `Remisión ${r.viaje.remision}` : 'Viaje'}
-                                              </span>
-                                            )}
-                                          </td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
-                                {/* Base fijo, fuera de la tabla — el mismo
-                                    registro que edita el campo de arriba. */}
-                                {promedioLote && (
-                                  <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm">
-                                    <span
-                                      className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary"
-                                      title="Promedio base definido por el administrador (el que edita el campo de arriba)"
-                                    >
-                                      Base
-                                    </span>
-                                    <span className="font-semibold">
-                                      {Number(promedioLote.promedio).toLocaleString('es-CO', { maximumFractionDigits: 4 })}
-                                    </span>
-                                    <span className="text-muted-foreground text-xs">kg/gajo</span>
-                                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground ml-auto">
-                                      <Calendar className="h-3 w-3" />
-                                      {promedioLote.fecha
-                                        ? formatearFecha(promedioLote.fecha)
-                                        : (promedioLote.updated_at ? formatearFecha(promedioLote.updated_at) : '—')}
-                                    </span>
-                                  </div>
-                                )}
+                  {/* Acordeón histórico */}
+                  {estaExpandido && (
+                    <TableRow className="bg-muted/30 hover:bg-muted/30">
+                      <TableCell colSpan={5} className="whitespace-normal px-5 py-3">
+                        <div className="space-y-3">
+                          {/* Últimos 3 registros del lote (cualquier año).
+                              "Base" = baseline del admin (viaje_id null);
+                              con remisión = lo generó un viaje al pesar. */}
+                          {registros.length > 0 && (
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground">
+                                  <History className="h-3.5 w-3.5" />
+                                  Últimos registros · {lote.nombre}
+                                </p>
+                                <Select
+                                  value={mesFiltroHistorico}
+                                  onValueChange={setMesFiltroHistorico}
+                                >
+                                  <SelectTrigger className="w-40 h-8 text-xs">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="todos">Más recientes</SelectItem>
+                                    {MESES.map(([v, nombre]) => (
+                                      <SelectItem key={v} value={v}>{nombre}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </div>
-                            )}
-                            {historial.length > 0 && (<>
-                            <p className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground">
-                              <History className="h-3.5 w-3.5" />
-                              Historial de promedios — {lote.nombre}
-                            </p>
-                            <div className="rounded-lg border border-border/60 overflow-x-auto">
-                              <table className="w-full min-w-[640px] text-sm">
-                                <thead>
-                                  <tr className="bg-muted/40 border-b border-border/60">
-                                    <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground">Año</th>
-                                    <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground">Kg Promedio por Gajo</th>
-                                    <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground">Fecha Actualización</th>
-                                    <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground">Variación</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {historial.map((h, idx) => {
-                                    const siguiente = historial[idx + 1];
-                                    const variacion = siguiente ? h.promedio - siguiente.promedio : null;
-                                    return (
-                                      <tr key={h.anio} className="border-b border-border/40 last:border-0 hover:bg-muted/30 transition-colors">
-                                        <td className="px-4 py-2.5 font-medium">{h.anio}</td>
-                                        <td className="px-4 py-2.5">
-                                          <span className="font-semibold">{h.promedio.toFixed(1)}</span>
-                                          <span className="text-muted-foreground text-xs ml-1">kg/gajo</span>
+                              <div className="rounded-lg border border-border/60 overflow-x-auto">
+                                <table className="w-full min-w-[640px] text-sm">
+                                  <thead>
+                                    <tr className="bg-muted/40 border-b border-border/60">
+                                      <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground">Fecha</th>
+                                      <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground">Kg por gajo</th>
+                                      <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground">Origen</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {ultimos.length === 0 && (
+                                      <tr>
+                                        <td colSpan={3} className="px-4 py-3 text-center text-xs text-muted-foreground">
+                                          Sin registros en el mes seleccionado
                                         </td>
+                                      </tr>
+                                    )}
+                                    {ultimos.map((r) => (
+                                      <tr key={r.id} className="border-b border-border/40 last:border-0 hover:bg-muted/30 transition-colors">
                                         <td className="px-4 py-2.5 text-muted-foreground text-xs">
                                           <span className="inline-flex items-center gap-1.5">
                                             <Calendar className="h-3 w-3" />
-                                            {h.updated_at ? formatearFecha(h.updated_at) : '—'}
+                                            {r.fecha
+                                              ? formatearFecha(r.fecha)
+                                              : (r.updated_at ? formatearFecha(r.updated_at) : '—')}
                                           </span>
                                         </td>
                                         <td className="px-4 py-2.5">
-                                          {variacion != null ? (
-                                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                                              variacion > 0
-                                                ? 'bg-[#1E5631]/10 text-[#1E5631]'
-                                                : variacion < 0
-                                                ? 'bg-destructive/10 text-destructive'
-                                                : 'bg-muted text-muted-foreground'
-                                            }`}>
-                                              {variacion > 0 ? '+' : ''}{variacion.toFixed(1)} kg
+                                          <span className="font-semibold">
+                                            {Number(r.promedio).toLocaleString('es-CO', { maximumFractionDigits: 4 })}
+                                          </span>
+                                          <span className="text-muted-foreground text-xs ml-1">kg/gajo</span>
+                                        </td>
+                                        <td className="px-4 py-2.5">
+                                          {r.viaje_id == null ? (
+                                            <span
+                                              className="rounded-md bg-primary-soft px-2 py-0.5 text-xs font-semibold text-primary"
+                                              title="Baseline definido por el admin (sin viaje)"
+                                            >
+                                              Base
                                             </span>
                                           ) : (
-                                            <span className="text-xs text-muted-foreground">—</span>
+                                            <span
+                                              className="rounded-md bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground"
+                                              title="Generado automáticamente por un viaje homogéneo al pesar"
+                                            >
+                                              {r.viaje?.remision ? `Remisión ${r.viaje.remision}` : 'Viaje'}
+                                            </span>
                                           )}
                                         </td>
                                       </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                              {/* Base fijo, fuera de la tabla — el mismo
+                                  registro que edita el campo de arriba. */}
+                              {promedioLote && (
+                                <div className="flex items-center gap-2 border-t border-border/40 px-4 py-2.5 text-sm">
+                                  <span
+                                    className="rounded-md bg-primary-soft px-2 py-0.5 text-xs font-semibold text-primary"
+                                    title="Promedio base definido por el administrador (el que edita el campo de arriba)"
+                                  >
+                                    Base
+                                  </span>
+                                  <span className="font-semibold">
+                                    {Number(promedioLote.promedio).toLocaleString('es-CO', { maximumFractionDigits: 4 })}
+                                  </span>
+                                  <span className="text-muted-foreground text-xs">kg/gajo</span>
+                                  <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground ml-auto">
+                                    <Calendar className="h-3 w-3" />
+                                    {promedioLote.fecha
+                                      ? formatearFecha(promedioLote.fecha)
+                                      : (promedioLote.updated_at ? formatearFecha(promedioLote.updated_at) : '—')}
+                                  </span>
+                                </div>
+                              )}
                             </div>
-                            </>)}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+                          )}
+                          {historial.length > 0 && (<>
+                          <p className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground">
+                            <History className="h-3.5 w-3.5" strokeWidth={2} />
+                            Historial · {lote.nombre}
+                          </p>
+                          <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+                            {historial.map((h, idx) => {
+                              const siguiente = historial[idx + 1];
+                              const variacion = siguiente ? h.promedio - siguiente.promedio : null;
+                              return (
+                                <li key={h.anio} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+                                  <div className="min-w-0">
+                                    <p className="font-semibold text-foreground">{h.anio}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {h.updated_at ? formatearFecha(h.updated_at) : '—'}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold tabular-nums">{h.promedio.toFixed(1)}</span>
+                                    <span className="text-xs text-muted-foreground">kg/gajo</span>
+                                    {variacion != null && (
+                                      <Badge variant={variacion > 0 ? 'success' : variacion < 0 ? 'destructive' : 'secondary'}>
+                                        {variacion > 0 ? '+' : ''}{variacion.toFixed(1)} kg
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                          </>)}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </TableBody>
+        </Table>
 
-        {hayCambios && (
-          <div className="rounded-lg bg-warning-soft border border-warning/20 p-3">
-            <p className="text-sm text-warning">
-              Hay cambios sin guardar. Haz clic en "Guardar Cambios" para aplicarlos.
-            </p>
-          </div>
-        )}
+    </ConfigSection>
 
-        {/* El botón va al pie del formulario, como en el resto de la app. */}
-        <div className="flex justify-end">
-          <Button onClick={handleGuardar} disabled={!hayCambios}>
-            <Save className="mr-2 h-4 w-4" />
-            Guardar Cambios
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm text-warning">
+        {hayCambios ? 'Hay cambios sin guardar.' : ''}
+      </p>
+      <ConfigActions>
+        <Button onClick={handleGuardar} disabled={!hayCambios}>
+          <Save strokeWidth={2} />
+          Guardar
+        </Button>
+      </ConfigActions>
+    </div>
+    </div>
     </TabLoadingGate>
   );
 }
