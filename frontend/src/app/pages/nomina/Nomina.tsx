@@ -42,7 +42,7 @@ import {
 import { toast } from 'sonner';
 import {
   nominaApi, Nomina as NominaT, NominaIndicadores, NominaErrorCodes,
-  type EstadoNomina,
+  type EstadoNomina, type NominaTerceroActaResumen,
 } from '../../../api/nomina';
 import type { ApiError } from '../../../api/client';
 
@@ -98,6 +98,56 @@ function fmtMillones(n: number): string {
   return `$${num(n / 1_000_000, 2)} M`;
 }
 
+/**
+ * Lo que un período le paga a empresas contratistas.
+ *
+ * El listado de nóminas no lo trae: `resumen` (§2.2) cuenta los operarios en
+ * `operarios_count` pero deja su plata por fuera, porque va por el acta (§7).
+ * Un período con solo terceros llegaba entonces a la tabla con devengado,
+ * deducciones y neto en cero aunque tuviera un acta por girar.
+ */
+interface TotalesTerceros {
+  /** Jornales más cosecha de todas las actas. */
+  bruto: number;
+  /** Bruto menos los descuentos a operarios: lo que se transfiere. */
+  neto: number;
+  /** La parte de `neto` en actas que aún no se han girado. */
+  pendiente: number;
+  /** La parte de `neto` en actas ya giradas. */
+  pagado: number;
+}
+
+const TERCEROS_EN_CERO: TotalesTerceros = { bruto: 0, neto: 0, pendiente: 0, pagado: 0 };
+
+/** Cuántas actas se piden a la vez, para no disparar 50 peticiones juntas. */
+const ACTAS_POR_TANDA = 6;
+
+async function enTandas<T, R>(
+  items: T[],
+  limite: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const salida: R[] = [];
+  for (let i = 0; i < items.length; i += limite) {
+    salida.push(...(await Promise.all(items.slice(i, i + limite).map(fn))));
+  }
+  return salida;
+}
+
+function totalizarActas(actas: NominaTerceroActaResumen[]): TotalesTerceros {
+  return actas.reduce((acc, a) => {
+    const bruto = toNumber(a.total_bruto);
+    const neto = toNumber(a.total_a_transferir);
+    const girada = a.estado_pago === 'PAGADO';
+    return {
+      bruto: acc.bruto + bruto,
+      neto: acc.neto + neto,
+      pendiente: acc.pendiente + (girada ? 0 : neto),
+      pagado: acc.pagado + (girada ? neto : 0),
+    };
+  }, TERCEROS_EN_CERO);
+}
+
 export default function Nomina() {
   const navigate = useNavigate();
 
@@ -112,6 +162,8 @@ export default function Nomina() {
   const [nominas, setNominas] = useState<NominaT[]>([]);
   const [indicadores, setIndicadores] = useState<NominaIndicadores | null>(null);
   const [cargando, setCargando] = useState(true);
+  /** Actas de terceros por nómina. Llega después del listado, sin bloquearlo. */
+  const [terceros, setTerceros] = useState<Map<number, TotalesTerceros>>(new Map());
 
   // Eliminar nómina (solo BORRADOR sin liquidados — el backend bloquea con
   // NOMINA_CON_LIQUIDADOS/NOMINA_CERRADA si no se cumple, lo manejamos abajo).
@@ -138,6 +190,30 @@ export default function Nomina() {
   // nueva. Cada carga incrementa el contador; solo la última puede setear.
   const reqIdRef = useRef(0);
 
+  /**
+   * Pide el acta de terceros de cada período listado.
+   *
+   * Se consulta para todos y no solo donde `resumen.operarios_count` sea
+   * mayor que cero: ese conteo es de una versión del backend más nueva que la
+   * que hay documentada en el repo, y si llegara ausente o en cero el período
+   * volvería a mostrarse sin la plata del contratista. Un acta que falle se
+   * omite y la fila queda como estaba, sin tumbar la tabla.
+   */
+  const cargarTerceros = async (lista: NominaT[], reqId: number) => {
+    if (lista.length === 0) {
+      if (reqId === reqIdRef.current) setTerceros(new Map());
+      return;
+    }
+    const pares = await enTandas(lista, ACTAS_POR_TANDA, (n) =>
+      nominaApi.terceros
+        .listar(n.id)
+        .then((r) => [n.id, totalizarActas(r.data ?? [])] as const)
+        .catch(() => null),
+    );
+    if (reqId !== reqIdRef.current) return;
+    setTerceros(new Map(pares.filter((p): p is readonly [number, TotalesTerceros] => p !== null)));
+  };
+
   const cargarNominas = () => {
     const reqId = ++reqIdRef.current;
     setCargando(true);
@@ -154,6 +230,7 @@ export default function Nomina() {
         setNominas(listRes.data);
         setIndicadores(indRes.data);
         setCargando(false);
+        void cargarTerceros(listRes.data, reqId);
       })
       .catch((err: ApiError) => {
         if (reqId !== reqIdRef.current) return;
@@ -256,6 +333,16 @@ export default function Nomina() {
     const netoDeNomina = (n: NominaT): number =>
       n.resumen ? n.resumen.neto : toNumber(n.total_general);
 
+    /**
+     * Lo que ese período le transfiere a contratistas, girado o no.
+     *
+     * En cero si la nómina llegó sin `resumen`, porque entonces `netoDeNomina`
+     * cae a `total_general`, que ya trae a los operarios adentro: sumarle el
+     * acta sería contarlos dos veces.
+     */
+    const tercerosDe = (n: NominaT): TotalesTerceros =>
+      (n.resumen ? terceros.get(n.id) : undefined) ?? TERCEROS_EN_CERO;
+
     if (periodoKpi === 'todos' && indicadores) {
       // §10.1 — Una nómina EN_PROGRESO sigue abierta: lo que la cierra es
       // CERRADA. Agruparlas por "distinto de BORRADOR" dejaría fuera de los
@@ -264,16 +351,18 @@ export default function Nomina() {
       const labelBorrador = borradores.length === 1
         ? periodoLabel(borradores[0])
         : `${borradores.length} períodos abiertos`;
-      const netoBorradores = borradores.reduce((s, n) => s + netoDeNomina(n), 0);
-      // Pendiente = lo mayor entre las actas pendientes que reporta el
-      // backend y lo proyectado en borradores. Max, no suma: el acta de un
-      // tercero del borrador está contada en ambos lados.
-      const pendiente = Math.max(indicadores.pendiente_pagar ?? 0, netoBorradores);
+      // Las dos mitades de lo que falta por pagar no se pisan: `resumen.neto`
+      // es de colaboradores propios (§2.2) y `pendiente_pagar` del backend son
+      // actas de tercero sin girar (§2.3), de períodos abiertos y cerrados.
+      // Antes se tomaba el mayor de los dos creyendo que se solapaban, y el
+      // acta de un período cerrado desaparecía detrás del borrador.
+      const netoInternos = borradores.reduce((s, n) => s + netoDeNomina(n), 0);
+      const netoTerceros = borradores.reduce((s, n) => s + tercerosDe(n).neto, 0);
       return {
         totalColaboradores: indicadores.total_colaboradores ?? 0,
         totalTerceros: indicadores.total_terceros ?? 0,
-        netoAPagar: netoBorradores,
-        totalPendiente: pendiente,
+        netoAPagar: netoInternos + netoTerceros,
+        totalPendiente: netoInternos + (indicadores.pendiente_pagar ?? 0),
         labelBorrador,
         borradoresLen: borradores.length,
       };
@@ -291,16 +380,20 @@ export default function Nomina() {
     // fallback a la suma local de cerradas mientras tanto.
     const totalColaboradores = indicadoresPeriodo?.total_colaboradores
       ?? cerradas.reduce((s, n) => s + toNumber(n.total_general), 0);
-    const totalTerceros = indicadoresPeriodo?.total_terceros ?? 0;
-    const netoAPagar = borradores.reduce((s, n) => s + netoDeNomina(n), 0);
-    const totalPendiente = netoAPagar;
+    const totalTerceros = indicadoresPeriodo?.total_terceros
+      ?? cerradas.reduce((s, n) => s + tercerosDe(n).pagado, 0);
+    const netoInternos = borradores.reduce((s, n) => s + netoDeNomina(n), 0);
+    const netoAPagar = netoInternos + borradores.reduce((s, n) => s + tercerosDe(n).neto, 0);
+    // Mismo reparto que arriba: internos sin liquidar más actas sin girar, y
+    // las actas sin girar de un período ya cerrado también cuentan.
+    const totalPendiente = netoInternos + filtradas.reduce((s, n) => s + tercerosDe(n).pendiente, 0);
 
     const labelBorrador = borradores.length === 1
       ? periodoLabel(borradores[0])
       : `${borradores.length} períodos abiertos`;
 
     return { totalColaboradores, totalTerceros, netoAPagar, totalPendiente, labelBorrador, borradoresLen: borradores.length };
-  }, [nominas, periodoKpi, indicadores, indicadoresPeriodo]);
+  }, [nominas, periodoKpi, indicadores, indicadoresPeriodo, terceros]);
 
   /** Hay algo filtrando, asi que el vacio puede ser por los filtros. */
   const hayFiltros = filtroEstado !== 'todos' || filtroMes !== 'todos' || filtroBusqueda !== '';
@@ -490,9 +583,18 @@ export default function Nomina() {
                       // cifras solo mientras quede una fila PENDIENTE.
                       const res = n.resumen;
                       const usarEstimado = res?.estimado ?? false;
-                      const dev = res ? res.devengado : totalReal + dedReal;
-                      const ded = res ? res.deducciones : dedReal;
-                      const total = res ? res.neto : totalReal;
+                      // §2.2 deja la plata del contratista por fuera, así que
+                      // se le suma el acta (§7.1). Sin esto un período de solo
+                      // terceros se muestra en cero aunque tenga giro abierto.
+                      //
+                      // Solo cuando hay `resumen`. El respaldo `total_general`
+                      // sí trae a los operarios dentro: `recalcularTotalesNomina`
+                      // suma todas las filas LIQUIDADO sin filtrar por
+                      // `empleado_id`. Sumarle el acta ahí sería contar dos veces.
+                      const ter = res ? (terceros.get(n.id) ?? TERCEROS_EN_CERO) : TERCEROS_EN_CERO;
+                      const dev = (res ? res.devengado : totalReal + dedReal) + ter.bruto;
+                      const ded = (res ? res.deducciones : dedReal) + (ter.bruto - ter.neto);
+                      const total = (res ? res.neto : totalReal) + ter.neto;
                       return (
                         <tr key={n.id} className="transition-colors hover:bg-muted/40">
                           <td className="min-w-[13rem] px-5 py-3">
@@ -528,6 +630,11 @@ export default function Nomina() {
                           </td>
                           <td className="px-4 py-3 text-right font-semibold tabular-nums text-foreground">
                             {cop(total)}
+                            {ter.neto > 0 && (
+                              <span className="block text-xs font-normal text-muted-foreground">
+                                {cop(ter.neto)} a terceros
+                              </span>
+                            )}
                             {usarEstimado && (
                               <span className="block text-xs font-normal text-muted-foreground">Estimado</span>
                             )}

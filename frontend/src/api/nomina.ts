@@ -100,7 +100,14 @@ export interface ResumenNomina {
   /** La parte de `devengado` que es auxilio; informativa. */
   auxilio_transporte: number;
   deducciones: number;
-  /** `devengado − deducciones`. En una CERRADA coincide con `total_general`. */
+  /**
+   * `devengado − deducciones`, solo de empleados propios.
+   *
+   * No confundir con `total_general` de la nómina. Ese lo escribe
+   * `recalcularTotalesNomina` sumando **todas** las filas LIQUIDADO sin
+   * filtrar por `empleado_id`, así que incluye a los operarios de tercero.
+   * Los dos coinciden únicamente en una CERRADA sin contratistas.
+   */
   neto: number;
   /** `true` mientras quede una fila PENDIENTE: solo entonces se rotula "(est.)". */
   estimado: boolean;
